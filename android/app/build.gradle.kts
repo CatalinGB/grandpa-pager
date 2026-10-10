@@ -19,8 +19,16 @@ android {
     buildTypes {
         getByName("release") {
             isMinifyEnabled = false
+            // Sideloadable release build (signed with the debug key) so the
+            // production UI (no countdown) can be installed on the phone.
+            signingConfig = signingConfigs.getByName("debug")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
+    }
+
+    buildFeatures {
+        // Exposes BuildConfig.DEBUG so the receiver can hide dev-only UI (countdown).
+        buildConfig = true
     }
 
     compileOptions {

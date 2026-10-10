@@ -122,7 +122,9 @@ class ReceiverActivity : Activity() {
             messageView.gravity = Gravity.CENTER
             messageView.text = cfg.currentMessageText ?: ""
             warnView.visibility = View.GONE
+            // The "clears in …" countdown is a dev-only aid; production hides it.
             countdownView.text = getString(R.string.clears_in, remainingLabel())
+            countdownView.visibility = if (BuildConfig.DEBUG) View.VISIBLE else View.GONE
         } else {
             if (cfg.currentMessageId != null && !clearRequested) {
                 clearRequested = true
@@ -140,6 +142,7 @@ class ReceiverActivity : Activity() {
                 warnView.text = getString(R.string.conn_problem)
             }
             countdownView.text = ""
+            countdownView.visibility = View.GONE
         }
     }
 

@@ -55,6 +55,7 @@ carries execution.)
 - [13 Receiver layout v2](issues/13-receiver-layout-v2.md): Variant C — name centred above the message (max auto-sized); idle = one-row `SÂMBĂTĂ 10/10/2026` + clock 1.3×.
 - [14 New-message attention cue](issues/14-attention-cue.md): One-shot tri-modal burst — slow amber glow (~6 s) + chime + double vibration; never re-cue the same message.
 - [15 Connection problem in place](issues/15-connection-warning.md): Amber `Probleme cu conexiunea` on the idle clock screen when the link is down; never hides a live message.
+- [16 Hide the expiry countdown in production](issues/16-countdown-dev-only.md): countdown visible only in `BuildConfig.DEBUG`; release hides it (release APK debug-signed to stay sideloadable).
 
 ## Not yet specified
 

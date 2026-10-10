@@ -41,6 +41,7 @@ A1. The Android receiver and its schema are unchanged. (Execution effort.)
 - [06 Broker choice](issues/06-broker-choice.md): Flespi — one broker for receiver + all senders.
 - [10 Duration picker](issues/10-duration-picker.md): Variant B (− / value / + stepper + presets).
 - [18 Vendor MQTT.js](issues/18-vendor-mqttjs.md): MQTT.js vendored into the repo; page fails loudly if the library is missing.
+- [19 First-run onboarding](issues/19-onboarding.md): first screen asks name + token, then message box + picker with a settings box at the bottom.
 
 ## Built & shipped
 
