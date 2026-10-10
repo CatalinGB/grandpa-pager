@@ -17,8 +17,8 @@ Research: `.scratch/grandpa-pager/research/torch-signal.md`.
 *strength*/dimming (`setTorchStrengthLevel`, `FLASH_INFO_STRENGTH_MAXIMUM_LEVEL`)
 is API 33+ and needs hardware support. On API 28 the only control is on/off.
 
-So the achievable signal is a **slow 3× on/off pulse** (~0.8 Hz; ON 500 ms /
-OFF 700 ms, ≈3.6 s), fired once with the glow/chime/vibration on arrival.
+So the achievable signal is a **slow 3× on/off pulse** (ON 1500 ms / OFF 1500 ms,
+≈9 s total), fired once with the glow/chime/vibration on arrival.
 
 Implementation (`ReceiverActivity`):
 - `CameraManager.setTorchMode(cameraId, on)` on the camera whose

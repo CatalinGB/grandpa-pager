@@ -16,9 +16,9 @@ launch the system launcher (`ReceiverActivity.dispatchTouchEvent` +
 `switchToLauncher`). The device owner is kept, so pressing Home returns to the
 pager — a temporary admin escape, not a removal.
 
-The receiver is now pinned to **portrait** (`android:screenOrientation="portrait"`)
-so the pager layout and the corner are stable regardless of how the phone is held
-(it had rotated to landscape, which broke the corner maths).
-
 Verified on the Mi A1: 5 taps → `ReceiverActivity: admin gesture: switching to
 launcher` → foreground becomes `com.android.launcher3`.
+
+Note: the receiver is **not** orientation-locked — it respects rotation; the
+gesture reads the live window size (`window.decorView.width/height`) so the
+corner is correct in both portrait and landscape.

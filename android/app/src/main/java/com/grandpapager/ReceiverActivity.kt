@@ -227,7 +227,7 @@ class ReceiverActivity : Activity() {
         glowAnim?.cancel()
         glowOverlay.alpha = 0f
         glowAnim = ValueAnimator.ofFloat(0f, 1f, 0f, 1f, 0f, 1f, 0f).apply {
-            duration = 6000L
+            duration = 9000L
             addUpdateListener { glowOverlay.alpha = it.animatedValue as Float }
             start()
         }
@@ -271,7 +271,8 @@ class ReceiverActivity : Activity() {
 
     private fun playTorchCue() {
         torchHandler.removeCallbacksAndMessages(null)
-        val onMs = 500L; val offMs = 700L; val pulses = 3
+        // Slow, gentle on/off (a true fade isn't possible before API 33).
+        val onMs = 1500L; val offMs = 1500L; val pulses = 3
         val run = object : Runnable {
             var count = 0
             override fun run() {
