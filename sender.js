@@ -15,6 +15,9 @@
   var el = function (id) { return document.getElementById(id); };
   var client = null;
   var minutes = DEFAULT_MIN;
+  var myLastId = null, myLastAt = 0;
+
+  function escapeHtml(s) { return String(s).replace(/[&<>"]/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]; }); }
 
   /* ---------- views ---------- */
   function showView(which) {
@@ -68,6 +71,27 @@
       "văzut:    " + age + "s în urmă";
   }
 
+  /* Non-blocking notice: shows any message already on the display (option B). */
+  function renderBanner(raw) {
+    var b = el("banner");
+    var text = (raw == null) ? "" : String(raw);
+    if (!text || text === "{}") { b.hidden = true; return; }
+    var d; try { d = JSON.parse(text); } catch (e) { b.hidden = true; return; }
+    if (!d || !d.text) { b.hidden = true; return; }
+
+    var who = d.sender ? " de la <b>" + escapeHtml(d.sender) + "</b>" : "";
+    var exp = "";
+    if (d.expires_at) {
+      var mins = Math.max(0, Math.round((new Date(d.expires_at).getTime() - Date.now()) / 60000));
+      exp = " (expiră în " + Math.max(1, mins) + " min)";
+    }
+    var replaced = (myLastId && d.id && d.id !== myLastId && (Date.now() - myLastAt) < 6000)
+      ? "<br>⚠ Mesajul tău tocmai a fost înlocuit de altcineva."
+      : "";
+    b.hidden = false;
+    b.innerHTML = "Pe ecran acum: „<b>" + escapeHtml(d.text) + "</b>”" + who + exp + ". Dacă trimiți, îl înlocuiești." + replaced;
+  }
+
   /* ---------- mqtt ---------- */
   function uuid() {
     if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
@@ -104,15 +128,18 @@
     client.on("connect", function () {
       setConnected(true);
       el("sendHint").textContent = "Conectat.";
-      client.subscribe(TOPIC.status, { qos: 1 });
+      client.subscribe([TOPIC.status, TOPIC.message], { qos: 1 });
     });
     client.on("reconnect", function () { el("sendHint").textContent = "Se reconectează…"; });
     client.on("close", function () { setConnected(false); });
     client.on("error", function (err) { setConnected(false); el("sendHint").textContent = "Eroare: " + err.message; });
     client.on("message", function (topic, payload) {
-      if (topic !== TOPIC.status) return;
-      try { renderDiag(JSON.parse(payload.toString())); }
-      catch (e) { el("diag").textContent = payload.toString(); }
+      if (topic === TOPIC.status) {
+        try { renderDiag(JSON.parse(payload.toString())); }
+        catch (e) { el("diag").textContent = payload.toString(); }
+      } else if (topic === TOPIC.message) {
+        renderBanner(payload.toString());
+      }
     });
   }
 
@@ -133,6 +160,7 @@
       duration_minutes: minutes,
     };
     client.publish(TOPIC.message, JSON.stringify(payload), { qos: 1, retain: true });
+    myLastId = payload.id; myLastAt = Date.now();
     el("text").value = "";
     el("sendHint").textContent = "Trimis — apare pe ecran.";
   }

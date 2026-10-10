@@ -40,6 +40,8 @@
   .presets button.on{ background:var(--accent); border-color:var(--accent); color:#fff; }
 
   .diag{ background:var(--card2); border:1px solid var(--line); border-radius:10px; padding:12px; white-space:pre-wrap; font-family:ui-monospace,monospace; font-size:13px; color:var(--muted); }
+  .banner{ background:#2a2312; border:1px solid #5a4a12; color:#fbbf24; border-radius:10px; padding:10px 12px; font-size:14px; margin-bottom:12px; }
+  .banner b{ color:#fff; }
   details summary{ cursor:pointer; color:var(--muted); }
   .hint{ color:var(--muted); font-size:12px; margin-top:8px; }
 </style>
@@ -73,6 +75,8 @@
     <div class="card">
       <h1>Grandpa Pager</h1>
       <div class="sub">Trimite un mesaj pe ecranul lui Bunicu. <span id="connPill" class="pill off">neconectat</span></div>
+
+      <div id="banner" class="banner" hidden></div>
 
       <div class="label">Mesaj</div>
       <textarea id="text" placeholder="Scrie mesajul…"></textarea>
