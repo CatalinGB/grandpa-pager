@@ -198,8 +198,68 @@
     el("setupHint").textContent = "Token uitat. Introdu-l din nou.";
   }
 
+  /* ---------- PWA: service worker + "install as app" popup ---------- */
+  function initPwa() {
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", function () {
+        navigator.serviceWorker.register("./sw.js").catch(function () {});
+      });
+    }
+    var bar = el("installBar"), text = el("installText"), go = el("installGo"), no = el("installNo");
+    if (!bar) return;
+    var deferred = null;
+
+    // Dev/testing: force-show the install popup via ?install=1
+    if (new URLSearchParams(location.search).get("install") === "1") {
+      text.textContent = "Instalează „Grandpa Pager” ca aplicație pe telefon.";
+      go.hidden = false;
+      bar.hidden = false;
+    }
+
+    var standalone = function () {
+      return (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true;
+    };
+    var dismissed = function () {
+      var t = parseInt(localStorage.getItem("gp_install_dismiss") || "0", 10);
+      return t && (Date.now() - t) < 7 * 24 * 3600 * 1000; // nag at most weekly
+    };
+
+    window.addEventListener("beforeinstallprompt", function (e) {
+      e.preventDefault();
+      deferred = e;
+      if (!standalone() && !dismissed()) {
+        text.textContent = "Instalează „Grandpa Pager” ca aplicație pe telefon.";
+        go.hidden = false;
+        bar.hidden = false;
+      }
+    });
+    window.addEventListener("appinstalled", function () { localStorage.setItem("gp_installed", "1"); bar.hidden = true; });
+
+    go.addEventListener("click", function () {
+      if (!deferred) return;
+      deferred.prompt();
+      deferred.userChoice.then(function () { deferred = null; bar.hidden = true; });
+    });
+    no.addEventListener("click", function () {
+      localStorage.setItem("gp_install_dismiss", String(Date.now()));
+      bar.hidden = true;
+    });
+
+    // Firefox (and others) don't fire beforeinstallprompt: show a manual hint on Android.
+    if (!standalone() && !localStorage.getItem("gp_installed") && !dismissed() && /Android/i.test(navigator.userAgent)) {
+      setTimeout(function () {
+        if (bar.hidden && !deferred) {
+          text.innerHTML = "Adaugă pe ecranul principal: meniul browserului (⋮) → „Adaugă pe ecranul principal”.";
+          go.hidden = true;
+          bar.hidden = false;
+        }
+      }, 5000);
+    }
+  }
+
   /* ---------- wire up ---------- */
   function init() {
+    initPwa();
     if (typeof mqtt === "undefined") { el("setupHint").textContent = "Eroare: mqtt.min.js nu s-a încărcat."; showView("setup"); return; }
 
     buildPresets();
