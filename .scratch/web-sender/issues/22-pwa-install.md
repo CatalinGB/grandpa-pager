@@ -23,7 +23,12 @@ The web sender is now a **PWA**:
 Behaviour:
 - **Chrome/Edge Android**: `beforeinstallprompt` → the popup shows; “Instalează”
   triggers the native install (Add to Home screen).
-- **Firefox Android**: it doesn't fire `beforeinstallprompt`, so after 5 s a hint
-  shows: *“meniul browserului (⋮) → Adaugă pe ecranul principal”*.
-- “Mai târziu” dismisses it for 7 days; once installed it never nags again.
-- `?install=1` force-shows the popup (dev/testing).
+- **Firefox Android**: it doesn't fire `beforeinstallprompt`, so the popup shows
+  the manual path: **⋮ → „Mai multe” → „Adaugă pe ecranul principal”**.
+- The popup appears **only on mobile** (it’s pointless on desktop and caused the
+  “This app can’t be installed” confusion there).
+- **Dismissal is permanent** (`gp_install_dismissed`); once dismissed or the hint
+  shown once (`gp_hint_shown`) or installed, it never returns.
+- The service worker caches each asset independently so install can’t fail on one
+  404, and registers immediately.
+- `?install=1` force-shows the CTA, `?install=help` the instructions (dev/testing).

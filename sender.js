@@ -15,7 +15,7 @@
   var el = function (id) { return document.getElementById(id); };
   var client = null;
   var minutes = DEFAULT_MIN;
-  var myLastId = null, myLastAt = 0;
+  var myLastId = null, myLastAt = 0, lastStatus = null;
 
   function escapeHtml(s) { return String(s).replace(/[&<>"]/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]; }); }
 
@@ -71,23 +71,38 @@
       "văzut:    " + age + "s în urmă";
   }
 
-  /* Non-blocking notice: shows any message already on the display (option B). */
-  function renderBanner(raw) {
+  /* Non-blocking notice that a message is already on the display (option B).
+     Driven by grandpa/status (sender + expiry) so it works with the sender
+     token; the message text is shown too if the token may read grandpa/message. */
+  function updateBannerFromStatus(d) {
     var b = el("banner");
-    var text = (raw == null) ? "" : String(raw);
-    if (!text || text === "{}") { b.hidden = true; return; }
-    var d; try { d = JSON.parse(text); } catch (e) { b.hidden = true; return; }
-    if (!d || !d.text) { b.hidden = true; return; }
-
+    if (!d || d.state !== "showing" || !d.current_message_id) { b.hidden = true; return; }
     var who = d.sender ? " de la <b>" + escapeHtml(d.sender) + "</b>" : "";
     var exp = "";
     if (d.expires_at) {
-      var mins = Math.max(0, Math.round((new Date(d.expires_at).getTime() - Date.now()) / 60000));
-      exp = " (expiră în " + Math.max(1, mins) + " min)";
+      var mins = Math.max(1, Math.round((new Date(d.expires_at).getTime() - Date.now()) / 60000));
+      exp = " (expiră în " + mins + " min)";
+    }
+    var replaced = (myLastId && d.current_message_id !== myLastId && (Date.now() - myLastAt) < 6000)
+      ? "<br>⚠ Mesajul tău tocmai a fost înlocuit de altcineva." : "";
+    b.hidden = false;
+    b.innerHTML = "Pe ecran acum: un mesaj" + who + exp + ". Dacă trimiți, îl înlocuiești." + replaced;
+  }
+
+  function renderBannerFromMessage(raw) {
+    var b = el("banner");
+    var text = (raw == null) ? "" : String(raw);
+    if (!text || text === "{}") { updateBannerFromStatus(lastStatus); return; }
+    var d; try { d = JSON.parse(text); } catch (e) { return; }
+    if (!d || !d.text) { updateBannerFromStatus(lastStatus); return; }
+    var who = d.sender ? " de la <b>" + escapeHtml(d.sender) + "</b>" : "";
+    var exp = "";
+    if (d.expires_at) {
+      var mins = Math.max(1, Math.round((new Date(d.expires_at).getTime() - Date.now()) / 60000));
+      exp = " (expiră în " + mins + " min)";
     }
     var replaced = (myLastId && d.id && d.id !== myLastId && (Date.now() - myLastAt) < 6000)
-      ? "<br>⚠ Mesajul tău tocmai a fost înlocuit de altcineva."
-      : "";
+      ? "<br>⚠ Mesajul tău tocmai a fost înlocuit de altcineva." : "";
     b.hidden = false;
     b.innerHTML = "Pe ecran acum: „<b>" + escapeHtml(d.text) + "</b>”" + who + exp + ". Dacă trimiți, îl înlocuiești." + replaced;
   }
@@ -135,10 +150,10 @@
     client.on("error", function (err) { setConnected(false); el("sendHint").textContent = "Eroare: " + err.message; });
     client.on("message", function (topic, payload) {
       if (topic === TOPIC.status) {
-        try { renderDiag(JSON.parse(payload.toString())); }
+        try { lastStatus = JSON.parse(payload.toString()); renderDiag(lastStatus); updateBannerFromStatus(lastStatus); }
         catch (e) { el("diag").textContent = payload.toString(); }
       } else if (topic === TOPIC.message) {
-        renderBanner(payload.toString());
+        renderBannerFromMessage(payload.toString());
       }
     });
   }
@@ -205,69 +220,61 @@
     }
     var bar = el("installBar"), text = el("installText"), go = el("installGo"), no = el("installNo");
     if (!bar) return;
-    var deferred = null;
+
+    var ua = navigator.userAgent;
+    var isAndroid = /Android/i.test(ua);
+    var isIOS = /iPhone|iPad|iPod/i.test(ua);
+    var isFirefox = /Firefox|FxiOS/i.test(ua);
+    var isMobile = isAndroid || isIOS;
 
     var standalone = function () {
       return (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true;
     };
-    var dismissed = function () {
-      var t = parseInt(localStorage.getItem("gp_install_dismiss") || "0", 10);
-      return t && (Date.now() - t) < 7 * 24 * 3600 * 1000; // nag at most weekly
+    // Suppressed forever once: installed, dismissed, or the hint already shown.
+    var suppressed = function () {
+      return standalone() ||
+        localStorage.getItem("gp_installed") === "1" ||
+        localStorage.getItem("gp_install_dismissed") === "1" ||
+        localStorage.getItem("gp_hint_shown") === "1";
     };
     function instructions() {
-      var ua = navigator.userAgent;
-      if (/Android/i.test(ua)) {
-        return /Firefox/i.test(ua)
-          ? "În Firefox: apasă meniul ⋮ (sus-dreapta) → <b>Instalează</b> sau <b>Adaugă pe ecranul principal</b>."
-          : "În Chrome: apasă meniul ⋮ (sus-dreapta) → <b>Instalează aplicația</b> sau <b>Adaugă pe ecranul principal</b>.";
+      if (isAndroid) {
+        return isFirefox
+          ? "În Firefox: meniul <b>⋮</b> (sus-dreapta) → <b>„Mai multe”</b> → <b>„Adaugă pe ecranul principal”</b>."
+          : "În Chrome: meniul <b>⋮</b> (sus-dreapta) → <b>„Adaugă pe ecranul principal”</b> / <b>„Instalează aplicația”</b>.";
       }
-      if (/iPhone|iPad|iPod/i.test(ua)) {
-        return "În Safari: butonul Partajare ⤴ → <b>Adaugă la ecranul principal</b>.";
-      }
-      return "Pe calculator nu se instalează ca aplicație. Deschide pagina pe telefon (Chrome sau Firefox) și alege <b>Adaugă pe ecranul principal</b>.";
+      if (isIOS) return "În Safari: butonul <b>Partajare</b> ⤴ → <b>„Adaugă la ecranul principal”</b>.";
+      return "Instalarea ca aplicație se face de pe telefon (Android: Chrome sau Firefox).";
     }
-    function promptCta() {
-      text.textContent = "Instalează „Grandpa Pager” ca aplicație pe telefon.";
-      go.hidden = false;
-      bar.hidden = false;
-    }
+    function hide() { bar.hidden = true; }
 
-    // Dev/testing: ?install=1 → CTA popup, ?install=help → instructions.
+    // Dev/testing: ?install=1 → CTA, ?install=help → instructions (bypass suppression).
     var force = new URLSearchParams(location.search).get("install");
-    if (force === "1") { promptCta(); }
+    if (force === "1") { text.textContent = "Instalează „Grandpa Pager” ca aplicație pe telefon."; go.hidden = false; bar.hidden = false; }
     else if (force === "help") { text.innerHTML = instructions(); go.hidden = true; bar.hidden = false; }
 
+    var deferred = null;
     window.addEventListener("beforeinstallprompt", function (e) {
       e.preventDefault();
       deferred = e;
-      if (!standalone() && !dismissed()) promptCta();
+      if (isMobile && !suppressed()) { text.textContent = "Instalează „Grandpa Pager” ca aplicație pe telefon."; go.hidden = false; bar.hidden = false; }
     });
-    window.addEventListener("appinstalled", function () { localStorage.setItem("gp_installed", "1"); bar.hidden = true; });
+    window.addEventListener("appinstalled", function () { localStorage.setItem("gp_installed", "1"); hide(); });
 
     go.addEventListener("click", function () {
-      if (deferred) {
-        deferred.prompt();
-        deferred.userChoice.then(function () { deferred = null; bar.hidden = true; });
-      } else {
-        // No native prompt (Firefox, some Brave builds, desktop): show how-to.
-        text.innerHTML = instructions();
-        go.hidden = true;
-      }
+      if (deferred) { deferred.prompt(); deferred.userChoice.then(function () { deferred = null; hide(); }); }
+      else { text.innerHTML = instructions(); go.hidden = true; }
     });
-    no.addEventListener("click", function () {
-      localStorage.setItem("gp_install_dismiss", String(Date.now()));
-      bar.hidden = true;
-    });
+    no.addEventListener("click", function () { localStorage.setItem("gp_install_dismissed", "1"); hide(); });
 
-    // Phones without an auto prompt (Firefox/Android, iOS): surface the manual path.
-    if (!standalone() && !localStorage.getItem("gp_installed") && !dismissed() &&
-        /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+    // Mobile without an auto-prompt (Firefox/Android, iOS): show the how-to ONCE.
+    if (isMobile && !suppressed()) {
       setTimeout(function () {
-        // Re-check at fire time: the user may have dismissed it meanwhile.
-        if (bar.hidden && !deferred && !dismissed() && !localStorage.getItem("gp_installed") && !standalone()) {
+        if (bar.hidden && !deferred && !suppressed()) {
           text.innerHTML = instructions(); go.hidden = true; bar.hidden = false;
+          localStorage.setItem("gp_hint_shown", "1");
         }
-      }, 5000);
+      }, 4000);
     }
   }
 

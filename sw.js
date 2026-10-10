@@ -1,5 +1,5 @@
 /* Grandpa Pager — service worker (enables PWA install + basic offline shell). */
-var CACHE = "grandpa-pager-v1";
+var CACHE = "grandpa-pager-v2";
 var ASSETS = [
   "./", "./index.html", "./sender.js", "./mqtt.min.js",
   "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png"

@@ -14,13 +14,17 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.TextView
+import java.util.ArrayDeque
 
 /**
  * The screen Grandpa sees (variant C):
@@ -57,6 +61,42 @@ class ReceiverActivity : Activity() {
     private var lastCuedId: String? = null
     private var glowAnim: ValueAnimator? = null
     private var releaseReceiver: BroadcastReceiver? = null
+    private val cornerTaps = ArrayDeque<Long>()
+
+    /**
+     * Admin escape hatch: five taps in the bottom-left corner switch to the
+     * original launcher (exits lock task so the admin can use the phone).
+     */
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (ev.action == MotionEvent.ACTION_UP) {
+            val w = window.decorView.width
+            val h = window.decorView.height
+            if (w > 0 && h > 0 && ev.x < w * 0.22f && ev.y > h * 0.78f) {
+                val now = SystemClock.elapsedRealtime()
+                cornerTaps.addLast(now)
+                while (cornerTaps.isNotEmpty() && now - cornerTaps.first() > 6000) cornerTaps.removeFirst()
+                if (cornerTaps.size >= 5) {
+                    cornerTaps.clear()
+                    switchToLauncher()
+                }
+            }
+        }
+        return super.dispatchTouchEvent(ev)
+    }
+
+    private fun switchToLauncher() {
+        Log.i(TAG, "admin gesture: switching to launcher")
+        runCatching { stopLockTask() }
+        val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        val target = packageManager.queryIntentActivities(homeIntent, 0)
+            .firstOrNull { it.activityInfo.packageName != packageName }
+        val launch = if (target != null) {
+            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+                .setComponent(ComponentName(target.activityInfo.packageName, target.activityInfo.name))
+        } else homeIntent
+        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        runCatching { startActivity(launch) }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -227,5 +267,6 @@ class ReceiverActivity : Activity() {
 
     companion object {
         const val ACTION_RELEASE_KIOSK = "com.grandpapager.RELEASE_KIOSK"
+        private const val TAG = "ReceiverActivity"
     }
 }
