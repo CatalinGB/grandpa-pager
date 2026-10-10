@@ -67,6 +67,23 @@ class Config(context: Context) {
         get() = p.getString("lastCued", null)
         set(v) = p.edit().putString("lastCued", v).apply()
 
+    // --- remote config (admin → grandpa/config) ---
+    var remoteConfigJson: String?
+        get() = p.getString("remoteConfig", null)
+        set(v) = p.edit().putString("remoteConfig", v).apply()
+
+    var remoteConfigAppliedAt: String?
+        get() = p.getString("remoteAppliedAt", null)
+        set(v) = p.edit().putString("remoteAppliedAt", v).apply()
+
+    var remoteConfigError: String?
+        get() = p.getString("remoteError", null)
+        set(v) = p.edit().putString("remoteError", v).apply()
+
+    /** The currently applied remote config (defaults if none). */
+    fun remoteConfig(): RemoteConfig =
+        RemoteConfigCodec.parse(remoteConfigJson) ?: RemoteConfig()
+
     // --- sender-side cached receiver view ---
     var lastStatusJson: String?
         get() = p.getString("lastStatus", null)

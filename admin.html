@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grandpa Pager — Admin</title>
+<meta name="theme-color" content="#0f1115">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<script src="./mqtt.min.js"></script>
+<style>
+  :root{ --bg:#0f1115; --card:#171b22; --card2:#12161d; --fg:#f2f4f8; --muted:#9aa4b2; --accent:#3b82f6; --line:#2b3140; --ok:#22c55e; --warn:#f59e0b; }
+  *{ box-sizing:border-box; margin:0; padding:0; font-family:system-ui,-apple-system,Roboto,sans-serif; }
+  body{ background:var(--bg); color:var(--fg); display:flex; justify-content:center; padding:16px; }
+  #app{ width:100%; max-width:440px; }
+  .card{ background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; margin-bottom:12px; }
+  h1{ font-size:18px; }
+  .sub{ color:var(--muted); font-size:13px; }
+  input[type=password],input[type=text]{ width:100%; padding:12px; border-radius:10px; border:1px solid var(--line); background:var(--card2); color:var(--fg); font-size:16px; }
+  button{ cursor:pointer; }
+  .pill{ font-size:12px; font-weight:700; padding:3px 10px; border-radius:999px; }
+  .on{ background:#14351f; color:#4ade80; } .off{ background:#3a1717; color:#f87171; }
+  .sec{ color:var(--muted); font-size:12px; letter-spacing:.08em; text-transform:uppercase; margin:16px 0 8px; }
+  .row{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid var(--line); }
+  .row:last-child{ border-bottom:0; }
+  input[type=range]{ width:150px; }
+  .seg{ display:flex; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  .seg button{ background:transparent; color:var(--muted); border:0; padding:8px 12px; }
+  .seg button.on{ background:var(--accent); color:#fff; }
+  .sw{ width:52px; height:30px; border-radius:999px; background:#333a47; position:relative; border:0; }
+  .sw::after{ content:""; position:absolute; top:3px; left:3px; width:24px; height:24px; border-radius:50%; background:#fff; transition:.15s; }
+  .sw.on{ background:var(--ok); } .sw.on::after{ left:25px; }
+  .stepper{ display:flex; align-items:center; gap:10px; }
+  .stepper button{ width:38px; height:38px; font-size:20px; border-radius:10px; border:1px solid var(--line); background:var(--card2); color:var(--fg); }
+  .stepper b{ min-width:56px; text-align:center; font-size:18px; }
+  .val{ min-width:44px; text-align:right; color:var(--fg); }
+  .apply{ flex:2; padding:15px; border:0; border-radius:12px; background:var(--accent); color:#fff; font-size:17px; font-weight:700; }
+  .ghost{ flex:1; background:transparent; color:var(--muted); border:1px solid var(--line); border-radius:12px; padding:15px; font-weight:700; }
+  .rowbtns{ display:flex; gap:10px; }
+  .statusline{ display:flex; gap:8px; flex-wrap:wrap; color:var(--muted); font-size:12px; margin-top:8px; }
+  pre{ background:#0b0e13; border:1px solid var(--line); border-radius:10px; padding:10px; font-size:11px; color:#9fb3c8; overflow:auto; margin-top:10px; }
+  .hint{ color:var(--muted); font-size:12px; margin-top:8px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <section id="unlock" class="card">
+    <h1>Admin · Pager</h1>
+    <div class="sub">Introdu tokenul de admin pentru a configura pagerul.</div>
+    <div style="height:12px"></div>
+    <input id="adminToken" type="password" placeholder="token admin" autocomplete="off">
+    <div style="height:12px"></div>
+    <button class="apply" style="width:100%" id="unlockBtn">Conectează</button>
+    <div class="hint" id="unlockHint">Tokenul e ținut doar în acest browser (sesiune).</div>
+  </section>
+
+  <section id="admin" hidden>
+    <div class="card">
+      <div class="row" style="border:0;padding-top:0"><h1>Admin · Pager</h1><span id="connPill" class="pill off">neconectat</span></div>
+      <div class="statusline" id="devStatus">—</div>
+    </div>
+    <div class="card">
+      <div class="sec" style="margin-top:0">Afișare</div>
+      <div id="sec-display"></div>
+      <div class="sec">Semnal la mesaj nou</div>
+      <div id="sec-cue"></div>
+      <div class="sec">Mesaje</div>
+      <div id="sec-defaults"></div>
+      <div class="sec">Kiosk</div>
+      <div id="sec-kiosk"></div>
+      <div style="height:12px"></div>
+      <div class="rowbtns"><button class="ghost" id="reset">Reset</button><button class="apply" id="apply">Aplică pe telefon</button></div>
+      <div class="hint" id="applied"></div>
+      <pre id="jsonPreview"></pre>
+    </div>
+  </section>
+</div>
+<script src="admin.js"></script>
+</body>
+</html>

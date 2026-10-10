@@ -36,6 +36,16 @@ the receiver validates and applies**, plus a live read of the device status.
 - [02 Config schema](issues/02-config-schema.md): v1 = `{schema:1, display, cue, defaults, kiosk}`; receiver clamps bounds, rejects unknown schema, ignores unknown fields, echoes applied config in status.
 - [03 Admin UI shape](issues/03-admin-ui.md): variant **A “Secțiuni”** — grouped single-scroll form + live status + JSON preview, gated by `?admin=1` + the `grandpa-admin` token.
 - [04 Receiver: apply/validate/ack](issues/04-receiver-apply.md): subscribe retained `grandpa/config`, apply on (re)connect; reject bad `schema`, else clamp/ignore; kiosk via activity; persist + reboot; ack in `status.config` + read-back; receiver token granted `subscribe grandpa/config`.
+- [06 Implement admin mode](issues/06-implement.md): shipped `admin.html`/`admin.js` (variant A, token-gated, prefill from status, Apply→`grandpa/config`) + receiver config handler; verified end-to-end on Flespi.
+
+## Built & shipped
+
+- **Admin page**: https://catalingb.github.io/grandpa-pager/admin.html (enter the
+  `grandpa-admin` token).
+- Receiver applies remote config from `grandpa/config` and acks it in
+  `grandpa/status.config`.
+- The map is **complete**: all decision tickets resolved; only build work
+  remained and it is done.
 
 ## Not yet specified
 

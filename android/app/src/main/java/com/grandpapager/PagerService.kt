@@ -209,11 +209,30 @@ class PagerService : Service(), MqttController.Listener {
             Topics.COMMAND -> if (cfg.role == Role.RECEIVER) {
                 if (PagerJson.toCommand(text)?.action == "clear") clearMessage("command")
             }
+            Topics.CONFIG -> if (cfg.role == Role.RECEIVER) {
+                applyRemoteConfig(text)
+            }
             Topics.STATUS -> if (cfg.role.isSender) {
                 cfg.lastStatusJson = text
                 PagerBus.notifyChanged()
             }
         }
+    }
+
+    /** Validate + store the admin remote config, then ack via status. */
+    private fun applyRemoteConfig(text: String) {
+        val parsed = RemoteConfigCodec.parse(text)
+        if (parsed == null) {
+            cfg.remoteConfigError = "schema invalid"
+            Log.w(TAG, "config rejected (bad schema)")
+        } else {
+            cfg.remoteConfigJson = RemoteConfigCodec.toJson(parsed)
+            cfg.remoteConfigAppliedAt = TimeUtil.nowIso()
+            cfg.remoteConfigError = null
+            Log.i(TAG, "config applied: ${cfg.remoteConfigJson}")
+        }
+        publishStatus()
+        PagerBus.notifyChanged()
     }
 
     // ------------------------------------------------------------ message ops
@@ -282,7 +301,10 @@ class PagerService : Service(), MqttController.Listener {
             current_message_id = cfg.currentMessageId,
             expires_at = if (cfg.currentExpiresAt > 0) TimeUtil.toIso(cfg.currentExpiresAt) else null,
             last_seen = TimeUtil.nowIso(),
-            app = "receiver"
+            app = "receiver",
+            config = cfg.remoteConfig(),
+            config_applied_at = cfg.remoteConfigAppliedAt,
+            config_error = cfg.remoteConfigError
         )
         m.publish(Topics.STATUS, PagerJson.diagnostics(d), retained = true)
     }

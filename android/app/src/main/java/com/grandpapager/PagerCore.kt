@@ -14,6 +14,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 object Topics {
     const val MESSAGE = "grandpa/message"   // retained, QoS1 — latest message
     const val COMMAND = "grandpa/command"   // QoS1 — control
+    const val CONFIG = "grandpa/config"     // retained, QoS1 — admin remote config
     const val STATUS = "grandpa/status"     // retained, QoS1 — receiver diagnostics
 }
 
@@ -46,7 +47,10 @@ data class DiagnosticsPayload(
     val current_message_id: String?,
     val expires_at: String?,
     val last_seen: String,
-    val app: String
+    val app: String,
+    val config: RemoteConfig? = null,
+    val config_applied_at: String? = null,
+    val config_error: String? = null
 )
 
 /** ISO-8601 UTC helpers that work down to API 24 (no java.time). */

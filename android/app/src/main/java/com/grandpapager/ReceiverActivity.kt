@@ -2,7 +2,9 @@ package com.grandpapager
 
 import android.animation.ValueAnimator
 import android.app.Activity
+import android.app.ActivityManager
 import android.app.admin.DevicePolicyManager
+import android.content.pm.ActivityInfo
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
@@ -67,6 +69,7 @@ class ReceiverActivity : Activity() {
     private var torchCameraId: String? = null
     private var torchRequested = false
     private val torchHandler = Handler(Looper.getMainLooper())
+    private var appliedOrientation: Int? = null
 
     /**
      * Admin escape hatch: five taps in the bottom-left corner switch to the
@@ -153,6 +156,7 @@ class ReceiverActivity : Activity() {
     }
 
     private fun refresh() {
+        applyRemoteConfig()
         if (cfg.hasActiveMessage()) {
             val id = cfg.currentMessageId
             if (id != null && id != lastCuedId) {
@@ -169,9 +173,9 @@ class ReceiverActivity : Activity() {
             messageView.gravity = Gravity.CENTER
             messageView.text = cfg.currentMessageText ?: ""
             warnView.visibility = View.GONE
-            // The "clears in …" countdown is a dev-only aid; production hides it.
+            // The "clears in …" countdown is a dev aid; the admin can also enable it.
             countdownView.text = getString(R.string.clears_in, remainingLabel())
-            countdownView.visibility = if (BuildConfig.DEBUG) View.VISIBLE else View.GONE
+            countdownView.visibility = if (BuildConfig.DEBUG || cfg.remoteConfig().display.countdown) View.VISIBLE else View.GONE
         } else {
             if (cfg.currentMessageId != null && !clearRequested) {
                 clearRequested = true
@@ -222,20 +226,46 @@ class ReceiverActivity : Activity() {
         }
     }
 
-    /** One-shot tri-modal cue: slow glow, a chime, a double vibration, + torch. */
+    /** Apply the admin remote config (display, orientation, kiosk). */
+    private fun applyRemoteConfig() {
+        val rc = cfg.remoteConfig()
+        nameView.setTextSize(TypedValue.COMPLEX_UNIT_SP, rc.display.name_size_sp.toFloat())
+        val orient = when (rc.display.orientation) {
+            "portrait" -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            "landscape" -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+        if (orient != appliedOrientation) {
+            appliedOrientation = orient
+            runCatching { requestedOrientation = orient }
+        }
+        if (DeviceOwnerManager.isDeviceOwner(this)) {
+            val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            val inLock = am.lockTaskModeState != ActivityManager.LOCK_TASK_MODE_NONE
+            when {
+                rc.kiosk.locked && !inLock -> runCatching { startLockTask() }
+                !rc.kiosk.locked && inLock -> switchToLauncher()
+            }
+        }
+    }
+
+    /** One-shot cue: glow, chime, vibration, torch — per the remote config. */
     private fun playArrivalCue() {
+        val rc = cfg.remoteConfig()
         glowAnim?.cancel()
         glowOverlay.alpha = 0f
-        glowAnim = ValueAnimator.ofFloat(0f, 1f, 0f, 1f, 0f, 1f, 0f).apply {
-            duration = 9000L
-            addUpdateListener { glowOverlay.alpha = it.animatedValue as Float }
-            start()
+        if (rc.cue.glow_ms > 0) {
+            glowAnim = ValueAnimator.ofFloat(0f, 1f, 0f, 1f, 0f, 1f, 0f).apply {
+                duration = rc.cue.glow_ms.toLong()
+                addUpdateListener { glowOverlay.alpha = it.animatedValue as Float }
+                start()
+            }
         }
-        runCatching {
+        if (rc.cue.chime) runCatching {
             val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
             RingtoneManager.getRingtone(this, uri)?.play()
         }
-        runCatching {
+        if (rc.cue.vibrate) runCatching {
             val v = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
             val pattern = longArrayOf(0L, 150L, 120L, 150L)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -244,7 +274,7 @@ class ReceiverActivity : Activity() {
                 @Suppress("DEPRECATION") v.vibrate(pattern, -1)
             }
         }
-        playTorchCue()
+        if (rc.cue.torch.enabled) playTorchCue(rc.cue.torch)
     }
 
     /* ---- Torch/flash signal (binary on/off — a smooth fade isn't possible
@@ -269,10 +299,9 @@ class ReceiverActivity : Activity() {
         }.onFailure { Log.w(TAG, "torch($on) failed: ${it.message}") }
     }
 
-    private fun playTorchCue() {
+    private fun playTorchCue(t: RemoteConfig.Torch) {
         torchHandler.removeCallbacksAndMessages(null)
-        // Slow, gentle on/off (a true fade isn't possible before API 33).
-        val onMs = 1500L; val offMs = 1500L; val pulses = 3
+        val onMs = t.on_ms.toLong(); val offMs = t.off_ms.toLong(); val pulses = t.pulses
         val run = object : Runnable {
             var count = 0
             override fun run() {

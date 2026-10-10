@@ -81,7 +81,7 @@ class MqttController(
     private fun subscribe(cfg: Config) {
         val c = client ?: return
         val (topics, qos) = when (cfg.role) {
-            Role.RECEIVER -> listOf(Topics.MESSAGE, Topics.COMMAND) to intArrayOf(1, 1)
+            Role.RECEIVER -> listOf(Topics.MESSAGE, Topics.COMMAND, Topics.CONFIG) to intArrayOf(1, 1, 1)
             else -> listOf(Topics.STATUS) to intArrayOf(1)
         }
         c.subscribe(topics.toTypedArray(), qos)
