@@ -1,0 +1,162 @@
+<!doctype html>
+<!--
+  PROTOTYPE — throwaway. Admin mode UI for the GitHub Pages pager app.
+  Question: "How should the admin config screen look/behave?"
+  Variants: A Sections · B Tabs · C Cards(switch-first). ?variant=A|B|C · ?chrome=0 for stills.
+-->
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE — admin mode</title>
+<style>
+  :root{ --bg:#0f1115; --card:#171b22; --card2:#12161d; --fg:#f2f4f8; --muted:#9aa4b2; --accent:#3b82f6; --line:#2b3140; --ok:#22c55e; --warn:#f59e0b; }
+  *{ box-sizing:border-box; margin:0; padding:0; font-family:system-ui,-apple-system,Roboto,sans-serif; }
+  body{ background:var(--bg); color:var(--fg); display:flex; justify-content:center; padding:16px; }
+  #app{ width:100%; max-width:440px; }
+  .card{ background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; margin-bottom:12px; }
+  h1{ font-size:18px; }
+  .sub{ color:var(--muted); font-size:13px; }
+  .pill{ font-size:12px; font-weight:700; padding:3px 10px; border-radius:999px; }
+  .on{ background:#14351f; color:#4ade80; }
+  .sec{ color:var(--muted); font-size:12px; letter-spacing:.08em; text-transform:uppercase; margin:16px 0 8px; }
+  .row{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid var(--line); }
+  .row:last-child{ border-bottom:0; }
+  .row .lbl{ font-size:15px; }
+  input[type=range]{ width:150px; }
+  .seg{ display:flex; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  .seg button{ background:transparent; color:var(--muted); border:0; padding:8px 12px; cursor:pointer; }
+  .seg button.on{ background:var(--accent); color:#fff; }
+  .sw{ width:52px; height:30px; border-radius:999px; background:#333a47; position:relative; border:0; cursor:pointer; }
+  .sw::after{ content:""; position:absolute; top:3px; left:3px; width:24px; height:24px; border-radius:50%; background:#fff; transition:.15s; }
+  .sw.on{ background:var(--ok); }
+  .sw.on::after{ left:25px; }
+  .stepper{ display:flex; align-items:center; gap:10px; }
+  .stepper button{ width:38px; height:38px; font-size:20px; border-radius:10px; border:1px solid var(--line); background:var(--card2); color:var(--fg); cursor:pointer; }
+  .stepper b{ min-width:56px; text-align:center; font-size:18px; }
+  .val{ color:var(--fg); font-variant-numeric:tabular-nums; min-width:44px; text-align:right; }
+  .apply{ width:100%; padding:15px; border:0; border-radius:12px; background:var(--accent); color:#fff; font-size:17px; font-weight:700; cursor:pointer; }
+  .ghost{ background:transparent; color:var(--muted); border:1px solid var(--line); border-radius:12px; padding:15px; font-weight:700; cursor:pointer; }
+  .rowbtns{ display:flex; gap:10px; }
+  .rowbtns>*{ flex:1; }
+  .tabs{ display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap; }
+  .tabs button{ flex:1; padding:10px; border-radius:10px; border:1px solid var(--line); background:var(--card2); color:var(--muted); cursor:pointer; }
+  .tabs button.on{ background:var(--accent); color:#fff; border-color:var(--accent); }
+  .bigcard{ display:flex; align-items:center; justify-content:space-between; padding:14px; border:1px solid var(--line); border-radius:14px; margin-bottom:10px; background:var(--card2); }
+  .bigcard .t{ font-size:16px; } .bigcard .d{ color:var(--muted); font-size:12px; }
+  pre{ background:#0b0e13; border:1px solid var(--line); border-radius:10px; padding:10px; font-size:11px; color:#9fb3c8; overflow:auto; margin-top:10px; }
+  .statusline{ display:flex; gap:8px; flex-wrap:wrap; color:var(--muted); font-size:12px; }
+  #bar{ position:fixed; bottom:12px; left:50%; transform:translateX(-50%); display:flex; gap:6px; align-items:center; background:#111; border:1px solid #444; border-radius:999px; padding:6px 10px; font-size:14px; color:#fff; z-index:99; }
+  #bar button{ background:#222; color:#fff; border:1px solid #555; border-radius:8px; padding:4px 9px; cursor:pointer; }
+  #bar #vlabel{ min-width:150px; text-align:center; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="bar"><button onclick="cycle(-1)">◀</button><span id="vlabel"></span><button onclick="cycle(1)">▶</button></div>
+<script>
+const P=new URLSearchParams(location.search);
+const NAMES={A:"Secțiuni",B:"File (tabs)",C:"Carduri"};
+let variant=(P.get("variant")||"A").toUpperCase();
+const showChrome=P.get("chrome")!=="0";
+let cfg={schema:1,
+  display:{name_size_sp:46,countdown:false,orientation:"auto"},
+  cue:{glow_ms:9000,chime:true,vibrate:true,torch:{enabled:true,on_ms:1500,off_ms:1500,pulses:3}},
+  defaults:{duration_minutes:240}, kiosk:{locked:true}};
+const DEF=JSON.parse(JSON.stringify(cfg));
+let tab="display";
+
+const set=(path,v)=>{const p=path.split(".");let o=cfg;for(let i=0;i<p.length-1;i++)o=o[p[i]];o[p[p.length-1]]=v;render();};
+const fmtH=m=>m>=60?((m%60)?(m/60).toFixed(1):(m/60))+" h":m+" min";
+const fmtMs=ms=>(ms/1000)+" s";
+
+function sw(path,label,desc){
+  const v=path.split(".").reduce((o,k)=>o[k],cfg);
+  return `<div class="row"><div><div class="lbl">${label}</div>${desc?`<div class="sub">${desc}</div>`:""}</div>
+    <button class="sw ${v?"on":""}" onclick="set('${path}',${!v})"></button></div>`;
+}
+function slider(path,label,min,max,step,unit,disp){
+  const v=path.split(".").reduce((o,k)=>o[k],cfg);
+  return `<div class="row"><div class="lbl">${label}</div>
+    <input type="range" min="${min}" max="${max}" step="${step}" value="${v}" oninput="set('${path}',+this.value)">
+    <span class="val">${disp?disp(v):v+unit}</span></div>`;
+}
+function seg(path,label,opts){
+  const v=path.split(".").reduce((o,k)=>o[k],cfg);
+  return `<div class="row"><div class="lbl">${label}</div><div class="seg">`+
+    opts.map(o=>`<button class="${o===v?"on":""}" onclick="set('${path}','${o}')">${o}</button>`).join("")+`</div></div>`;
+}
+function stepper(path,label,min,max,step,disp){
+  const v=path.split(".").reduce((o,k)=>o[k],cfg);
+  return `<div class="row"><div class="lbl">${label}</div><div class="stepper">
+    <button onclick="set('${path}',Math.max(${min},${v}-${step}))">−</button>
+    <b>${disp?disp(v):v}</b>
+    <button onclick="set('${path}',Math.min(${max},${v}+${step}))">+</button></div></div>`;
+}
+
+function deviceStatus(){ return `<div class="statusline"><span class="pill on">conectat</span><span>baterie 87%</span><span>wifi ✔</span><span>mqtt ✔</span><span>mesaj: Maria</span></div>`; }
+function jsonPreview(){ return `<pre>${JSON.stringify(cfg,null,1)}</pre>`; }
+
+function applyRow(){ return `<div class="rowbtns"><button class="ghost" onclick="reset()">Reset</button><button class="apply" onclick="apply()">Aplică pe telefon</button></div>`; }
+
+const SEC = {
+  display:[ seg("display.orientation","Orientare",["auto","portrait","landscape"]),
+            slider("display.name_size_sp","Mărime nume",20,120,2,"sp"),
+            sw("display.countdown","Arată contorul","doar build de test") ],
+  cue:[ slider("cue.glow_ms","Strălucire",0,20000,500,"ms",fmtMs),
+        sw("cue.chime","Sunet"), sw("cue.vibrate","Vibrație"),
+        sw("cue.torch.enabled","Lanternă"), 
+        slider("cue.torch.on_ms","Aprins",200,5000,100,"ms",fmtMs),
+        slider("cue.torch.off_ms","Stins",200,5000,100,"ms",fmtMs),
+        stepper("cue.torch.pulses","Pulsuri",1,10,1) ],
+  defaults:[ stepper("defaults.duration_minutes","Durată implicită",5,1440,30,fmtH) ],
+  kiosk:[ sw("kiosk.locked","Blocat (kiosk)","oprit = deschide launcherul") ]
+};
+
+function cvA(){
+  return `<div class="card"><div class="row" style="border:0;padding-top:0"><h1>Admin · Pager</h1>${badge()}</div>${deviceStatus()}</div>
+  <div class="card"><div class="sec" style="margin-top:0">Afișare</div>${SEC.display.join("")}
+  <div class="sec">Semnal la mesaj nou</div>${SEC.cue.join("")}
+  <div class="sec">Mesaje</div>${SEC.defaults.join("")}
+  <div class="sec">Kiosk</div>${SEC.kiosk.join("")}
+  <div style="height:12px"></div>${applyRow()}${jsonPreview()}</div>`;
+}
+function cvB(){
+  const tabs=[["display","Afișare"],["cue","Semnal"],["defaults","Mesaje"],["kiosk","Kiosk"]];
+  return `<div class="card"><div class="row" style="border:0;padding-top:0"><h1>Admin · Pager</h1>${badge()}</div>${deviceStatus()}</div>
+  <div class="card"><div class="tabs">${tabs.map(([id,l])=>`<button class="${tab===id?"on":""}" onclick="tab='${id}';render()">${l}</button>`).join("")}</div>
+  ${SEC[tab].join("")}${jsonPreview()}</div>
+  <div class="card">${applyRow()}</div>`;
+}
+function cvC(){
+  return `<div class="card"><div class="row" style="border:0;padding-top:0"><h1>Admin · Pager</h1>${badge()}</div>${deviceStatus()}</div>
+  <div class="card">
+    <div class="bigcard"><div><div class="t">Kiosk blocat</div><div class="d">oprit = deschide launcherul</div></div><button class="sw ${cfg.kiosk.locked?"on":""}" onclick="set('kiosk.locked',${!cfg.kiosk.locked})"></button></div>
+    <div class="bigcard"><div><div class="t">Lanternă</div><div class="d">semnal cu blițul</div></div><button class="sw ${cfg.cue.torch.enabled?"on":""}" onclick="set('cue.torch.enabled',${!cfg.cue.torch.enabled})"></button></div>
+    <div class="bigcard"><div><div class="t">Sunet</div></div><button class="sw ${cfg.cue.chime?"on":""}" onclick="set('cue.chime',${!cfg.cue.chime})"></button></div>
+    <div class="bigcard"><div><div class="t">Vibrație</div></div><button class="sw ${cfg.cue.vibrate?"on":""}" onclick="set('cue.vibrate',${!cfg.cue.vibrate})"></button></div>
+  </div>
+  <div class="card"><div class="sec" style="margin-top:0">Reglaje</div>
+    ${slider("display.name_size_sp","Mărime nume",20,120,2,"sp")}
+    ${slider("cue.glow_ms","Strălucire",0,20000,500,"ms",fmtMs)}
+    ${seg("display.orientation","Orientare",["auto","portrait","landscape"])}
+    ${stepper("defaults.duration_minutes","Durată implicită",5,1440,30,fmtH)}
+    ${jsonPreview()}</div>
+  <div class="card">${applyRow()}</div>`;
+}
+function badge(){ return `<span class="pill ok" style="background:#1e2a3a;color:#93c5fd">admin</span>`; }
+
+function render(){
+  document.getElementById("app").innerHTML = variant==="A"?cvA():variant==="B"?cvB():cvC();
+  document.getElementById("vlabel").textContent=`${variant} — ${NAMES[variant]}`;
+  document.getElementById("bar").style.display=showChrome?"flex":"none";
+  const u=new URL(location.href); u.searchParams.set("variant",variant); history.replaceState(null,"",u);
+}
+function cycle(d){ const k=Object.keys(NAMES); variant=k[(k.indexOf(variant)+d+k.length)%k.length]; render(); }
+function reset(){ cfg=JSON.parse(JSON.stringify(DEF)); render(); }
+function apply(){ /* prototype: no-op */ alert("PROTOTYPE — ar publica pe grandpa/config"); }
+addEventListener("keydown",e=>{ if(e.key==="ArrowLeft")cycle(-1); if(e.key==="ArrowRight")cycle(1); });
+render();
+</script>
+</body>
+</html>

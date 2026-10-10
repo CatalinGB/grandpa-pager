@@ -44,7 +44,6 @@ class PagerService : Service(), MqttController.Listener {
         const val EXTRA_EXPECTED_ID = "expectedId"
         private const val HEARTBEAT_MS = 30_000L
         private const val STATUS_STALE_MS = 90_000L
-
         fun start(ctx: Context) = launch(ctx, Intent(ctx, PagerService::class.java))
 
         fun send(ctx: Context, text: String, duration: Int) = launch(
@@ -68,7 +67,7 @@ class PagerService : Service(), MqttController.Listener {
     @Volatile private var mqtt: MqttController? = null
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
     private val handler = Handler(Looper.getMainLooper())
-    private var heartbeat: Runnable? = null
+    private var watchdog: Runnable? = null
     private val started = java.util.concurrent.atomic.AtomicBoolean(false)
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -117,13 +116,26 @@ class PagerService : Service(), MqttController.Listener {
         }
     }
 
+    /**
+     * Guarantees a live connection. Paho's automaticReconnect can stop retrying
+     * after a long outage, leaving a non-null but dead client; only creating a
+     * client when it is null would then strand the service forever (ticket 17).
+     * So when the existing client is not connected it is torn down and rebuilt —
+     * the old client must be closed first, otherwise its (still retrying) socket
+     * would share this clientId and the two would kick each other off.
+     */
     private fun ensureConnected() {
-        if (mqtt == null) {
-            val m = MqttController(this, this)
-            m.connect(cfg)
-            mqtt = m
-            Log.i(TAG, "connected")
+        val existing = mqtt
+        if (existing != null && existing.isConnected()) return
+        if (existing != null) {
+            runCatching { existing.disconnect() }
+            mqtt = null
+            Log.w(TAG, "connection was dead; reconnecting")
         }
+        val m = MqttController(this, this)
+        m.connect(cfg)
+        mqtt = m
+        Log.i(TAG, "connected")
     }
 
     private fun scheduleReconnect() {
@@ -142,8 +154,8 @@ class PagerService : Service(), MqttController.Listener {
         if (cfg.role == Role.RECEIVER) {
             restoreReceiverState()
             publishStatus()
-            startHeartbeat()
         }
+        startWatchdog()
         PagerBus.notifyChanged()
         started.set(true)
     }
@@ -162,7 +174,7 @@ class PagerService : Service(), MqttController.Listener {
     }
 
     override fun onDestroy() {
-        stopHeartbeat()
+        stopWatchdog()
         Link.connected = false
         runCatching { mqtt?.disconnect() }
         executor.shutdownNow()
@@ -275,21 +287,32 @@ class PagerService : Service(), MqttController.Listener {
         m.publish(Topics.STATUS, PagerJson.diagnostics(d), retained = true)
     }
 
-    private fun startHeartbeat() {
-        stopHeartbeat()
+    /**
+     * Periodic self-healing check for BOTH roles: verifies the link is alive
+     * (recreating the client if Paho's automaticReconnect has given up) and, for
+     * the receiver, keeps the diagnostics heartbeat flowing so senders can detect
+     * it. This is what makes the service recover from a long broker outage.
+     */
+    private fun startWatchdog() {
+        stopWatchdog()
         val r = object : Runnable {
             override fun run() {
-                executor.execute { runCatching { publishStatus() } }
+                executor.execute {
+                    runCatching {
+                        ensureConnected()
+                        if (cfg.role == Role.RECEIVER) publishStatus()
+                    }.onFailure { Log.w(TAG, "watchdog reconnect failed", it) }
+                }
                 handler.postDelayed(this, HEARTBEAT_MS)
             }
         }
-        heartbeat = r
+        watchdog = r
         handler.postDelayed(r, HEARTBEAT_MS)
     }
 
-    private fun stopHeartbeat() {
-        heartbeat?.let { handler.removeCallbacks(it) }
-        heartbeat = null
+    private fun stopWatchdog() {
+        watchdog?.let { handler.removeCallbacks(it) }
+        watchdog = null
     }
 
     private fun batteryLevel(): Int {

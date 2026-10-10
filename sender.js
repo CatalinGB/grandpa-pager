@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  var LS = { token: "gp_token", sender: "gp_sender", broker: "gp_broker", client: "gp_client" };
+  var LS = { token: "gp_token", sender: "gp_sender", broker: "gp_broker" };
   var TOPIC = { message: "grandpa/message", command: "grandpa/command", status: "grandpa/status" };
   var DEFAULT_BROKER = "wss://mqtt.flespi.io:443";
   var DEFAULT_MIN = 240;
@@ -115,10 +115,14 @@
       return v.toString(16);
     });
   }
+  /* A fresh, unique clientId per connection. The sender runs clean sessions, so
+     a persisted id buys nothing and, worse, makes two instances that share
+     localStorage (two tabs, or the installed PWA + a tab) collide: the broker
+     drops the older session on each CONNECT and the two kick each other off
+     forever — the connect/disconnect flicker. A per-connection random id makes
+     each instance independent. */
   function clientId() {
-    var id = localStorage.getItem(LS.client);
-    if (!id) { id = "grandpa-web-" + Math.random().toString(16).slice(2) + Date.now().toString(16); localStorage.setItem(LS.client, id); }
-    return id;
+    return "grandpa-web-" + Math.random().toString(16).slice(2) + "-" + Date.now().toString(16);
   }
 
   function connect() {

@@ -1,7 +1,20 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
+
+// Optional release signing: put a gitignored `android/keystore.properties`
+// alongside the project (storeFile/storePassword/keyAlias/keyPassword).
+// Without it, the release build falls back to the debug key so local
+// sideloading keeps working. NEVER commit the keystore or its passwords.
+val keystoreFile = rootProject.file("keystore.properties")
+val keystoreProps = Properties().apply {
+    if (keystoreFile.exists()) keystoreFile.inputStream().use { load(it) }
+}
+val hasReleaseKeystore = keystoreFile.exists() &&
+    keystoreProps.getProperty("storeFile")?.isNotBlank() == true
 
 android {
     namespace = "com.grandpapager"
@@ -16,12 +29,27 @@ android {
         versionName = "1.0"
     }
 
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         getByName("release") {
             isMinifyEnabled = false
-            // Sideloadable release build (signed with the debug key) so the
-            // production UI (no countdown) can be installed on the phone.
-            signingConfig = signingConfigs.getByName("debug")
+            // Use the real release keystore when configured; otherwise sign with
+            // the debug key so the production UI can still be sideloaded locally.
+            signingConfig = if (hasReleaseKeystore) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
