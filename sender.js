@@ -213,74 +213,16 @@
     el("setupHint").textContent = "Token uitat. Introdu-l din nou.";
   }
 
-  /* ---------- PWA: service worker + "install as app" popup ---------- */
-  function initPwa() {
+  /* ---------- service worker (offline app shell) ---------- */
+  function registerSW() {
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("./sw.js").catch(function () {});
-    }
-    var bar = el("installBar"), text = el("installText"), go = el("installGo"), no = el("installNo");
-    if (!bar) return;
-
-    var ua = navigator.userAgent;
-    var isAndroid = /Android/i.test(ua);
-    var isIOS = /iPhone|iPad|iPod/i.test(ua);
-    var isFirefox = /Firefox|FxiOS/i.test(ua);
-    var isMobile = isAndroid || isIOS;
-
-    var standalone = function () {
-      return (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true;
-    };
-    // Suppressed forever once: installed, dismissed, or the hint already shown.
-    var suppressed = function () {
-      return standalone() ||
-        localStorage.getItem("gp_installed") === "1" ||
-        localStorage.getItem("gp_install_dismissed") === "1" ||
-        localStorage.getItem("gp_hint_shown") === "1";
-    };
-    function instructions() {
-      if (isAndroid) {
-        return isFirefox
-          ? "În Firefox: meniul <b>⋮</b> (sus-dreapta) → <b>„Mai multe”</b> → <b>„Adaugă pe ecranul principal”</b>."
-          : "În Chrome: meniul <b>⋮</b> (sus-dreapta) → <b>„Adaugă pe ecranul principal”</b> / <b>„Instalează aplicația”</b>.";
-      }
-      if (isIOS) return "În Safari: butonul <b>Partajare</b> ⤴ → <b>„Adaugă la ecranul principal”</b>.";
-      return "Instalarea ca aplicație se face de pe telefon (Android: Chrome sau Firefox).";
-    }
-    function hide() { bar.hidden = true; }
-
-    // Dev/testing: ?install=1 → CTA, ?install=help → instructions (bypass suppression).
-    var force = new URLSearchParams(location.search).get("install");
-    if (force === "1") { text.textContent = "Instalează „Grandpa Pager” ca aplicație pe telefon."; go.hidden = false; bar.hidden = false; }
-    else if (force === "help") { text.innerHTML = instructions(); go.hidden = true; bar.hidden = false; }
-
-    var deferred = null;
-    window.addEventListener("beforeinstallprompt", function (e) {
-      e.preventDefault();
-      deferred = e;
-      if (isMobile && !suppressed()) { text.textContent = "Instalează „Grandpa Pager” ca aplicație pe telefon."; go.hidden = false; bar.hidden = false; }
-    });
-    window.addEventListener("appinstalled", function () { localStorage.setItem("gp_installed", "1"); hide(); });
-
-    go.addEventListener("click", function () {
-      if (deferred) { deferred.prompt(); deferred.userChoice.then(function () { deferred = null; hide(); }); }
-      else { text.innerHTML = instructions(); go.hidden = true; }
-    });
-    no.addEventListener("click", function () { localStorage.setItem("gp_install_dismissed", "1"); hide(); });
-
-    // Mobile without an auto-prompt (Firefox/Android, iOS): show the how-to ONCE.
-    if (isMobile && !suppressed()) {
-      setTimeout(function () {
-        if (bar.hidden && !deferred && !suppressed()) {
-          text.innerHTML = instructions(); go.hidden = true; bar.hidden = false;
-          localStorage.setItem("gp_hint_shown", "1");
-        }
-      }, 4000);
     }
   }
 
   /* ---------- wire up ---------- */
   function init() {
-    initPwa();
+    registerSW();
     if (typeof mqtt === "undefined") { el("setupHint").textContent = "Eroare: mqtt.min.js nu s-a încărcat."; showView("setup"); return; }
 
     buildPresets();

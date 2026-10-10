@@ -45,14 +45,6 @@
   .diag{ background:var(--card2); border:1px solid var(--line); border-radius:10px; padding:12px; white-space:pre-wrap; font-family:ui-monospace,monospace; font-size:13px; color:var(--muted); }
   .banner{ background:#2a2312; border:1px solid #5a4a12; color:#fbbf24; border-radius:10px; padding:10px 12px; font-size:14px; margin-bottom:12px; }
   .banner b{ color:#fff; }
-
-  .installbar{ position:fixed; left:50%; bottom:14px; transform:translateX(-50%); width:min(430px,92vw);
-    background:#1b1f27; border:1px solid #2b3140; border-radius:14px; padding:12px 14px; display:flex;
-    align-items:center; gap:10px; box-shadow:0 6px 24px rgba(0,0,0,.55); z-index:60; }
-  .installbar .txt{ flex:1; font-size:14px; line-height:1.35; }
-  .installbar button{ padding:10px 14px; border-radius:10px; border:0; font-weight:700; white-space:nowrap; }
-  .installbar .go{ background:var(--accent); color:#fff; }
-  .installbar .no{ background:transparent; color:var(--muted); border:1px solid var(--line); }
   details summary{ cursor:pointer; color:var(--muted); }
   .hint{ color:var(--muted); font-size:12px; margin-top:8px; }
 </style>
@@ -132,11 +124,5 @@
 </div>
 
 <script src="sender.js"></script>
-
-<div id="installBar" class="installbar" hidden>
-  <div class="txt" id="installText">Instalează aplicația pe ecranul telefonului.</div>
-  <button class="go" id="installGo">Instalează</button>
-  <button class="no" id="installNo">Mai târziu</button>
-</div>
 </body>
 </html>

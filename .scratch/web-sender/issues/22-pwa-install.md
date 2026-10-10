@@ -11,24 +11,14 @@ Android Chrome/Firefox.
 
 ## Answer
 
-The web sender is now a **PWA**:
+**Install UI removed at the owner's request.** The install popup / instructions
+are gone entirely (`#installBar`, its CSS, and all `beforeinstallprompt`/dismiss/
+hint logic in `sender.js`). The page no longer nags about installing.
 
-- `manifest.webmanifest` — `Grandpa Pager`, `display: standalone`, amber theme,
-  maskable + standard icons (`icon-192/512`, `icon-maskable-512`).
-- `sw.js` — service worker (network-first with cache fallback) so the app is
-  installable and works offline for the shell.
-- `index.html` — `<link rel="manifest">`, `theme-color`, `apple-touch-icon`,
-  and a bottom **install popup** (`#installBar`).
+Kept for offline use: `manifest.webmanifest` + `sw.js` (service worker). The app
+can still be installed from the browser's own menu/icon if the user chooses, but
+the web app itself shows no install instructions.
 
-Behaviour:
-- **Chrome/Edge Android**: `beforeinstallprompt` → the popup shows; “Instalează”
-  triggers the native install (Add to Home screen).
-- **Firefox Android**: it doesn't fire `beforeinstallprompt`, so the popup shows
-  the manual path: **⋮ → „Mai multe” → „Adaugă pe ecranul principal”**.
-- The popup appears **only on mobile** (it’s pointless on desktop and caused the
-  “This app can’t be installed” confusion there).
-- **Dismissal is permanent** (`gp_install_dismissed`); once dismissed or the hint
-  shown once (`gp_hint_shown`) or installed, it never returns.
-- The service worker caches each asset independently so install can’t fail on one
-  404, and registers immediately.
-- `?install=1` force-shows the CTA, `?install=help` the instructions (dev/testing).
+Earlier behaviour (now removed): popup with a native install CTA on Chrome
+Android and manual instructions on Firefox.
+
