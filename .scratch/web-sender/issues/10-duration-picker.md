@@ -1,7 +1,7 @@
 # 10 — Friendly expiration-time picker
 
 Type: prototype
-Status: open
+Status: resolved
 Blocked by:
 
 ## Question
@@ -21,3 +21,8 @@ readout and default 4 h:
 - **C — Slider**: 15 min–24 h range with tick labels.
 
 **Awaiting the owner's pick** (A is the friendliest for non-technical senders).
+
+## Answer
+
+Owner picked **B — the − / value / + stepper** (with quick presets). Implemented
+in `index.html`/`sender.js`; verified on the phone via the web→receiver path.

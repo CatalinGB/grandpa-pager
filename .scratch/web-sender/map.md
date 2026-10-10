@@ -36,6 +36,20 @@ A1. The Android receiver and its schema are unchanged. (Execution effort.)
 - [02 EMQX Cloud WebSocket support](issues/02-emqx-cloud-wss.md): EMQX Cloud Serverless **already supports WSS** at `wss://<deployment>:8084/mqtt` (username/password) — **no broker switch needed**.
 - [03 MQTT.js in the browser](issues/03-mqttjs-browser.md): pin `mqtt@5.16.0/dist/mqtt.min.js`; API unchanged in v5; must use `wss://`.
 - [09 Does Flespi fully cover all needs?](issues/09-flespi-coverage.md): Yes functionally (persistent sessions ~10 d, retained, LWT, wildcards, per-token ACLs). No infinite token — max 1 y TTL, but rolling, so one shared token kept alive by the receiver is effectively non-expiring. Free tier is "testing & development".
+- [04 Sender schema](issues/04-sender-schema.md): Web sender publishes the exact Android schema incl. `sender`; clear = empty retained.
+- [05 Token & onboarding](issues/05-token-onboarding.md): Token entered at runtime, kept in `localStorage`; one shared publisher token is fine (senders distinguished by typed name); scope with ACL + origins.
+- [06 Broker choice](issues/06-broker-choice.md): Flespi — one broker for receiver + all senders.
+- [10 Duration picker](issues/10-duration-picker.md): Variant B (− / value / + stepper + presets).
+- [18 Vendor MQTT.js](issues/18-vendor-mqttjs.md): MQTT.js vendored into the repo; page fails loudly if the library is missing.
+
+## Built & shipped
+
+- **Web sender**: `index.html` + `sender.js` (+ vendored `mqtt.min.js`), live at
+  **https://catalingb.github.io/grandpa-pager/**.
+- **Repo**: https://github.com/CatalingGB/grandpa-pager (entire solution).
+- Docker-free local broker with TLS + WSS: `tools/broker/server.js`.
+- Verified e2e: headless browser → broker → Android receiver on the phone.
+- Security audit: `SECURITY.md`; Flespi hardening: `docs/flespi-setup.md`.
 
 ## Not yet specified
 

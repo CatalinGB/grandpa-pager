@@ -143,6 +143,10 @@
 
   /* ---------- wire up ---------- */
   function init() {
+    if (typeof mqtt === "undefined") {
+      el("sendHint").textContent = "Eroare: biblioteca MQTT (mqtt.min.js) nu s-a încărcat.";
+      return;
+    }
     buildPresets();
     setMinutes(DEFAULT_MIN);
 

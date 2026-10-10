@@ -1,7 +1,7 @@
 # 04 — Sender schema (add the sender field)
 
 Type: grilling
-Status: open
+Status: resolved
 Blocked by:
 
 ## Question
@@ -26,3 +26,9 @@ The web sender must publish the **same schema as the Android sender**, i.e.:
 - Clear = publish an **empty retained** payload to `grandpa/message`.
 - Subscribe to `grandpa/status` for the diagnostics panel.
 - Topic + QoS 1 + retained identical to the Android sender.
+
+## Answer
+
+Confirmed and implemented in `sender.js` (see the whole repo). The web sender
+publishes the exact Android schema including `sender`; duration comes from the
+picker; clear = empty retained. Verified end-to-end (web → broker → phone).
