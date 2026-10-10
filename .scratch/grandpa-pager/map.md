@@ -56,6 +56,7 @@ carries execution.)
 - [14 New-message attention cue](issues/14-attention-cue.md): One-shot tri-modal burst — slow amber glow (~6 s) + chime + double vibration; never re-cue the same message.
 - [15 Connection problem in place](issues/15-connection-warning.md): Amber `Probleme cu conexiunea` on the idle clock screen when the link is down; never hides a live message.
 - [16 Hide the expiry countdown in production](issues/16-countdown-dev-only.md): countdown visible only in `BuildConfig.DEBUG`; release hides it (release APK debug-signed to stay sideloadable).
+- [17 Lock down the phone's network (open-source firewall)](issues/17-network-firewall.md): install NetGuard (no-root), whitelist only the pager app, wire always-on VPN via the device owner; DNS caveat on Android 9.
 
 ## Not yet specified
 

@@ -201,9 +201,7 @@
   /* ---------- PWA: service worker + "install as app" popup ---------- */
   function initPwa() {
     if ("serviceWorker" in navigator) {
-      window.addEventListener("load", function () {
-        navigator.serviceWorker.register("./sw.js").catch(function () {});
-      });
+      navigator.serviceWorker.register("./sw.js").catch(function () {});
     }
     var bar = el("installBar"), text = el("installText"), go = el("installGo"), no = el("installNo");
     if (!bar) return;
