@@ -1,0 +1,62 @@
+<resources>
+    <!-- Receiver display -->
+    <string name="from_prefix">От: %1$s</string>
+    <string name="clears_in">очистится через %1$s</string>
+    <string name="duration_hm">%1$dh %2$dm</string>
+    <string name="duration_m">%1$dm</string>
+    <string name="duration_lt_min">&lt;1m</string>
+    <!-- Tokens: {EEEE}=weekday {do}=ordinal day {d}=day {MMMM}=month {yyyy}=year -->
+    <string name="idle_date_fmt">{EEEE}, {d} {MMMM} {yyyy} г.</string>
+
+    <!-- Setup -->
+    <string name="setup_title">Grandpa Pager — настройка</string>
+    <string name="role">Роль</string>
+    <string name="role_receiver">Приёмник (это телефон дедушки)</string>
+    <string name="role_admin">Отправитель — админ</string>
+    <string name="role_family">Отправитель — семья</string>
+    <string name="broker_host">Хост брокера (без схемы)</string>
+    <string name="port">Порт</string>
+    <string name="username">Имя пользователя</string>
+    <string name="password">Пароль</string>
+    <string name="sender_name">Ваше имя отправителя</string>
+    <string name="sender_name_hint">напр. Мария</string>
+    <string name="use_tls">Использовать TLS (ssl://)</string>
+    <string name="save_start">Сохранить и запустить</string>
+    <string name="err_host_required">Требуется хост брокера.</string>
+    <string name="status_saved">Сохранено. Запуск как %1$s…</string>
+    <string name="status_configured">Настроено (%1$s). Выберите роль и нажмите «Сохранить», чтобы применить.</string>
+    <string name="status_configured_none">Заполните данные брокера и выберите роль.</string>
+    <string name="device_owner">владелец устройства</string>
+    <string name="normal_app">обычное приложение</string>
+
+    <!-- Sender -->
+    <string name="sender_from_label">От:</string>
+    <string name="sender_name_hint_full">Ваше имя (отображается на экране дедушки)</string>
+    <string name="message">Сообщение</string>
+    <string name="message_hint">Введите сообщение…</string>
+    <string name="duration_minutes">Длительность (минуты)</string>
+    <string name="send_to_grandpa">Отправить дедушке</string>
+    <string name="clear_message">Очистить сообщение</string>
+    <string name="grandpas_device">Устройство дедушки</string>
+    <string name="waiting">ожидание…</string>
+    <string name="err_type_message">Сначала введите сообщение.</string>
+    <string name="sent_confirm">Отправлено. Запрашиваем показ на устройстве дедушки…</string>
+    <string name="status_none">Статуса пока нет — устройство может быть офлайн.</string>
+    <string name="status_unreadable">Нечитаемые данные статуса.</string>
+    <string name="lbl_state">состояние:</string>
+    <string name="lbl_mqtt">mqtt:</string>
+    <string name="lbl_battery">батарея:</string>
+    <string name="lbl_wifi">wifi:</string>
+    <string name="lbl_message">сообщение:</string>
+    <string name="lbl_msg_id">id сообщения:</string>
+    <string name="lbl_expires">истекает:</string>
+    <string name="lbl_seen">просмотрено:</string>
+    <string name="charging_suffix">(зарядка)</string>
+    <string name="stale_suffix">(УСТАРЕЛО %1$ds)</string>
+    <string name="seen_ago">%1$ds назад</string>
+
+    <!-- Service notification -->
+    <string name="notif_running">Работает</string>
+    <string name="notif_listening">Ожидание сообщений</string>
+    <string name="notif_connected">Подключено к пейджеру дедушки</string>
+</resources>

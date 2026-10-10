@@ -1,0 +1,62 @@
+<resources>
+    <!-- Receiver display -->
+    <string name="from_prefix">Von: %1$s</string>
+    <string name="clears_in">löscht in %1$s</string>
+    <string name="duration_hm">%1$dh %2$dm</string>
+    <string name="duration_m">%1$dm</string>
+    <string name="duration_lt_min">&lt;1m</string>
+    <!-- Tokens: {EEEE}=weekday {do}=ordinal day {d}=day {MMMM}=month {yyyy}=year -->
+    <string name="idle_date_fmt">{EEEE}, {d}. {MMMM} {yyyy}</string>
+
+    <!-- Setup -->
+    <string name="setup_title">Grandpa Pager — Einrichtung</string>
+    <string name="role">Rolle</string>
+    <string name="role_receiver">Empfänger (das ist Opas Handy)</string>
+    <string name="role_admin">Sender — Admin</string>
+    <string name="role_family">Sender — Familie</string>
+    <string name="broker_host">Broker-Host (ohne Schema)</string>
+    <string name="port">Port</string>
+    <string name="username">Benutzername</string>
+    <string name="password">Passwort</string>
+    <string name="sender_name">Dein Sendername</string>
+    <string name="sender_name_hint">z. B. Maria</string>
+    <string name="use_tls">TLS verwenden (ssl://)</string>
+    <string name="save_start">Speichern &amp; starten</string>
+    <string name="err_host_required">Broker-Host ist erforderlich.</string>
+    <string name="status_saved">Gespeichert. Startet als %1$s…</string>
+    <string name="status_configured">Konfiguriert (%1$s). Wähle eine Rolle und speichere, um sie anzuwenden.</string>
+    <string name="status_configured_none">Gib die Broker-Details ein und wähle eine Rolle.</string>
+    <string name="device_owner">Geräteeigentümer</string>
+    <string name="normal_app">normale App</string>
+
+    <!-- Sender -->
+    <string name="sender_from_label">Von:</string>
+    <string name="sender_name_hint_full">Dein Name (erscheint auf Opas Bildschirm)</string>
+    <string name="message">Nachricht</string>
+    <string name="message_hint">Nachricht eingeben…</string>
+    <string name="duration_minutes">Dauer (Minuten)</string>
+    <string name="send_to_grandpa">An Opa senden</string>
+    <string name="clear_message">Nachricht löschen</string>
+    <string name="grandpas_device">Opas Gerät</string>
+    <string name="waiting">wartet…</string>
+    <string name="err_type_message">Gib zuerst eine Nachricht ein.</string>
+    <string name="sent_confirm">Gesendet. Opas Gerät wird gebeten, sie anzuzeigen…</string>
+    <string name="status_none">Noch kein Status — das Gerät ist eventuell offline.</string>
+    <string name="status_unreadable">Unlesbare Status-Daten.</string>
+    <string name="lbl_state">Status:</string>
+    <string name="lbl_mqtt">mqtt:</string>
+    <string name="lbl_battery">Akku:</string>
+    <string name="lbl_wifi">wifi:</string>
+    <string name="lbl_message">Nachricht:</string>
+    <string name="lbl_msg_id">Nachrichten-ID:</string>
+    <string name="lbl_expires">läuft ab:</string>
+    <string name="lbl_seen">gesehen:</string>
+    <string name="charging_suffix">(lädt)</string>
+    <string name="stale_suffix">(VERALTET %1$ds)</string>
+    <string name="seen_ago">vor %1$ds</string>
+
+    <!-- Service notification -->
+    <string name="notif_running">Läuft</string>
+    <string name="notif_listening">Empfängt Nachrichten</string>
+    <string name="notif_connected">Mit Opas Pager verbunden</string>
+</resources>

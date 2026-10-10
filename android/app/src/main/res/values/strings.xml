@@ -1,0 +1,67 @@
+<resources>
+    <string name="app_name" translatable="false">Grandpa Pager</string>
+
+    <!-- Receiver display -->
+    <string name="from_prefix">From: %1$s</string>
+    <string name="clears_in">clears in %1$s</string>
+    <string name="duration_hm">%1$dh %2$dm</string>
+    <string name="duration_m">%1$dm</string>
+    <string name="duration_lt_min">&lt;1m</string>
+    <string name="conn_problem">Probleme cu conexiunea</string>
+    <!-- Tokens: {EEEE}=weekday {do}=ordinal day {d}=day {MMMM}=month {yyyy}=year -->
+    <string name="idle_date_fmt">{EEEE} {do} of {MMMM} {yyyy}</string>
+
+    <!-- Setup -->
+    <string name="setup_title">Grandpa Pager — setup</string>
+    <string name="role">Role</string>
+    <string name="role_receiver">Receiver (this is Grandpa\'s phone)</string>
+    <string name="role_admin">Sender — Admin</string>
+    <string name="role_family">Sender — Family</string>
+    <string name="broker_host">Broker host (no scheme)</string>
+    <string name="broker_host_hint" translatable="false">127.0.0.1 or xxxx.emqxcloud.com</string>
+    <string name="port">Port</string>
+    <string name="username">Username</string>
+    <string name="password">Password</string>
+    <string name="sender_name">Your sender name</string>
+    <string name="sender_name_hint">e.g. Maria</string>
+    <string name="use_tls">Use TLS (ssl://)</string>
+    <string name="save_start">Save &amp; start</string>
+    <string name="err_host_required">Broker host is required.</string>
+    <string name="status_saved">Saved. Starting as %1$s…</string>
+    <string name="status_configured">Configured (%1$s). Pick a role and Save to apply.</string>
+    <string name="status_configured_none">Fill in the broker details and choose a role.</string>
+    <string name="device_owner">device owner</string>
+    <string name="normal_app">normal app</string>
+
+    <!-- Sender -->
+    <string name="sender_from_label">From:</string>
+    <string name="sender_name_hint_full">Your name (appears on Grandpa\'s screen)</string>
+    <string name="message">Message</string>
+    <string name="message_hint">Type the message…</string>
+    <string name="duration_minutes">Duration (minutes)</string>
+    <string name="default_duration" translatable="false">240</string>
+    <string name="send_to_grandpa">Send to Grandpa</string>
+    <string name="clear_message">Clear message</string>
+    <string name="grandpas_device">Grandpa\'s device</string>
+    <string name="waiting">waiting…</string>
+    <string name="err_type_message">Type a message first.</string>
+    <string name="sent_confirm">Sent. Asking Grandpa\'s device to show it…</string>
+    <string name="status_none">No status yet — device may be offline.</string>
+    <string name="status_unreadable">Unreadable status payload.</string>
+    <string name="lbl_state">state:</string>
+    <string name="lbl_mqtt">mqtt:</string>
+    <string name="lbl_battery">battery:</string>
+    <string name="lbl_wifi">wifi:</string>
+    <string name="lbl_message">message:</string>
+    <string name="lbl_msg_id">msg id:</string>
+    <string name="lbl_expires">expires:</string>
+    <string name="lbl_seen">seen:</string>
+    <string name="charging_suffix">(charging)</string>
+    <string name="stale_suffix">(STALE %1$ds)</string>
+    <string name="seen_ago">%1$ds ago</string>
+
+    <!-- Service notification -->
+    <string name="notif_running">Running</string>
+    <string name="notif_listening">Listening for messages</string>
+    <string name="notif_connected">Connected to Grandpa\'s pager</string>
+</resources>

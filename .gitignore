@@ -1,0 +1,18 @@
+# Build output
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+
+# Node
+tools/broker/node_modules/
+
+# Secrets — never commit the token or the test CA private key
+.env
+.env.*
+tools/certs/*.key
+tools/certs/*.srl
+
+# OS / editor
+.DS_Store
+*.swp

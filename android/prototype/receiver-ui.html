@@ -1,0 +1,224 @@
+<!--
+  PROTOTYPE — throwaway. Do not ship.
+  Question: "What should the Grandpa Pager receiver screen look like?"
+  Three structurally different variants of the receiver route (message / idle /
+  offline), switchable via ?variant=A|B|C and ?state=msg|idle|offline.
+  Render for review:  ?chrome=0  (hides the switcher)
+  Constraints being tested:
+    - sender shown as the NAME only (no "From:")
+    - name+message as large as possible while still fitting the screen
+    - idle: one-row date (UPPERCASE weekday + dd/mm/yyyy) + clock 30% larger
+    - offline: a layman message an elderly person understands
+-->
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE — receiver UI</title>
+<style>
+  :root{ --bg:#000; --fg:#fff; --accent:#FAB005; --muted:#8f8f8f; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ width:100%; height:100%; background:var(--bg); overflow:hidden; }
+  #screen{
+    width:100vw; height:100vh; background:var(--bg); color:var(--fg);
+    font-family: Roboto, "Helvetica Neue", Arial, sans-serif;
+    display:flex; flex-direction:column; position:relative;
+  }
+  .area{ flex:1; overflow:hidden; display:flex; padding:4vh 5vw 2vh; min-height:0; }
+  .fit{ font-size:64px; line-height:1.06; }
+  .name{ color:var(--accent); font-weight:700; }
+  .msg{ color:var(--fg); font-weight:700; }
+  .countdown{ color:var(--muted); text-align:center; padding:1.5vh 0 3.5vh; font-size:3.4vh; }
+
+  /* ---- message-state layouts ---- */
+  .A .area{ flex-direction:column; align-items:flex-start; justify-content:flex-start; }
+  .A .fit{ display:flex; flex-direction:column; gap:.12em; }
+  .A .name{ font-size:.44em; }
+  .A .msg{ font-size:1em; }
+
+  .B .area{ align-items:center; justify-content:center; }
+  .B .fit{ display:block; text-align:center; }
+  .countdown .name{ color:var(--accent); }
+
+  .C .area{ align-items:center; justify-content:center; }
+  .C .fit{ display:flex; flex-direction:column; align-items:center; text-align:center; gap:.18em; }
+  .C .name{ font-size:.36em; }
+  .C .msg{ font-size:1em; }
+
+  /* ---- idle-state layouts ---- */
+  .idle .area{ align-items:center; justify-content:center; }
+  .IdleA .fit{ display:flex; flex-direction:column; align-items:center; text-align:center; gap:.15em; }
+  .IdleB .area{ align-items:flex-start; justify-content:flex-start; }
+  .IdleB .fit{ display:flex; flex-direction:column; align-items:flex-start; gap:.15em; }
+  .IdleC .fit{ display:flex; flex-direction:column; align-items:center; text-align:center; gap:.05em; }
+  .date{ text-transform:uppercase; font-weight:700; white-space:nowrap; font-size:1em; }
+  .clock{ font-weight:700; font-size:1.3em; line-height:1; }
+
+  /* ---- offline-state layouts ---- */
+  .offline .area{ align-items:center; justify-content:center; }
+  .OffA .fit{ display:flex; flex-direction:column; align-items:center; text-align:center; gap:.18em; }
+  .OffA .big{ font-size:1em; font-weight:700; }
+  .OffA .sub{ font-size:.42em; color:var(--muted); }
+  .OffB .fit{ display:flex; flex-direction:column; align-items:center; text-align:center; gap:.12em; }
+  .OffB .icon{ font-size:.7em; }
+  .OffB .big{ font-size:1em; font-weight:700; }
+  .OffB .sub{ font-size:.4em; color:var(--muted); }
+  .OffC .fit{ display:flex; flex-direction:column; align-items:center; text-align:center; gap:.16em; }
+  .OffC .big{ font-size:1em; font-weight:700; }
+  .OffC .sub{ font-size:.46em; color:var(--fg); }
+
+  /* ---- attention cues for a NEW message ---- */
+  #screen.attn-glow{ animation: glowpulse 1.1s ease-in-out infinite; }
+  #screen.attn-glow.freeze{ animation:none; box-shadow: inset 0 0 0 20px rgba(250,176,5,.95); }
+  @keyframes glowpulse{
+    0%,100%{ box-shadow: inset 0 0 0 6px rgba(250,176,5,.30); }
+    50%    { box-shadow: inset 0 0 0 22px rgba(250,176,5,.95); }
+  }
+  .attn-blink .name{ animation: nameblink 1s steps(1,end) infinite;
+    background:rgba(250,176,5,.20); border-radius:.22em; padding:0 .12em; }
+  .attn-blink.freeze .name{ animation:none; opacity:1; }
+  @keyframes nameblink{ 0%,49%{opacity:1} 50%,100%{opacity:.12} }
+  .attn-flash{ animation: flashbg 1.3s ease-out 1; }
+  .attn-flash.freeze{ animation:none; background:#3a2b00; }
+  @keyframes flashbg{ from{ background:#5a4300; } to{ background:#000; } }
+  .newtag{ color:var(--accent); font-weight:800; letter-spacing:.06em; font-size:.4em; margin-bottom:.18em; }
+
+  /* ---- idle connection warning (same screen as the clock) ---- */
+  .warn{ margin-top:.5em; color:#ffb300; font-weight:700; font-size:1em; }
+
+  /* ---- prototype switcher ---- */
+    position:fixed; bottom:14px; left:50%; transform:translateX(-50%);
+    display:flex; align-items:center; gap:6px; z-index:99;
+    background:#111; border:1px solid #444; border-radius:999px;
+    padding:6px 10px; box-shadow:0 4px 20px rgba(0,0,0,.6);
+    font-family:system-ui,sans-serif; font-size:14px; color:#fff;
+  }
+  #bar button{ background:#222; color:#fff; border:1px solid #555; border-radius:8px;
+    padding:4px 9px; font-size:14px; cursor:pointer; }
+  #bar button.on{ background:var(--accent); color:#000; border-color:var(--accent); }
+  #bar .sep{ width:1px; height:20px; background:#444; margin:0 6px; }
+  #vlabel{ min-width:150px; text-align:center; }
+</style>
+</head>
+<body>
+<div id="screen"></div>
+<div id="bar">
+  <button onclick="cycle(-1)">◀</button>
+  <span id="vlabel"></span>
+  <button onclick="cycle(1)">▶</button>
+  <span class="sep"></span>
+  <button id="b-msg" onclick="setState('msg')">mesaj</button>
+  <button id="b-idle" onclick="setState('idle')">ceas</button>
+  <button id="b-offline" onclick="setState('offline')">offline</button>
+</div>
+<script>
+const P = new URLSearchParams(location.search);
+const VARIANT_NAMES = { A:'Stack (nume deasupra)', B:'Inline (nume în rând)', C:'Centrat (hero)' };
+let variant = (P.get('variant')||'A').toUpperCase();
+let state = P.get('state')||'msg';
+const showChrome = P.get('chrome')!=='0';
+
+// sample data
+const now = new Date();
+const RO_WD = ['DUMINICĂ','LUNI','MARȚI','MIERCURI','JOI','VINERI','SÂMBĂTĂ'];
+const wd = RO_WD[now.getDay()];
+const dd = String(now.getDate()).padStart(2,'0');
+const mm = String(now.getMonth()+1).padStart(2,'0');
+const dateStr = `${wd} ${dd}/${mm}/${now.getFullYear()}`;
+const clock = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+
+const SENDER = 'Maria';
+const MESSAGE = 'Mâine vin pe la ora 17:00 să te duc la doctor.';
+const COUNTDOWN = 'se șterge în 3h 59m';
+
+function markup(){
+  if(state==='msg'){
+    if(variant==='A') return `<div class="area"><div class="fit"><div class="name">${SENDER}</div><div class="msg">${MESSAGE}</div></div></div><div class="countdown">${COUNTDOWN}</div>`;
+    if(variant==='B') return `<div class="area"><div class="fit"><span class="msg">${MESSAGE}</span></div></div><div class="countdown"><span class="name">${SENDER}</span> · ${COUNTDOWN}</div>`;
+    return `<div class="area"><div class="fit"><div class="name">${SENDER}</div><div class="msg">${MESSAGE}</div></div></div><div class="countdown">${COUNTDOWN}</div>`;
+  }
+  if(state==='idle'){
+    if(variant==='A') return `<div class="area"><div class="fit"><div class="date">${dateStr}</div><div class="clock">${clock}</div></div></div>`;
+    if(variant==='B') return `<div class="area"><div class="fit"><div class="date">${dateStr}</div><div class="clock">${clock}</div></div></div>`;
+    return `<div class="area"><div class="fit"><div class="date">${dateStr}</div><div class="clock">${clock}</div></div></div>`;
+  }
+  // offline
+  if(variant==='A') return `<div class="area"><div class="fit"><div class="big">Nu am internet acum</div><div class="sub">Reîncerc singur. Stai liniștit.</div></div></div>`;
+  if(variant==='B') return `<div class="area"><div class="fit"><div class="icon">📵</div><div class="big">Nu am internet</div><div class="sub">Se repară singur, fără să faci nimic.</div></div></div>`;
+  return `<div class="area"><div class="fit"><div class="big">Fără conexiune</div><div class="sub">Verifică internetul sau așteaptă puțin.</div></div></div>`;
+}
+
+function autofit(area, fit){
+  let lo=10, hi=700;
+  for(let i=0;i<50;i++){
+    const mid=(lo+hi)/2;
+    fit.style.fontSize=mid+'px';
+    const ok = fit.scrollWidth<=area.clientWidth+1 && fit.scrollHeight<=area.clientHeight+1;
+    if(ok) lo=mid; else hi=mid;
+  }
+  fit.style.fontSize=lo+'px';
+}
+
+function render(){
+  const screen = document.getElementById('screen');
+  screen.className = state==='msg' ? variant : (state==='idle' ? ('idle Idle'+variant) : ('offline Off'+variant));
+  screen.innerHTML = markup();
+  const attention = P.get('attention') || 'none';
+  const conn = P.get('conn') || 'ok';
+  const freeze = P.get('freeze')==='1';
+  if(state==='msg' && attention!=='none'){
+    screen.classList.add('attn-'+attention);
+    if(freeze) screen.classList.add('freeze');
+    if(attention==='badge'){
+      const f=screen.querySelector('.fit');
+      if(f){ const b=document.createElement('div'); b.className='newtag'; b.textContent='MESAJ NOU'; f.insertBefore(b, f.firstChild); }
+    }
+  }
+  if(state==='idle' && conn==='down'){
+    const f=screen.querySelector('.fit');
+    if(f){ const w=document.createElement('div'); w.className='warn'; w.textContent='Probleme cu conexiunea'; f.appendChild(w); }
+  }
+  const area = screen.querySelector('.area');
+  const fit = screen.querySelector('.fit');
+  if(area && fit) autofit(area, fit);
+  document.getElementById('vlabel').textContent = `${variant} — ${VARIANT_NAMES[variant]}`;
+  document.getElementById('bar').style.display = showChrome ? 'flex' : 'none';
+  ['msg','idle','offline'].forEach(s=>{
+    const b=document.getElementById('b-'+s);
+    if(b) b.className = (s===state)?'on':'';
+  });
+  const u = new URL(location.href);
+  u.searchParams.set('variant', variant);
+  u.searchParams.set('state', state);
+  history.replaceState(null,'',u);
+
+  if(P.get('debug')==='1'){
+    const d=screen.querySelector('.date'), c=screen.querySelector('.clock'), m=screen.querySelector('.msg'), n=screen.querySelector('.name');
+    const g=el=>el?getComputedStyle(el).fontSize:'-';
+    const y=el=>el?Math.round(el.getBoundingClientRect().top):-1;
+    const dp=el=>el?getComputedStyle(el).display:'-';
+    document.getElementById('bar').insertAdjacentHTML('afterend',
+      `<pre id="dbg" style="position:fixed;top:0;left:0;z-index:100;color:#0f0;font-size:20px;background:#000">fit=${g(fit)} fitW=${fit?fit.clientWidth:'-'} fitDisp=${dp(fit)} name=${g(n)} msg=${g(m)} nameTop=${y(n)} msgTop=${y(m)} nameDisp=${dp(n)} msgDisp=${dp(m)}</pre>`);
+  }
+}
+
+function cycle(dir){
+  const keys=Object.keys(VARIANT_NAMES);
+  let i=keys.indexOf(variant);
+  i=(i+dir+keys.length)%keys.length;
+  variant=keys[i];
+  render();
+}
+function setState(s){ state=s; render(); }
+addEventListener('keydown', e=>{
+  const t=e.target.tagName;
+  if(t==='INPUT'||t==='TEXTAREA') return;
+  if(e.key==='ArrowLeft') cycle(-1);
+  if(e.key==='ArrowRight') cycle(1);
+});
+addEventListener('resize', render);
+render();
+</script>
+</body>
+</html>

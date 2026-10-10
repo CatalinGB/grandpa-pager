@@ -1,0 +1,126 @@
+<!doctype html>
+<!--
+  PROTOTYPE — throwaway. Do not ship.
+  Question: "What friendly control should pick a message's display duration?"
+  Three structurally different pickers on the sender form, switchable with
+  ?variant=A|B|C and the floating bar. Render with ?chrome=0 for stills.
+-->
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE — sender duration picker</title>
+<style>
+  :root{ --bg:#0f1115; --card:#1b1f27; --fg:#f2f4f8; --muted:#9aa4b2; --accent:#3b82f6; --accent2:#22c55e; --line:#2b3140; }
+  *{ box-sizing:border-box; margin:0; padding:0; font-family: system-ui, -apple-system, Roboto, sans-serif; }
+  body{ background:var(--bg); color:var(--fg); display:flex; justify-content:center; padding:18px; }
+  #app{ width:420px; }
+  .card{ background:var(--card); border:1px solid var(--line); border-radius:16px; padding:18px; }
+  h1{ font-size:18px; margin-bottom:12px; }
+  .label{ color:var(--muted); font-size:13px; margin:14px 0 6px; }
+  .sample{ background:#0b0e13; border:1px dashed var(--line); border-radius:10px; padding:12px; color:var(--muted); }
+  .chosen{ margin-top:16px; font-size:15px; color:var(--muted); }
+  .chosen b{ color:var(--fg); font-size:20px; }
+  .send{ margin-top:14px; width:100%; padding:16px; font-size:18px; font-weight:700; border:0; border-radius:12px; background:var(--accent); color:#fff; }
+  .grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+  .chip{ padding:16px 8px; font-size:16px; font-weight:600; border:1px solid var(--line); border-radius:12px; background:#12161d; color:var(--fg); cursor:pointer; }
+  .chip.on{ background:var(--accent); border-color:var(--accent); color:#fff; }
+  .chip small{ display:block; font-weight:400; color:var(--muted); font-size:12px; }
+  .chip.on small{ color:#dbeafe; }
+
+  /* Variant B: stepper */
+  .stepper{ display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .stepper button{ width:76px; height:76px; font-size:34px; font-weight:700; border-radius:14px; border:1px solid var(--line); background:#12161d; color:var(--fg); cursor:pointer; }
+  .value{ font-size:44px; font-weight:800; text-align:center; flex:1; }
+
+  /* Variant C: slider */
+  .sliderwrap{ padding:8px 4px; }
+  input[type=range]{ width:100%; height:44px; }
+  .ticks{ display:flex; justify-content:space-between; color:var(--muted); font-size:12px; }
+
+  #bar{ position:fixed; bottom:14px; left:50%; transform:translateX(-50%); display:flex; gap:6px; align-items:center;
+    background:#111; border:1px solid #444; border-radius:999px; padding:6px 10px; font-size:14px; color:#fff; z-index:99; }
+  #bar button{ background:#222; color:#fff; border:1px solid #555; border-radius:8px; padding:4px 9px; cursor:pointer; }
+  #bar #vlabel{ min-width:170px; text-align:center; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="card">
+    <h1>Trimite un mesaj</h1>
+    <div class="sample">„Mâine vin pe la ora 17:00 să te duc la doctor.”</div>
+
+    <div class="label">Cât timp să rămână pe ecran?</div>
+    <div id="picker"></div>
+
+    <div class="chosen">Se afișează: <b id="readout">4 h</b></div>
+    <button class="send">Trimite</button>
+  </div>
+</div>
+
+<div id="bar">
+  <button onclick="cycle(-1)">◀</button>
+  <span id="vlabel"></span>
+  <button onclick="cycle(1)">▶</button>
+</div>
+
+<script>
+const P = new URLSearchParams(location.search);
+const NAMES = { A:'Butoane rapide', B:'Pas cu pas (− +)', C:'Glisor' };
+let variant = (P.get('variant')||'A').toUpperCase();
+const showChrome = P.get('chrome')!=='0';
+let minutes = 240;
+
+const PRESETS = [ [30,'30 min'], [60,'1 h'], [120,'2 h'], [240,'4 h'], [480,'8 h'], [1440,'24 h'] ];
+
+function fmt(m){
+  if (m>=1440 && m%1440===0) return (m/1440)+' zi'+(m/1440>1?'le':'');
+  if (m>=60) { const h=Math.floor(m/60), mm=m%60; return mm? (h+' h '+mm+' min') : (h+' h'); }
+  return m+' min';
+}
+
+function chips(){
+  return `<div class="grid">` + PRESETS.map(([m,l])=>
+    `<button class="chip ${m===minutes?'on':''}" onclick="setM(${m})">${l}${m===240?'<small>implicit</small>':''}</button>`
+  ).join('') + `</div>
+  <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+     <button class="chip" style="padding:10px 14px" onclick="setM(${Math.max(5,minutes-15)})">− 15</button>
+     <button class="chip" style="padding:10px 14px" onclick="setM(${minutes+15})">+ 15</button>
+     <span style="color:var(--muted);font-size:13px">reglaj fin (minute)</span>
+  </div>`;
+}
+
+function stepper(){
+  return `<div class="stepper">
+    <button onclick="setM(${Math.max(15,minutes-60)})">−</button>
+    <div class="value">${fmt(minutes)}</div>
+    <button onclick="setM(${Math.min(1440,minutes+60)})">+</button>
+  </div>
+  <div class="grid" style="margin-top:12px">` +
+  [[60,'1 h'],[240,'4 h'],[1440,'24 h']].map(([m,l])=>
+    `<button class="chip" onclick="setM(${m})">${l}</button>`).join('') + `</div>`;
+}
+
+function slider(){
+  return `<div class="sliderwrap">
+    <input type="range" min="15" max="1440" step="15" value="${minutes}" oninput="setM(+this.value)">
+    <div class="ticks"><span>15 min</span><span>4 h</span><span>8 h</span><span>24 h</span></div>
+  </div>`;
+}
+
+function setM(m){ minutes = Math.max(5, Math.min(1440, m)); render(); }
+
+function render(){
+  document.getElementById('picker').innerHTML =
+    variant==='A'? chips() : variant==='B'? stepper() : slider();
+  document.getElementById('readout').textContent = fmt(minutes);
+  document.getElementById('vlabel').textContent = `${variant} — ${NAMES[variant]}`;
+  document.getElementById('bar').style.display = showChrome? 'flex':'none';
+  const u=new URL(location.href); u.searchParams.set('variant',variant); history.replaceState(null,'',u);
+}
+function cycle(d){ const k=Object.keys(NAMES); variant=k[(k.indexOf(variant)+d+k.length)%k.length]; render(); }
+addEventListener('keydown', e=>{ if(e.key==='ArrowLeft')cycle(-1); if(e.key==='ArrowRight')cycle(1); });
+render();
+</script>
+</body>
+</html>

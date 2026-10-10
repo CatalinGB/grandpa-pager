@@ -1,0 +1,62 @@
+<resources>
+    <!-- Receiver display -->
+    <string name="from_prefix">来自：%1$s</string>
+    <string name="clears_in">%1$s后清除</string>
+    <string name="duration_hm">%1$d小时 %2$d分</string>
+    <string name="duration_m">%1$d分</string>
+    <string name="duration_lt_min">&lt;1分</string>
+    <!-- Tokens: {EEEE}=weekday {do}=ordinal day {d}=day {MMMM}=month {yyyy}=year -->
+    <string name="idle_date_fmt">{yyyy}年{MMMM}{d}日 {EEEE}</string>
+
+    <!-- Setup -->
+    <string name="setup_title">Grandpa Pager — 设置</string>
+    <string name="role">角色</string>
+    <string name="role_receiver">接收端（这是爷爷的手机）</string>
+    <string name="role_admin">发送端 — 管理员</string>
+    <string name="role_family">发送端 — 家人</string>
+    <string name="broker_host">代理主机（不含协议）</string>
+    <string name="port">端口</string>
+    <string name="username">用户名</string>
+    <string name="password">密码</string>
+    <string name="sender_name">你的发送者名称</string>
+    <string name="sender_name_hint">例如：玛丽亚</string>
+    <string name="use_tls">使用 TLS (ssl://)</string>
+    <string name="save_start">保存并启动</string>
+    <string name="err_host_required">代理主机为必填项。</string>
+    <string name="status_saved">已保存。正在以 %1$s 启动…</string>
+    <string name="status_configured">已配置（%1$s）。选择角色并保存以应用。</string>
+    <string name="status_configured_none">请填写代理详情并选择角色。</string>
+    <string name="device_owner">设备所有者</string>
+    <string name="normal_app">普通应用</string>
+
+    <!-- Sender -->
+    <string name="sender_from_label">来自：</string>
+    <string name="sender_name_hint_full">你的名字（会显示在爷爷的屏幕上）</string>
+    <string name="message">消息</string>
+    <string name="message_hint">输入消息…</string>
+    <string name="duration_minutes">时长（分钟）</string>
+    <string name="send_to_grandpa">发送给爷爷</string>
+    <string name="clear_message">清除消息</string>
+    <string name="grandpas_device">爷爷的设备</string>
+    <string name="waiting">等待中…</string>
+    <string name="err_type_message">请先输入消息。</string>
+    <string name="sent_confirm">已发送。正在请求爷爷的设备显示…</string>
+    <string name="status_none">暂无状态 — 设备可能离线。</string>
+    <string name="status_unreadable">无法读取状态数据。</string>
+    <string name="lbl_state">状态：</string>
+    <string name="lbl_mqtt">mqtt:</string>
+    <string name="lbl_battery">电量：</string>
+    <string name="lbl_wifi">wifi:</string>
+    <string name="lbl_message">消息：</string>
+    <string name="lbl_msg_id">消息 ID：</string>
+    <string name="lbl_expires">过期：</string>
+    <string name="lbl_seen">已读：</string>
+    <string name="charging_suffix">（充电中）</string>
+    <string name="stale_suffix">（过期 %1$ds）</string>
+    <string name="seen_ago">%1$ds 前</string>
+
+    <!-- Service notification -->
+    <string name="notif_running">运行中</string>
+    <string name="notif_listening">正在监听消息</string>
+    <string name="notif_connected">已连接到爷爷的传呼机</string>
+</resources>

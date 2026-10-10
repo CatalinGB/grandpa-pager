@@ -1,0 +1,62 @@
+<resources>
+    <!-- Receiver display -->
+    <string name="from_prefix">De: %1$s</string>
+    <string name="clears_in">se borra en %1$s</string>
+    <string name="duration_hm">%1$dh %2$dm</string>
+    <string name="duration_m">%1$dm</string>
+    <string name="duration_lt_min">&lt;1m</string>
+    <!-- Tokens: {EEEE}=weekday {do}=ordinal day {d}=day {MMMM}=month {yyyy}=year -->
+    <string name="idle_date_fmt">{EEEE} {d} de {MMMM} de {yyyy}</string>
+
+    <!-- Setup -->
+    <string name="setup_title">Grandpa Pager — configuración</string>
+    <string name="role">Rol</string>
+    <string name="role_receiver">Receptor (es el teléfono del abuelo)</string>
+    <string name="role_admin">Remitente — Admin</string>
+    <string name="role_family">Remitente — Familia</string>
+    <string name="broker_host">Host del broker (sin esquema)</string>
+    <string name="port">Puerto</string>
+    <string name="username">Nombre de usuario</string>
+    <string name="password">Contraseña</string>
+    <string name="sender_name">Tu nombre de remitente</string>
+    <string name="sender_name_hint">p. ej. María</string>
+    <string name="use_tls">Usar TLS (ssl://)</string>
+    <string name="save_start">Guardar y empezar</string>
+    <string name="err_host_required">El host del broker es obligatorio.</string>
+    <string name="status_saved">Guardado. Iniciando como %1$s…</string>
+    <string name="status_configured">Configurado (%1$s). Elige un rol y guarda para aplicar.</string>
+    <string name="status_configured_none">Rellena los datos del broker y elige un rol.</string>
+    <string name="device_owner">propietario del dispositivo</string>
+    <string name="normal_app">app normal</string>
+
+    <!-- Sender -->
+    <string name="sender_from_label">De:</string>
+    <string name="sender_name_hint_full">Tu nombre (aparece en la pantalla del abuelo)</string>
+    <string name="message">Mensaje</string>
+    <string name="message_hint">Escribe el mensaje…</string>
+    <string name="duration_minutes">Duración (minutos)</string>
+    <string name="send_to_grandpa">Enviar al abuelo</string>
+    <string name="clear_message">Borrar mensaje</string>
+    <string name="grandpas_device">Dispositivo del abuelo</string>
+    <string name="waiting">esperando…</string>
+    <string name="err_type_message">Escribe primero un mensaje.</string>
+    <string name="sent_confirm">Enviado. Pidiendo al dispositivo del abuelo que lo muestre…</string>
+    <string name="status_none">Aún no hay estado — el dispositivo puede estar sin conexión.</string>
+    <string name="status_unreadable">Carga de estado ilegible.</string>
+    <string name="lbl_state">estado:</string>
+    <string name="lbl_mqtt">mqtt:</string>
+    <string name="lbl_battery">batería:</string>
+    <string name="lbl_wifi">wifi:</string>
+    <string name="lbl_message">mensaje:</string>
+    <string name="lbl_msg_id">id mensaje:</string>
+    <string name="lbl_expires">expira:</string>
+    <string name="lbl_seen">visto:</string>
+    <string name="charging_suffix">(cargando)</string>
+    <string name="stale_suffix">(OBSOLETO %1$ds)</string>
+    <string name="seen_ago">hace %1$ds</string>
+
+    <!-- Service notification -->
+    <string name="notif_running">En ejecución</string>
+    <string name="notif_listening">Escuchando mensajes</string>
+    <string name="notif_connected">Conectado al buscapersonas del abuelo</string>
+</resources>

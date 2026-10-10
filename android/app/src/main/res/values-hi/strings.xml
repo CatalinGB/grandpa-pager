@@ -1,0 +1,62 @@
+<resources>
+    <!-- Receiver display -->
+    <string name="from_prefix">प्रेषक: %1$s</string>
+    <string name="clears_in">%1$s में हट जाएगा</string>
+    <string name="duration_hm">%1$dघं %2$dमि</string>
+    <string name="duration_m">%1$dमि</string>
+    <string name="duration_lt_min">&lt;1मि</string>
+    <!-- Tokens: {EEEE}=weekday {do}=ordinal day {d}=day {MMMM}=month {yyyy}=year -->
+    <string name="idle_date_fmt">{EEEE}, {d} {MMMM} {yyyy}</string>
+
+    <!-- Setup -->
+    <string name="setup_title">Grandpa Pager — सेटअप</string>
+    <string name="role">भूमिका</string>
+    <string name="role_receiver">प्राप्तकर्ता (यह दादाजी का फ़ोन है)</string>
+    <string name="role_admin">प्रेषक — एडमिन</string>
+    <string name="role_family">प्रेषक — परिवार</string>
+    <string name="broker_host">ब्रोकर होस्ट (स्कीम के बिना)</string>
+    <string name="port">पोर्ट</string>
+    <string name="username">उपयोगकर्ता नाम</string>
+    <string name="password">पासवर्ड</string>
+    <string name="sender_name">आपका प्रेषक नाम</string>
+    <string name="sender_name_hint">जैसे मारिया</string>
+    <string name="use_tls">TLS का उपयोग करें (ssl://)</string>
+    <string name="save_start">सहेजें और शुरू करें</string>
+    <string name="err_host_required">ब्रोकर होस्ट आवश्यक है।</string>
+    <string name="status_saved">सहेजा गया। %1$s के रूप में शुरू हो रहा है…</string>
+    <string name="status_configured">कॉन्फ़िगर किया गया (%1$s)। भूमिका चुनें और लागू करने के लिए सहेजें।</string>
+    <string name="status_configured_none">ब्रोकर विवरण भरें और एक भूमिका चुनें।</string>
+    <string name="device_owner">डिवाइस स्वामी</string>
+    <string name="normal_app">सामान्य ऐप</string>
+
+    <!-- Sender -->
+    <string name="sender_from_label">प्रेषक:</string>
+    <string name="sender_name_hint_full">आपका नाम (दादाजी की स्क्रीन पर दिखाई देगा)</string>
+    <string name="message">संदेश</string>
+    <string name="message_hint">संदेश लिखें…</string>
+    <string name="duration_minutes">अवधि (मिनट)</string>
+    <string name="send_to_grandpa">दादाजी को भेजें</string>
+    <string name="clear_message">संदेश हटाएँ</string>
+    <string name="grandpas_device">दादाजी का डिवाइस</string>
+    <string name="waiting">प्रतीक्षा…</string>
+    <string name="err_type_message">पहले एक संदेश लिखें।</string>
+    <string name="sent_confirm">भेज दिया। दादाजी के डिवाइस से इसे दिखाने के लिए कहा जा रहा है…</string>
+    <string name="status_none">अभी कोई स्थिति नहीं — डिवाइस ऑफ़लाइन हो सकता है।</string>
+    <string name="status_unreadable">अपठनीय स्थिति डेटा।</string>
+    <string name="lbl_state">स्थिति:</string>
+    <string name="lbl_mqtt">mqtt:</string>
+    <string name="lbl_battery">बैटरी:</string>
+    <string name="lbl_wifi">wifi:</string>
+    <string name="lbl_message">संदेश:</string>
+    <string name="lbl_msg_id">संदेश आईडी:</string>
+    <string name="lbl_expires">समाप्ति:</string>
+    <string name="lbl_seen">देखा गया:</string>
+    <string name="charging_suffix">(चार्ज हो रहा है)</string>
+    <string name="stale_suffix">(पुराना %1$ds)</string>
+    <string name="seen_ago">%1$ds पहले</string>
+
+    <!-- Service notification -->
+    <string name="notif_running">चल रहा है</string>
+    <string name="notif_listening">संदेशों की प्रतीक्षा</string>
+    <string name="notif_connected">दादाजी के पेजर से जुड़ा</string>
+</resources>

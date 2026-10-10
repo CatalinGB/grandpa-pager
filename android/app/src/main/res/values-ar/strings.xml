@@ -1,0 +1,62 @@
+<resources>
+    <!-- Receiver display -->
+    <string name="from_prefix">من: %1$s</string>
+    <string name="clears_in">يُمسح خلال %1$s</string>
+    <string name="duration_hm">%1$dس %2$dد</string>
+    <string name="duration_m">%1$dد</string>
+    <string name="duration_lt_min">&lt;1د</string>
+    <!-- Tokens: {EEEE}=weekday {do}=ordinal day {d}=day {MMMM}=month {yyyy}=year -->
+    <string name="idle_date_fmt">{EEEE}، {d} {MMMM} {yyyy}</string>
+
+    <!-- Setup -->
+    <string name="setup_title">Grandpa Pager — الإعداد</string>
+    <string name="role">الدور</string>
+    <string name="role_receiver">المستقبِل (هذا هاتف الجد)</string>
+    <string name="role_admin">المُرسِل — مسؤول</string>
+    <string name="role_family">المُرسِل — العائلة</string>
+    <string name="broker_host">مضيف الوسيط (بدون مخطط)</string>
+    <string name="port">المنفذ</string>
+    <string name="username">اسم المستخدم</string>
+    <string name="password">كلمة المرور</string>
+    <string name="sender_name">اسم المُرسِل الخاص بك</string>
+    <string name="sender_name_hint">مثال: ماريا</string>
+    <string name="use_tls">استخدام TLS (ssl://)</string>
+    <string name="save_start">حفظ وبدء</string>
+    <string name="err_host_required">مضيف الوسيط مطلوب.</string>
+    <string name="status_saved">تم الحفظ. البدء كـ %1$s…</string>
+    <string name="status_configured">تم الإعداد (%1$s). اختر دورًا واحفظ للتطبيق.</string>
+    <string name="status_configured_none">املأ بيانات الوسيط واختر دورًا.</string>
+    <string name="device_owner">مالك الجهاز</string>
+    <string name="normal_app">تطبيق عادي</string>
+
+    <!-- Sender -->
+    <string name="sender_from_label">من:</string>
+    <string name="sender_name_hint_full">اسمك (يظهر على شاشة الجد)</string>
+    <string name="message">الرسالة</string>
+    <string name="message_hint">اكتب الرسالة…</string>
+    <string name="duration_minutes">المدة (دقائق)</string>
+    <string name="send_to_grandpa">إرسال إلى الجد</string>
+    <string name="clear_message">مسح الرسالة</string>
+    <string name="grandpas_device">جهاز الجد</string>
+    <string name="waiting">في الانتظار…</string>
+    <string name="err_type_message">اكتب رسالة أولًا.</string>
+    <string name="sent_confirm">تم الإرسال. يُطلب من جهاز الجد عرضها…</string>
+    <string name="status_none">لا توجد حالة بعد — قد يكون الجهاز غير متصل.</string>
+    <string name="status_unreadable">بيانات حالة غير مقروءة.</string>
+    <string name="lbl_state">الحالة:</string>
+    <string name="lbl_mqtt">mqtt:</string>
+    <string name="lbl_battery">البطارية:</string>
+    <string name="lbl_wifi">wifi:</string>
+    <string name="lbl_message">الرسالة:</string>
+    <string name="lbl_msg_id">معرّف الرسالة:</string>
+    <string name="lbl_expires">تنتهي:</string>
+    <string name="lbl_seen">شوهدت:</string>
+    <string name="charging_suffix">(يشحن)</string>
+    <string name="stale_suffix">(قديم %1$ds)</string>
+    <string name="seen_ago">قبل %1$ds</string>
+
+    <!-- Service notification -->
+    <string name="notif_running">قيد التشغيل</string>
+    <string name="notif_listening">في انتظار الرسائل</string>
+    <string name="notif_connected">متصل بجهاز نداء الجد</string>
+</resources>

@@ -1,0 +1,62 @@
+<resources>
+    <!-- Receiver display -->
+    <string name="from_prefix">De: %1$s</string>
+    <string name="clears_in">limpa em %1$s</string>
+    <string name="duration_hm">%1$dh %2$dm</string>
+    <string name="duration_m">%1$dm</string>
+    <string name="duration_lt_min">&lt;1m</string>
+    <!-- Tokens: {EEEE}=weekday {do}=ordinal day {d}=day {MMMM}=month {yyyy}=year -->
+    <string name="idle_date_fmt">{EEEE}, {d} de {MMMM} de {yyyy}</string>
+
+    <!-- Setup -->
+    <string name="setup_title">Grandpa Pager — configuração</string>
+    <string name="role">Função</string>
+    <string name="role_receiver">Recetor (este é o telemóvel do avô)</string>
+    <string name="role_admin">Remetente — Admin</string>
+    <string name="role_family">Remetente — Família</string>
+    <string name="broker_host">Host do broker (sem esquema)</string>
+    <string name="port">Porta</string>
+    <string name="username">Nome de utilizador</string>
+    <string name="password">Palavra-passe</string>
+    <string name="sender_name">O teu nome de remetente</string>
+    <string name="sender_name_hint">p. ex. Maria</string>
+    <string name="use_tls">Usar TLS (ssl://)</string>
+    <string name="save_start">Guardar e iniciar</string>
+    <string name="err_host_required">O host do broker é obrigatório.</string>
+    <string name="status_saved">Guardado. A iniciar como %1$s…</string>
+    <string name="status_configured">Configurado (%1$s). Escolhe uma função e guarda para aplicar.</string>
+    <string name="status_configured_none">Preenche os dados do broker e escolhe uma função.</string>
+    <string name="device_owner">proprietário do dispositivo</string>
+    <string name="normal_app">app normal</string>
+
+    <!-- Sender -->
+    <string name="sender_from_label">De:</string>
+    <string name="sender_name_hint_full">O teu nome (aparece no ecrã do avô)</string>
+    <string name="message">Mensagem</string>
+    <string name="message_hint">Escreve a mensagem…</string>
+    <string name="duration_minutes">Duração (minutos)</string>
+    <string name="send_to_grandpa">Enviar ao avô</string>
+    <string name="clear_message">Limpar mensagem</string>
+    <string name="grandpas_device">Dispositivo do avô</string>
+    <string name="waiting">à espera…</string>
+    <string name="err_type_message">Escreve primeiro uma mensagem.</string>
+    <string name="sent_confirm">Enviado. A pedir ao dispositivo do avô para o mostrar…</string>
+    <string name="status_none">Ainda sem estado — o dispositivo pode estar offline.</string>
+    <string name="status_unreadable">Carga de estado ilegível.</string>
+    <string name="lbl_state">estado:</string>
+    <string name="lbl_mqtt">mqtt:</string>
+    <string name="lbl_battery">bateria:</string>
+    <string name="lbl_wifi">wifi:</string>
+    <string name="lbl_message">mensagem:</string>
+    <string name="lbl_msg_id">id da mensagem:</string>
+    <string name="lbl_expires">expira:</string>
+    <string name="lbl_seen">visto:</string>
+    <string name="charging_suffix">(a carregar)</string>
+    <string name="stale_suffix">(DESATUALIZADO %1$ds)</string>
+    <string name="seen_ago">há %1$ds</string>
+
+    <!-- Service notification -->
+    <string name="notif_running">Em execução</string>
+    <string name="notif_listening">À escuta de mensagens</string>
+    <string name="notif_connected">Ligado ao pager do avô</string>
+</resources>

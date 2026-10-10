@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<map>
+    <string name="role">SENDER_ADMIN</string>
+    <string name="brokerHost">127.0.0.1</string>
+    <int name="brokerPort" value="8883" />
+    <string name="username">grandpa</string>
+    <string name="password">grandpa</string>
+    <string name="senderName">PhoneSender</string>
+    <boolean name="useTls" value="true" />
+</map>

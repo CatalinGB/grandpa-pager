@@ -1,0 +1,62 @@
+<resources>
+    <!-- Receiver display -->
+    <string name="from_prefix">De : %1$s</string>
+    <string name="clears_in">effacé dans %1$s</string>
+    <string name="duration_hm">%1$dh %2$dm</string>
+    <string name="duration_m">%1$dm</string>
+    <string name="duration_lt_min">&lt;1m</string>
+    <!-- Tokens: {EEEE}=weekday {do}=ordinal day {d}=day {MMMM}=month {yyyy}=year -->
+    <string name="idle_date_fmt">{EEEE} {d} {MMMM} {yyyy}</string>
+
+    <!-- Setup -->
+    <string name="setup_title">Grandpa Pager — configuration</string>
+    <string name="role">Rôle</string>
+    <string name="role_receiver">Récepteur (c\'est le téléphone de Papy)</string>
+    <string name="role_admin">Émetteur — Admin</string>
+    <string name="role_family">Émetteur — Famille</string>
+    <string name="broker_host">Hôte du broker (sans schéma)</string>
+    <string name="port">Port</string>
+    <string name="username">Nom d\'utilisateur</string>
+    <string name="password">Mot de passe</string>
+    <string name="sender_name">Votre nom d\'émetteur</string>
+    <string name="sender_name_hint">ex. Maria</string>
+    <string name="use_tls">Utiliser TLS (ssl://)</string>
+    <string name="save_start">Enregistrer et démarrer</string>
+    <string name="err_host_required">L\'hôte du broker est obligatoire.</string>
+    <string name="status_saved">Enregistré. Démarrage en tant que %1$s…</string>
+    <string name="status_configured">Configuré (%1$s). Choisissez un rôle et enregistrez pour appliquer.</string>
+    <string name="status_configured_none">Remplissez les détails du broker et choisissez un rôle.</string>
+    <string name="device_owner">propriétaire de l\'appareil</string>
+    <string name="normal_app">appli normale</string>
+
+    <!-- Sender -->
+    <string name="sender_from_label">De :</string>
+    <string name="sender_name_hint_full">Votre nom (apparaît sur l\'écran de Papy)</string>
+    <string name="message">Message</string>
+    <string name="message_hint">Saisissez le message…</string>
+    <string name="duration_minutes">Durée (minutes)</string>
+    <string name="send_to_grandpa">Envoyer à Papy</string>
+    <string name="clear_message">Effacer le message</string>
+    <string name="grandpas_device">Appareil de Papy</string>
+    <string name="waiting">en attente…</string>
+    <string name="err_type_message">Saisissez d\'abord un message.</string>
+    <string name="sent_confirm">Envoyé. Demande à l\'appareil de Papy de l\'afficher…</string>
+    <string name="status_none">Pas encore d\'état — l\'appareil est peut-être hors ligne.</string>
+    <string name="status_unreadable">Charge d\'état illisible.</string>
+    <string name="lbl_state">état :</string>
+    <string name="lbl_mqtt">mqtt :</string>
+    <string name="lbl_battery">batterie :</string>
+    <string name="lbl_wifi">wifi :</string>
+    <string name="lbl_message">message :</string>
+    <string name="lbl_msg_id">id message :</string>
+    <string name="lbl_expires">expire :</string>
+    <string name="lbl_seen">vu :</string>
+    <string name="charging_suffix">(en charge)</string>
+    <string name="stale_suffix">(OBSOLÈTE %1$ds)</string>
+    <string name="seen_ago">il y a %1$ds</string>
+
+    <!-- Service notification -->
+    <string name="notif_running">En cours</string>
+    <string name="notif_listening">À l\'écoute des messages</string>
+    <string name="notif_connected">Connecté au pager de Papy</string>
+</resources>

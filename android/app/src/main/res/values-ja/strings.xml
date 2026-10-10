@@ -1,0 +1,62 @@
+<resources>
+    <!-- Receiver display -->
+    <string name="from_prefix">差出人: %1$s</string>
+    <string name="clears_in">%1$sで消去</string>
+    <string name="duration_hm">%1$d時間 %2$d分</string>
+    <string name="duration_m">%1$d分</string>
+    <string name="duration_lt_min">&lt;1分</string>
+    <!-- Tokens: {EEEE}=weekday {do}=ordinal day {d}=day {MMMM}=month {yyyy}=year -->
+    <string name="idle_date_fmt">{yyyy}年{MMMM}{d}日 {EEEE}</string>
+
+    <!-- Setup -->
+    <string name="setup_title">Grandpa Pager — セットアップ</string>
+    <string name="role">役割</string>
+    <string name="role_receiver">受信側（おじいちゃんのスマホ）</string>
+    <string name="role_admin">送信側 — 管理者</string>
+    <string name="role_family">送信側 — 家族</string>
+    <string name="broker_host">ブローカーホスト（スキームなし）</string>
+    <string name="port">ポート</string>
+    <string name="username">ユーザー名</string>
+    <string name="password">パスワード</string>
+    <string name="sender_name">あなたの送信者名</string>
+    <string name="sender_name_hint">例: マリア</string>
+    <string name="use_tls">TLS を使用 (ssl://)</string>
+    <string name="save_start">保存して開始</string>
+    <string name="err_host_required">ブローカーホストは必須です。</string>
+    <string name="status_saved">保存しました。%1$s として開始します…</string>
+    <string name="status_configured">設定済み（%1$s）。役割を選んで保存すると適用されます。</string>
+    <string name="status_configured_none">ブローカーの詳細を入力し、役割を選んでください。</string>
+    <string name="device_owner">デバイス所有者</string>
+    <string name="normal_app">通常アプリ</string>
+
+    <!-- Sender -->
+    <string name="sender_from_label">差出人:</string>
+    <string name="sender_name_hint_full">あなたの名前（おじいちゃんの画面に表示されます）</string>
+    <string name="message">メッセージ</string>
+    <string name="message_hint">メッセージを入力…</string>
+    <string name="duration_minutes">表示時間（分）</string>
+    <string name="send_to_grandpa">おじいちゃんに送信</string>
+    <string name="clear_message">メッセージを消去</string>
+    <string name="grandpas_device">おじいちゃんのデバイス</string>
+    <string name="waiting">待機中…</string>
+    <string name="err_type_message">先にメッセージを入力してください。</string>
+    <string name="sent_confirm">送信しました。おじいちゃんのデバイスに表示を要求しています…</string>
+    <string name="status_none">まだ状態がありません — デバイスがオフラインの可能性があります。</string>
+    <string name="status_unreadable">状態データを読み取れません。</string>
+    <string name="lbl_state">状態:</string>
+    <string name="lbl_mqtt">mqtt:</string>
+    <string name="lbl_battery">バッテリー:</string>
+    <string name="lbl_wifi">wifi:</string>
+    <string name="lbl_message">メッセージ:</string>
+    <string name="lbl_msg_id">メッセージID:</string>
+    <string name="lbl_expires">期限:</string>
+    <string name="lbl_seen">確認:</string>
+    <string name="charging_suffix">（充電中）</string>
+    <string name="stale_suffix">（古い %1$ds）</string>
+    <string name="seen_ago">%1$ds前</string>
+
+    <!-- Service notification -->
+    <string name="notif_running">実行中</string>
+    <string name="notif_listening">メッセージを待機中</string>
+    <string name="notif_connected">おじいちゃんのページャーに接続済み</string>
+</resources>
