@@ -4,7 +4,7 @@
 (function () {
   "use strict";
   var BROKER = "wss://mqtt.flespi.io:443";
-  var TOPIC = { config: "grandpa/config", status: "grandpa/status", message: "grandpa/message" };
+  var TOPIC = { config: "grandpa/config", status: "grandpa/status" };
   var DEF = {
     schema: 1,
     display: { name_size_sp: 46, countdown: false, orientation: "auto" },
@@ -17,49 +17,61 @@
   var dirty = false, client = null;
 
   var get = function (path) { return path.split(".").reduce(function (o, k) { return o[k]; }, cfg); };
-  var set = function (path, v) { var p = path.split("."); var o = cfg; for (var i = 0; i < p.length - 1; i++) o = o[p[i]]; o[p[p.length - 1]] = v; dirty = true; preview(); };
-  var fmtH = function (m) { return m >= 60 ? ((m % 60) ? (m / 60).toFixed(1) : (m / 60)) + " h" : m + " min"; };
-  var fmtMs = function (ms) { return (ms / 1000) + " s"; };
+  function setPath(path, v) { var p = path.split("."); var o = cfg; for (var i = 0; i < p.length - 1; i++) o = o[p[i]]; o[p[p.length - 1]] = v; dirty = true; }
+  function fmtH(m) { return m >= 60 ? ((m % 60) ? +(m / 60).toFixed(1) : (m / 60)) + " h" : m + " min"; }
+  function fmtMs(ms) { return (ms / 1000) + " s"; }
+  function fmtOf(fmt, v) { return fmt === "ms" ? fmtMs(v) : fmt === "h" ? fmtH(v) : "" + v; }
 
+  /* ---- control markup (no re-render on change; handlers update in place) ---- */
   function sw(path, label, desc) {
     var v = get(path);
     return '<div class="row"><div><div>' + label + '</div>' + (desc ? '<div class="sub">' + desc + '</div>' : '') + '</div>' +
-      '<button class="sw ' + (v ? "on" : "") + '" onclick="A.set(\'' + path + '\',' + !v + ')"></button></div>';
+      '<button class="sw ' + (v ? "on" : "") + '" data-path="' + path + '" onclick="A.toggle(this)"></button></div>';
   }
-  function slider(path, label, min, max, step, disp) {
+  function slider(path, label, min, max, step, fmt) {
     var v = get(path);
     return '<div class="row"><div>' + label + '</div>' +
-      '<input type="range" min="' + min + '" max="' + max + '" step="' + step + '" value="' + v + '" oninput="A.set(\'' + path + '\',+this.value)">' +
-      '<span class="val">' + (disp ? disp(v) : v) + '</span></div>';
+      '<input type="range" data-path="' + path + '" data-fmt="' + (fmt || "") + '" min="' + min + '" max="' + max + '" step="' + step + '" value="' + v + '" oninput="A.slide(this)">' +
+      '<span class="val">' + (fmt ? fmtOf(fmt, v) : v) + '</span></div>';
   }
   function seg(path, label, opts) {
     var v = get(path);
     return '<div class="row"><div>' + label + '</div><div class="seg">' +
-      opts.map(function (o) { return '<button class="' + (o === v ? "on" : "") + '" onclick="A.set(\'' + path + '\',\'' + o + '\')">' + o + '</button>'; }).join("") + '</div></div>';
+      opts.map(function (o) { return '<button data-path="' + path + '" data-val="' + o + '" class="' + (o === v ? "on" : "") + '" onclick="A.choose(this)">' + o + '</button>'; }).join("") + '</div></div>';
   }
-  function stepper(path, label, min, max, step, disp) {
+  function stepper(path, label, min, max, step, fmt) {
     var v = get(path);
     return '<div class="row"><div>' + label + '</div><div class="stepper">' +
-      '<button onclick="A.set(\'' + path + '\',Math.max(' + min + ',' + v + '-' + step + '))">−</button>' +
-      '<b>' + (disp ? disp(v) : v) + '</b>' +
-      '<button onclick="A.set(\'' + path + '\',Math.min(' + max + ',' + v + '+' + step + '))">+</button></div></div>';
+      '<button data-path="' + path + '" data-delta="-' + step + '" data-min="' + min + '" data-max="' + max + '" data-step="' + step + '" data-fmt="' + (fmt || "") + '" onclick="A.step(this)">−</button>' +
+      '<b>' + (fmt ? fmtOf(fmt, v) : v) + '</b>' +
+      '<button data-path="' + path + '" data-delta="' + step + '" data-min="' + min + '" data-max="' + max + '" data-step="' + step + '" data-fmt="' + (fmt || "") + '" onclick="A.step(this)">+</button></div></div>';
   }
 
   function build() {
     el("sec-display").innerHTML = seg("display.orientation", "Orientare", ["auto", "portrait", "landscape"]) +
-      slider("display.name_size_sp", "Mărime nume", 20, 120, 2) +
-      sw("display.countdown", "Arată contorul");
-    el("sec-cue").innerHTML = slider("cue.glow_ms", "Strălucire", 0, 20000, 500, fmtMs) +
-      sw("cue.chime", "Sunet") + sw("cue.vibrate", "Vibrație") +
-      sw("cue.torch.enabled", "Lanternă") +
-      slider("cue.torch.on_ms", "Aprins", 200, 5000, 100, fmtMs) +
-      slider("cue.torch.off_ms", "Stins", 200, 5000, 100, fmtMs) +
+      slider("display.name_size_sp", "Mărime nume", 20, 120, 2) + sw("display.countdown", "Arată contorul");
+    el("sec-cue").innerHTML = slider("cue.glow_ms", "Strălucire", 0, 20000, 500, "ms") +
+      sw("cue.chime", "Sunet") + sw("cue.vibrate", "Vibrație") + sw("cue.torch.enabled", "Lanternă") +
+      slider("cue.torch.on_ms", "Aprins", 200, 5000, 100, "ms") +
+      slider("cue.torch.off_ms", "Stins", 200, 5000, 100, "ms") +
       stepper("cue.torch.pulses", "Pulsuri", 1, 10, 1);
-    el("sec-defaults").innerHTML = stepper("defaults.duration_minutes", "Durată implicită", 5, 1440, 30, fmtH);
+    el("sec-defaults").innerHTML = stepper("defaults.duration_minutes", "Durată implicită", 5, 1440, 30, "h");
     el("sec-kiosk").innerHTML = sw("kiosk.locked", "Blocat (kiosk)", "oprit = deschide launcherul");
     preview();
   }
   function preview() { el("jsonPreview").textContent = JSON.stringify(cfg, null, 1); }
+
+  /* ---- in-place handlers ---- */
+  function toggle(btn) { var p = btn.dataset.path; var v = !get(p); setPath(p, v); btn.classList.toggle("on", v); preview(); }
+  function slide(input) { var p = input.dataset.path; var v = +input.value; setPath(p, v); var s = input.nextElementSibling; if (s) s.textContent = input.dataset.fmt ? fmtOf(input.dataset.fmt, v) : v; preview(); }
+  function choose(btn) { var p = btn.dataset.path; setPath(p, btn.dataset.val); Array.prototype.forEach.call(btn.parentNode.children, function (b) { b.classList.toggle("on", b === btn); }); preview(); }
+  function step(btn) {
+    var p = btn.dataset.path, min = +btn.dataset.min, max = +btn.dataset.max, step = +btn.dataset.step;
+    var v = Math.max(min, Math.min(max, get(p) + (+btn.dataset.delta)));
+    setPath(p, v);
+    var b = btn.parentNode.querySelector("b"); if (b) b.textContent = btn.dataset.fmt ? fmtOf(btn.dataset.fmt, v) : v;
+    preview();
+  }
 
   function renderDevice(s) {
     if (!s) { el("devStatus").textContent = "—"; return; }
@@ -89,7 +101,7 @@
       if (topic !== TOPIC.status) return;
       var s; try { s = JSON.parse(payload.toString()); } catch (e) { return; }
       renderDevice(s);
-      if (!dirty && s.config) { cfg = Object.assign({}, DEF, s.config); build(); el("applied").textContent = "config curent preluat de pe telefon"; }
+      if (!dirty && s.config) { cfg = JSON.parse(JSON.stringify(s.config)); cfg.schema = cfg.schema || 1; build(); el("applied").textContent = "config curent preluat de pe telefon"; }
     });
   }
 
@@ -101,13 +113,40 @@
   }
   function reset() { cfg = JSON.parse(JSON.stringify(DEF)); dirty = true; build(); }
 
-  window.A = { set: set };
+  function showForm() { el("unlock").hidden = true; el("admin").hidden = false; build(); }
+
+  window.A = { toggle: toggle, slide: slide, choose: choose, step: step };
+
   document.addEventListener("DOMContentLoaded", function () {
-    var saved = sessionStorage.getItem("gp_admin");
-    if (saved) el("adminToken").value = saved;
+    var q = new URLSearchParams(location.search);
+    if (q.get("demo") === "1") { showForm(); el("applied").textContent = "mod demo (fără broker)"; }
     el("unlockBtn").addEventListener("click", connect);
     el("apply").addEventListener("click", apply);
     el("reset").addEventListener("click", reset);
-    if (saved) connect();
+    var saved = sessionStorage.getItem("gp_admin");
+    if (saved) el("adminToken").value = saved;
+    if (saved && !q.get("demo")) connect();
+
+    if (q.get("selftest") === "1") runSelfTest();
   });
+
+  /* headless test: exercise the in-place handlers and report PASS/FAIL */
+  function runSelfTest() {
+    showForm();
+    var checks = [];
+    function t(name, fn, expect) { try { fn(); var ok = get(expect.path) === expect.val; checks.push((ok ? "OK " : "FAIL ") + name); } catch (e) { checks.push("ERR " + name + " " + e.message); } }
+    var kioskBtn = el("sec-kiosk").querySelector("button.sw");
+    t("kiosk toggles off", function () { A.toggle(kioskBtn); }, { path: "kiosk.locked", val: false });
+    var nameSlider = el("sec-display").querySelector('input[data-path="display.name_size_sp"]');
+    t("name slider sets 100", function () { nameSlider.value = 100; A.slide(nameSlider); }, { path: "display.name_size_sp", val: 100 });
+    var portrait = el("sec-display").querySelector('button[data-val="portrait"]');
+    t("orientation portrait", function () { A.choose(portrait); }, { path: "display.orientation", val: "portrait" });
+    var plus = el("sec-defaults").querySelectorAll("button")[1];
+    t("duration +30", function () { A.step(plus); }, { path: "defaults.duration_minutes", val: 270 });
+    var torchOff = el("sec-cue").querySelector('button[data-path="cue.torch.enabled"]');
+    t("torch toggles off", function () { A.toggle(torchOff); }, { path: "cue.torch.enabled", val: false });
+    var fails = checks.filter(function (c) { return c.indexOf("OK ") !== 0; }).length;
+    document.title = fails ? ("SELFTEST_FAIL " + fails) : "SELFTEST_OK";
+    var pre = el("jsonPreview"); pre.textContent = "SELFTEST: " + (fails ? "FAIL" : "OK") + "\n" + checks.join("\n") + "\n\n" + JSON.stringify(cfg, null, 1);
+  }
 })();

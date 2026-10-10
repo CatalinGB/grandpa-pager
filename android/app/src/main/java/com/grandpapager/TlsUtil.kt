@@ -8,17 +8,28 @@ import java.security.SecureRandom
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
 import javax.net.ssl.SSLContext
+import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
 import javax.net.ssl.TrustManagerFactory
 import javax.net.ssl.X509TrustManager
 
 /**
- * Trust store that accepts BOTH the bundled CA (own test broker) and the
- * platform anchors (managed brokers like Flespi).
+ * Builds the TLS socket factory for the MQTT connection.
  *
- * Wrapped so that Paho's `SSLSocketFactory.createSocket()` (no-arg) works —
- * the SSLContext-derived factory doesn't implement the unconnected-socket form,
- * which Paho always calls.
+ * Trust store = the platform trust anchors, plus — **in debug builds only** — the
+ * bundled local test CA (`res/raw/ca.crt`). Its private key lives on the developer
+ * machine, so trusting it in a release build would let anyone holding that key
+ * impersonate the production broker. Release therefore trusts public CAs only.
+ *
+ * The factory is wrapped to:
+ *  - implement Paho's no-arg `createSocket()` (its SSLContext-derived factory does
+ *    not, which breaks the connection), and
+ *  - force the `HTTPS` endpoint-identification algorithm on every socket, so the
+ *    server certificate must match the host we asked for.
+ *
+ * Caveat: Paho connects via the no-arg socket, so endpoint identification may not
+ * always have a hostname to check; the primary protection remains trusting only
+ * public CAs (never the test CA in release) on top of TLS.
  */
 object TlsUtil {
 
@@ -30,33 +41,53 @@ object TlsUtil {
             override fun getSupportedCipherSuites(): Array<String> = base.supportedCipherSuites
 
             override fun createSocket(): Socket =
-                runCatching { base.createSocket() }
-                    .getOrElse { (SSLSocketFactory.getDefault() as SSLSocketFactory).createSocket() }
+                harden(runCatching { base.createSocket() }
+                    .getOrElse { (SSLSocketFactory.getDefault() as SSLSocketFactory).createSocket() })
 
-            override fun createSocket(host: String?, port: Int): Socket = base.createSocket(host, port)
+            override fun createSocket(host: String?, port: Int): Socket =
+                harden(base.createSocket(host, port))
+
             override fun createSocket(host: String?, port: Int, localHost: InetAddress?, localPort: Int): Socket =
-                base.createSocket(host, port, localHost, localPort)
-            override fun createSocket(host: InetAddress?, port: Int): Socket = base.createSocket(host, port)
+                harden(base.createSocket(host, port, localHost, localPort))
+
+            override fun createSocket(host: InetAddress?, port: Int): Socket =
+                harden(base.createSocket(host, port))
+
             override fun createSocket(address: InetAddress?, port: Int, localAddress: InetAddress?, localPort: Int): Socket =
-                base.createSocket(address, port, localAddress, localPort)
+                harden(base.createSocket(address, port, localAddress, localPort))
+
             override fun createSocket(s: Socket?, host: String?, port: Int, autoClose: Boolean): Socket =
-                base.createSocket(s, host, port, autoClose)
+                harden(base.createSocket(s, host, port, autoClose))
         }
+    }
+
+    private fun harden(socket: Socket): Socket {
+        if (socket is SSLSocket) {
+            runCatching {
+                val params = socket.sslParameters
+                params.endpointIdentificationAlgorithm = "HTTPS"
+                socket.sslParameters = params
+            }
+        }
+        return socket
     }
 
     private fun build(context: Context): SSLSocketFactory {
         val ks = KeyStore.getInstance(KeyStore.getDefaultType())
         ks.load(null, null)
 
-        // 1. bundled private CA (res/raw/ca.crt)
-        runCatching {
-            context.resources.openRawResource(R.raw.ca).use { input ->
-                val cert = CertificateFactory.getInstance("X.509").generateCertificate(input)
-                ks.setCertificateEntry("pager-ca", cert)
+        // 1. bundled local test CA — DEBUG ONLY (its key is not secret, but it
+        //    must never be trusted in a released build).
+        if (BuildConfig.DEBUG) {
+            runCatching {
+                context.resources.openRawResource(R.raw.ca).use { input ->
+                    val cert = CertificateFactory.getInstance("X.509").generateCertificate(input)
+                    ks.setCertificateEntry("pager-ca", cert)
+                }
             }
         }
 
-        // 2. platform trust anchors
+        // 2. platform trust anchors (managed brokers present a public certificate)
         runCatching {
             val def = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
             def.init(null as KeyStore?)
