@@ -11,7 +11,7 @@ as big as possible", and "date on one row, clock 30% bigger"?
 
 ## Answer
 
-Chosen from a throwaway UI prototype (`android/prototype/receiver-ui.html`,
+Chosen from a throwaway UI prototype (`../prototype/receiver-ui.html`,
 `?variant=C`, the primary source of all three variants).
 
 - **Message**: sender name centred above the message; message centred and

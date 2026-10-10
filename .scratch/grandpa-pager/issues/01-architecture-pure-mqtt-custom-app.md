@@ -6,7 +6,7 @@ Blocked by:
 
 ## Question
 
-Which of the five architectures in `initial-prompt.md` do we build, given the
+Which of the five architectures in `../initial-prompt.md` do we build, given the
 owner's constraints (MQTT-only, no Home Assistant, "a sender type and a receiver
 app, maybe one app with a config switch")?
 

@@ -73,10 +73,29 @@ from any other website**. Use `[]` to block browsers entirely.
     "acl": [
       { "uri": "mqtt", "topic": "grandpa/message", "actions": ["subscribe"] },
       { "uri": "mqtt", "topic": "grandpa/command", "actions": ["subscribe"] },
+      { "uri": "mqtt", "topic": "grandpa/config",  "actions": ["subscribe"] },
       { "uri": "mqtt", "topic": "grandpa/status",  "actions": ["publish"] }
     ]
   },
   "origins": [],
+  "ttl": 31536000,
+  "expire": 0
+}
+```
+
+### Admin token (goes in the admin browser page)
+
+```json
+{
+  "name": "grandpa-admin",
+  "access": {
+    "type": 2,
+    "acl": [
+      { "uri": "mqtt", "topic": "grandpa/config", "actions": ["publish", "subscribe"] },
+      { "uri": "mqtt", "topic": "grandpa/status", "actions": ["subscribe"] }
+    ]
+  },
+  "origins": ["https://catalingb.github.io"],
   "ttl": 31536000,
   "expire": 0
 }
@@ -102,10 +121,19 @@ Open the Pages site → **Setări broker** → broker `wss://mqtt.flespi.io:443`
 token = the **sender token**. It is stored only in that browser's
 `localStorage`.
 
+## 4b. Point the admin console at Flespi
+
+Open `…/admin.html` (or the **Admin** link on the sender) → enter the **admin
+token**. It is kept in `sessionStorage` (cleared when the tab closes). The admin
+page is built against `wss://mqtt.flespi.io:443`.
+
 ## 5. Privacy defaults
 
 - The **sender token is effectively public** (users type it; it sits in their
   browser). Mitigate with the ACL + origin lock above, and rotate it if a device
   is lost. Recreate the token to rotate (independent revocation).
 - `origins: []` on the receiver token prevents it being used from a browser at all.
+- The **admin token is more powerful** (it can reconfigure the device, including
+  kiosk lock). Keep it out of `localStorage` (the app uses `sessionStorage`), lock
+  it to the Pages origin, and rotate it if lost. Never the Master token.
 - Prefer per-person sender tokens if you need to revoke one person only.

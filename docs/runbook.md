@@ -16,10 +16,12 @@ equivalent commands in git history / shell history).
 
 ```bash
 cd android
-ANDROID_HOME=$HOME/Android/Sdk mise exec -- gradle assembleDebug testDebugUnitTest
-# APK: android/app/build/outputs/apk/debug/app-debug.apk   (~1.1 MB)
+ANDROID_HOME=$HOME/Android/Sdk ./gradlew assembleDebug testDebugUnitTest
+# APK: android/app/build/outputs/apk/debug/app-debug.apk   (~1.2 MB)
 # Tests: android/app/build/test-results/testDebugUnitTest/
 ```
+
+(The Gradle wrapper pins Gradle 8.14.3; `mise exec -- gradle …` also works.)
 
 ## 2. Local TLS broker (test only)
 
@@ -134,6 +136,27 @@ APK is signed with that key; otherwise it uses the debug key. Every push/PR runs
 
 > Changing the signing key later changes the app signature: the old install must
 > be uninstalled first (`adb uninstall com.grandpapager`).
+
+## 5c. Admin mode (remote config)
+
+The Pages app has an **admin console** (`admin.html`) gated by the scoped
+`grandpa-admin` token (see `flespi-setup.md`). It publishes a versioned config to
+the retained `grandpa/config`; the receiver validates, clamps, persists, applies
+and echoes it in `status.config`.
+
+The receiver **re-subscribes on every (re)connect** and re-applies the persisted
+config at boot, so settings survive reboot/offline. To test on the local broker
+(broker URL is hard-coded to Flespi in `admin.js`, so point a copy at the local
+WSS for local testing):
+
+```bash
+# clear the retained config, or set one directly
+NODE_PATH=tools/broker/node_modules node -e '
+const mqtt=require("mqtt");const c=mqtt.connect("mqtts://127.0.0.1:8883",{username:"grandpa",password:"grandpa",rejectUnauthorized:false});
+c.on("connect",()=>c.publish("grandpa/config",JSON.stringify({schema:1,display:{name_size_sp:90,countdown:true}}),{qos:1,retain:true},()=>c.end()));'
+# then read the ack:
+NODE_PATH=tools/broker/node_modules node tools/scripts/mqtt.js status
+```
 
 ## 6. Undo / maintenance
 

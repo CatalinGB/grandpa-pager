@@ -134,17 +134,23 @@
   function runSelfTest() {
     showForm();
     var checks = [];
-    function t(name, fn, expect) { try { fn(); var ok = get(expect.path) === expect.val; checks.push((ok ? "OK " : "FAIL ") + name); } catch (e) { checks.push("ERR " + name + " " + e.message); } }
+    function t(name, fn, expect) { try { fn(); var ok = expect ? get(expect.path) === expect.val : true; checks.push((ok ? "OK " : "FAIL ") + name); } catch (e) { checks.push("ERR " + name + " " + e.message); } }
+    // Real user-like interactions: .click() and dispatched 'input' events.
     var kioskBtn = el("sec-kiosk").querySelector("button.sw");
-    t("kiosk toggles off", function () { A.toggle(kioskBtn); }, { path: "kiosk.locked", val: false });
+    t("kiosk toggles off (click)", function () { kioskBtn.click(); }, { path: "kiosk.locked", val: false });
     var nameSlider = el("sec-display").querySelector('input[data-path="display.name_size_sp"]');
-    t("name slider sets 100", function () { nameSlider.value = 100; A.slide(nameSlider); }, { path: "display.name_size_sp", val: 100 });
+    t("name slider sets 100 (input event)", function () { nameSlider.value = 100; nameSlider.dispatchEvent(new Event("input", { bubbles: true })); }, { path: "display.name_size_sp", val: 100 });
+    var lbl = nameSlider.nextElementSibling;
+    checks.push(((lbl && lbl.textContent === "100") ? "OK " : "FAIL ") + "slider number shows 100 (is '" + (lbl ? lbl.textContent : "?") + "')");
+    var glow = el("sec-cue").querySelector('input[data-path="cue.glow_ms"]');
+    t("glow slider sets 4000 (input event)", function () { glow.value = 4000; glow.dispatchEvent(new Event("input", { bubbles: true })); }, { path: "cue.glow_ms", val: 4000 });
+    checks.push(((glow.nextElementSibling && glow.nextElementSibling.textContent === "4 s") ? "OK " : "FAIL ") + "glow shows '4 s' (is '" + glow.nextElementSibling.textContent + "')");
     var portrait = el("sec-display").querySelector('button[data-val="portrait"]');
-    t("orientation portrait", function () { A.choose(portrait); }, { path: "display.orientation", val: "portrait" });
+    t("orientation portrait (click)", function () { portrait.click(); }, { path: "display.orientation", val: "portrait" });
     var plus = el("sec-defaults").querySelectorAll("button")[1];
-    t("duration +30", function () { A.step(plus); }, { path: "defaults.duration_minutes", val: 270 });
+    t("duration +30 (click)", function () { plus.click(); }, { path: "defaults.duration_minutes", val: 270 });
     var torchOff = el("sec-cue").querySelector('button[data-path="cue.torch.enabled"]');
-    t("torch toggles off", function () { A.toggle(torchOff); }, { path: "cue.torch.enabled", val: false });
+    t("torch toggles off (click)", function () { torchOff.click(); }, { path: "cue.torch.enabled", val: false });
     var fails = checks.filter(function (c) { return c.indexOf("OK ") !== 0; }).length;
     document.title = fails ? ("SELFTEST_FAIL " + fails) : "SELFTEST_OK";
     var pre = el("jsonPreview"); pre.textContent = "SELFTEST: " + (fails ? "FAIL" : "OK") + "\n" + checks.join("\n") + "\n\n" + JSON.stringify(cfg, null, 1);

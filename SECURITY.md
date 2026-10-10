@@ -1,31 +1,31 @@
 # Security audit — Grandpa Pager
 
-Date: 2026-10-10 (updated: same day, after release hardening). Scope: the Flespi
-MQTT channel, the Android receiver, the GitHub Pages web sender, and the tokens.
+Date: 2026-10-10 (updated after release hardening and the admin-mode work).
+Scope: the Flespi MQTT channel, the Android receiver, the GitHub Pages web
+sender **and admin console**, and the tokens.
 
 ## Assets
-- **The message channel** (`grandpa/message`, `grandpa/status`) — private family
-  communication.
+- **The message channel** (`grandpa/message`, `grandpa/status`, `grandpa/config`)
+  — private family communication and device configuration.
 - **Broker tokens** (Flespi) — the thing that grants access.
-- **The web sender** — a *public* static site (GitHub Pages free = public repo).
+- **The web pages** — a *public* static site (GitHub Pages free = public repo).
 
 ## What is NOT exposed (verified)
-- **No secrets in the repo.** `.env` (the Flespi token) and the test CA private
-  key are in `.gitignore`; a scan for the token value found it **only** in
-  `.env`. The published site ships code only.
-- The web sender **has no token baked in** — the user types it and it lives in
-  their browser `localStorage`.
+- **No secrets in the repo.** `.env` / `.env.tokens` (Flespi tokens) and the test
+  CA private key are in `.gitignore`; a scan of the whole git history found no
+  token value. The published site ships code only.
+- The web pages **have no token baked in** — the user types it; the sender keeps
+  it in `localStorage`, the admin in `sessionStorage`.
 
 ## Findings
 
 1. **The sender token is effectively public.** Any script on the page, or anyone
    with access to the user's browser, can read `localStorage`. *Mitigations:*
-   a **scoped ACL** token (publish-only `grandpa/message`, subscribe
+   a **scoped ACL** token (publish `grandpa/message`, subscribe
    `grandpa/status`), and **`origins` locked to the Pages origin** so a leaked
    token can't be used from another site. Residual risk is a user's own browser.
-2. **Never ship the master token.** The `.env` token is *not* a master
-   (`/platform/tokens` returned `403`), but treat it as sensitive and keep it off
-   every client.
+2. **Never ship the master token.** The `.env` token is used only offline to mint
+   the scoped tokens; keep it off every client.
 3. **TLS-only.** Use `mqtts://mqtt.flespi.io:8883` (Android) and
    `wss://mqtt.flespi.io:443` (browser). Flespi also serves **plaintext**
    `1883`/`80` — never use those; there is no forced-TLS switch, so the clients
@@ -45,25 +45,36 @@ MQTT channel, the Android receiver, the GitHub Pages web sender, and the tokens.
 8. **TLS hostname verification (fixed).** Paho `mqttv3` does not enable endpoint
    identification by default, so any cert from a trusted CA would be accepted for
    any host. `TlsUtil` now wraps the socket factory to force the `HTTPS` endpoint
-   identification algorithm.
-9. **Bundled test CA (fixed for release).** The app used to trust the bundled
-   test CA (`res/raw/ca.crt`, whose private key lives on the dev machine) in all
-   builds. It is now trusted **only in debug builds**; release trusts the
-   platform CAs only.
+   identification algorithm (Paho's no-arg socket may limit this — see the
+   architecture caveat).
+9. **Bundled test CA (fixed for release).** The app must not trust the bundled
+   test CA (`res/raw/ca.crt`, whose private key lives on the dev machine) in a
+   released build. `TlsUtil` trusts it **only in debug builds**; release trusts
+   the platform CAs only.
 10. **CDN dependency removed.** MQTT.js is **vendored** (`mqtt.min.js`) so the
-    page works even if a CDN is blocked — also removing a third-party script from
+    pages work even if a CDN is blocked — also removing a third-party script from
     the trust path.
 11. **Content-Security-Policy added.** The web sender — which holds a broker
-    token — now ships a strict CSP (`script-src 'self'`, `connect-src 'self' wss:`,
+    token — ships a strict CSP (`script-src 'self'`, `connect-src 'self' wss:`,
     `base-uri 'none'`, `form-action 'none'`, `object-src 'none'`).
+12. **The admin token is more powerful than the sender token.** It can reconfigure
+    the device (display, cues, default duration) and toggle the kiosk lock. It is
+    narrowly scoped (pub/sub `grandpa/config`, sub `grandpa/status`), origin-locked,
+    held in `sessionStorage`, and can only toggle the lock — never broker
+    credentials, device-owner status, or any factory-reset surface.
+13. **The admin page has no CSP yet.** `admin.js` uses inline `onclick`
+    attributes, which a strict `script-src 'self'` would block; hardening it
+    (event delegation + CSP) is recommended but pending.
 
 ## Recommended actions (priority order)
 1. Create **scoped ACL tokens** and set **`origins`** exactly as in
    `docs/flespi-setup.md`; stop using the `.env` token in clients.
 2. Keep the **receiver token off the browser** (`origins: []`).
-3. Optional: **per-person sender tokens** for independent revocation.
-4. **Rotate** the sender token if a device is lost (recreate the token).
-5. For a real release build, provide a **release keystore**
+3. Add a **CSP to `admin.html`** once its inline handlers are refactored.
+4. Optional: **per-person sender tokens** for independent revocation; consider a
+   **separate admin token per admin**.
+5. **Rotate** the sender/admin token if a device is lost (recreate the token).
+6. For a real release build, provide a **release keystore**
    (`android/keystore.properties`, gitignored) instead of the debug-key fallback.
 
 ## Notes on the test that couldn't run here
@@ -71,3 +82,4 @@ The sandbox's headless Chromium cannot open *external* WebSockets (it opens a
 localhost WSS broker fine), so the browser→Flespi leg was validated instead with
 a Node MQTT client (same protocol/token) and with the page against the local WSS
 broker. The browser→Flespi leg must be confirmed in a real browser.
+

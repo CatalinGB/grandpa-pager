@@ -23,7 +23,8 @@ carries execution.)
 - **Domain**: Android/Kotlin app development, MQTT over TLS, ADB kiosk lockdown.
 - **Skills each session should consult**: `android-adb-control` (driving the
   phone), `research`, `prototype`, `grilling`, `domain-modeling`.
-- **Standing constraints** (from `initial-prompt.md`, confirmed by owner):
+- **Standing constraints** (from `initial-prompt.md`, archived in this folder,
+  confirmed by owner):
   free/low-cost, EU/Romania-friendly, **private** TLS broker (never a public
   broker), application-level `expires_at` (default 4 h, per-message override),
   retained messages, automatic reconnect + reboot recovery, no public-internet
