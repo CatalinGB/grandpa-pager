@@ -167,7 +167,12 @@
       el("sendHint").textContent = "Token uitat.";
     });
 
-    if (el("token").value) connect();
+    if (el("token").value) {
+      connect();
+    } else {
+      el("settings").open = true;
+      el("sendHint").textContent = "Introdu tokenul brokerului și apasă „Conectează”.";
+    }
   }
 
   document.addEventListener("DOMContentLoaded", init);
