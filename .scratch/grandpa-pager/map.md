@@ -58,6 +58,7 @@ carries execution.)
 - [16 Hide the expiry countdown in production](issues/16-countdown-dev-only.md): countdown visible only in `BuildConfig.DEBUG`; release hides it (release APK debug-signed to stay sideloadable).
 - [17 Lock down the phone's network (open-source firewall)](issues/17-network-firewall.md): install NetGuard (no-root), whitelist only the pager app, wire always-on VPN via the device owner; DNS caveat on Android 9.
 - [18 Admin escape gesture](issues/18-admin-escape-gesture.md): 5 taps bottom-left → stop lock task + open the original launcher (device owner kept); receiver pinned to portrait.
+- [19 Torch/flash attention signal](issues/19-torch-signal.md): a smooth fade is impossible on API 28, so a slow 3× on/off torch pulse is fired with the arrival cue (`setTorchMode`, no permission).
 
 ## Not yet specified
 

@@ -9,6 +9,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Paint
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraManager
 import android.media.RingtoneManager
 import android.os.Build
 import android.os.Bundle
@@ -62,6 +64,9 @@ class ReceiverActivity : Activity() {
     private var glowAnim: ValueAnimator? = null
     private var releaseReceiver: BroadcastReceiver? = null
     private val cornerTaps = ArrayDeque<Long>()
+    private var torchCameraId: String? = null
+    private var torchRequested = false
+    private val torchHandler = Handler(Looper.getMainLooper())
 
     /**
      * Admin escape hatch: five taps in the bottom-left corner switch to the
@@ -141,6 +146,8 @@ class ReceiverActivity : Activity() {
 
     override fun onDestroy() {
         glowAnim?.cancel()
+        torchHandler.removeCallbacksAndMessages(null)
+        setTorch(false)
         releaseReceiver?.let { runCatching { unregisterReceiver(it) } }
         super.onDestroy()
     }
@@ -215,7 +222,7 @@ class ReceiverActivity : Activity() {
         }
     }
 
-    /** One-shot tri-modal cue: slow glow, a chime, a double vibration. */
+    /** One-shot tri-modal cue: slow glow, a chime, a double vibration, + torch. */
     private fun playArrivalCue() {
         glowAnim?.cancel()
         glowOverlay.alpha = 0f
@@ -237,6 +244,47 @@ class ReceiverActivity : Activity() {
                 @Suppress("DEPRECATION") v.vibrate(pattern, -1)
             }
         }
+        playTorchCue()
+    }
+
+    /* ---- Torch/flash signal (binary on/off — a smooth fade isn't possible
+       before API 33). Slow 3× pulse as an across-the-room cue. No permission. ---- */
+    private fun cameraManager(): CameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
+
+    private fun torchId(): String? {
+        torchCameraId?.let { return it }
+        return runCatching {
+            val cm = cameraManager()
+            cm.cameraIdList.firstOrNull { id ->
+                cm.getCameraCharacteristics(id).get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+            }?.also { torchCameraId = it }
+        }.getOrNull()
+    }
+
+    private fun setTorch(on: Boolean) {
+        val id = torchId() ?: run { Log.w(TAG, "no torch camera"); return }
+        runCatching {
+            cameraManager().setTorchMode(id, on)
+            Log.i(TAG, "torch($on) ok on camera $id")
+        }.onFailure { Log.w(TAG, "torch($on) failed: ${it.message}") }
+    }
+
+    private fun playTorchCue() {
+        torchHandler.removeCallbacksAndMessages(null)
+        val onMs = 500L; val offMs = 700L; val pulses = 3
+        val run = object : Runnable {
+            var count = 0
+            override fun run() {
+                setTorch(true)
+                torchHandler.postDelayed({
+                    setTorch(false)
+                    count++
+                    if (count < pulses) torchHandler.postDelayed(this, offMs)
+                }, onMs)
+            }
+        }
+        torchRequested = true
+        torchHandler.post(run)
     }
 
     private fun remainingLabel(): String {
