@@ -35,13 +35,12 @@ the receiver validates and applies**, plus a live read of the device status.
 - [05 Provision the admin token](issues/05-admin-token.md): created `grandpa-admin` (publish/subscribe `grandpa/config`, subscribe `grandpa/status`, origin-locked to the Pages site, TTL 1 y).
 - [02 Config schema](issues/02-config-schema.md): v1 = `{schema:1, display, cue, defaults, kiosk}`; receiver clamps bounds, rejects unknown schema, ignores unknown fields, echoes applied config in status.
 - [03 Admin UI shape](issues/03-admin-ui.md): variant **A “Secțiuni”** — grouped single-scroll form + live status + JSON preview, gated by `?admin=1` + the `grandpa-admin` token.
+- [04 Receiver: apply/validate/ack](issues/04-receiver-apply.md): subscribe retained `grandpa/config`, apply on (re)connect; reject bad `schema`, else clamp/ignore; kiosk via activity; persist + reboot; ack in `status.config` + read-back; receiver token granted `subscribe grandpa/config`.
 
 ## Not yet specified
 
-- **Kiosk lock/unlock remotely**: the precise device-owner calls the receiver
-  makes when the config asks to re-lock / open the launcher (and the safe revert).
 - **Multi-admin & revocation**, and whether the admin token should ever refresh.
-- **Offline admin**: retained `grandpa/config` applying when the receiver reconnects.
+- **Config history / audit** of who applied what.
 
 ## Out of scope
 

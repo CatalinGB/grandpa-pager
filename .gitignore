@@ -10,6 +10,7 @@ tools/broker/node_modules/
 # Secrets — never commit the token or the test CA private key
 .env
 .env.*
+!.env.example
 tools/certs/*.key
 tools/certs/*.srl
 

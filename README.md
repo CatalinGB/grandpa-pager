@@ -57,9 +57,23 @@ docs/                        architecture, decision log, runbook, test evidence
 tools/broker/                local Aedes TLS broker (test)
 tools/certs/                 test CA + server cert (local only — do not commit keys)
 tools/scripts/               e2e MQTT client + example prefs
-.scratch/grandpa-pager/      wayfinder map, tickets, research
+.github/workflows/           CI (build + tests) and tagged releases
+.scratch/                    wayfinder maps, tickets, research
 initial-prompt.md            the original brief
 ```
+
+## Releases
+
+Tag a version (`git tag v1.0 && git push --tags`) and the release workflow builds
+`app-release.apk` and attaches it to a GitHub Release. By default it is signed
+with the debug key; provide the `KEYSTORE_B64` / `KEYSTORE_PASSWORD` /
+`KEY_ALIAS` / `KEY_PASSWORD` repo secrets (or a local
+`android/keystore.properties`) for a real signing key. See
+[`docs/runbook.md`](docs/runbook.md) §5b.
+
+## License
+
+[MIT](LICENSE).
 
 ## Production note
 

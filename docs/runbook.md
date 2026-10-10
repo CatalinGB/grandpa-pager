@@ -98,6 +98,43 @@ Observed results (2026-10-10, Mi A1 / Android 9, via `adb reverse`):
 4. Power: enable **Stay awake**, and grant battery-optimization exemption
    (offered at setup). The service already keeps the screen on while in the app.
 
+## 5b. Release build
+
+The project has a Gradle wrapper (`android/gradlew`), so CI and contributors do
+not need a pre-installed Gradle.
+
+```bash
+cd android
+ANDROID_HOME=$HOME/Android/Sdk ./gradlew assembleRelease testDebugUnitTest
+# APK: android/app/build/outputs/apk/release/app-release.apk
+```
+
+**Signing.** By default the release APK falls back to the **debug key** (fine for
+personal sideloading). For a real release, create a keystore once and add a
+gitignored `android/keystore.properties`:
+
+```bash
+keytool -genkeypair -v -keystore android/release.jks -keyalg RSA -keysize 2048 \
+  -validity 10000 -alias grandpa
+```
+
+```properties
+# android/keystore.properties  (gitignored — never commit)
+storeFile=release.jks
+storePassword=…
+keyAlias=grandpa
+keyPassword=…
+```
+
+**GitHub Releases.** Pushing a `v*` tag builds the release APK and attaches it to
+a GitHub Release (`.github/workflows/release.yml`). If the repo secrets
+`KEYSTORE_B64` / `KEYSTORE_PASSWORD` / `KEY_ALIAS` / `KEY_PASSWORD` are set, the
+APK is signed with that key; otherwise it uses the debug key. Every push/PR runs
+`.github/workflows/ci.yml` (debug build + unit tests).
+
+> Changing the signing key later changes the app signature: the old install must
+> be uninstalled first (`adb uninstall com.grandpapager`).
+
 ## 6. Undo / maintenance
 
 Exit kiosk and clear device owner (from a running receiver):
