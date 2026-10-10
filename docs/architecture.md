@@ -40,7 +40,7 @@ notified through the in-process `PagerBus` and by re-reading `SharedPreferences`
 | `MqttController.kt` | Paho wrapper: TLS, persistent session, auto-reconnect, subscribe, publish. |
 | `PagerService.kt` | Foreground service: connect, receive, show/clear, apply remote config, expiry alarm, watchdog, diagnostics. |
 | `ReceiverActivity.kt` | Variant-C display: sender centred above the message (auto-sized), countdown below; idle = one-row date + clock (1.3×); one-shot glow+chime+vibration+torch cue; kiosk entry; admin exit gesture; applies remote config. |
-| `DateLabels.kt` | Locale-aware idle labels: `SÂMBĂTĂ 10/10/2026` and the device time format. |
+| `DateLabels.kt` | Locale-aware idle labels: `SATURDAY 10/10/2026` and the device time format. |
 | `SenderActivity.kt` | Android compose + monitor UI. |
 | `SetupActivity.kt` | Role + broker configuration (+ battery-optimization request). |
 | `BootReceiver.kt` | Restart service after reboot / update. |

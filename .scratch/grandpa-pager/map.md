@@ -30,8 +30,8 @@ carries execution.)
   retained messages, automatic reconnect + reboot recovery, no public-internet
   exposure of the compose surface, low maintenance.
 - **Target device**: Xiaomi Mi A1 (`tissot`, Android One), Android 9 / API 28,
-  single user, **no accounts** (device-owner provisioning viable), currently
-  `192.168.50.15`, USB serial `329708ee0804`.
+  single user, **no accounts** (device-owner provisioning viable), on the home
+  LAN, connected via USB/ADB.
 - **Local e2e strategy**: run a private TLS broker (Node **Aedes**) on the host;
   reach it from the phone over USB with `adb reverse tcp:8883 tcp:8883` (host and
   phone are on different subnets, so USB reverse is the reliable path).

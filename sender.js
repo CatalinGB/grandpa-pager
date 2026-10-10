@@ -55,7 +55,7 @@
   /* ---------- status ---------- */
   function setConnected(ok) {
     var p = el("connPill");
-    p.textContent = ok ? "conectat" : "neconectat";
+    p.textContent = ok ? "connected" : "disconnected";
     p.className = "pill " + (ok ? "on" : "off");
   }
   function renderDiag(d) {
@@ -63,12 +63,12 @@
     var age = Math.max(0, Math.round((Date.now() - seen) / 1000));
     var online = d.state !== "offline" && age < 90;
     el("diag").textContent =
-      "stare:    " + d.state + (online ? "" : "   (ÎNVECHIT " + age + "s)") + "\n" +
+      "state:    " + d.state + (online ? "" : "   (STALE " + age + "s)") + "\n" +
       "mqtt:     " + d.mqtt + "\n" +
-      "baterie:  " + d.battery + "%" + (d.charging ? " (se încarcă)" : "") + "\n" +
+      "battery:  " + d.battery + "%" + (d.charging ? " (charging)" : "") + "\n" +
       "wifi:     " + d.wifi + "\n" +
-      "mesaj:    " + (d.sender || "-") + "\n" +
-      "văzut:    " + age + "s în urmă";
+      "message:  " + (d.sender || "-") + "\n" +
+      "seen:     " + age + "s ago";
   }
 
   /* Non-blocking notice that a message is already on the display (option B).
@@ -77,16 +77,16 @@
   function updateBannerFromStatus(d) {
     var b = el("banner");
     if (!d || d.state !== "showing" || !d.current_message_id) { b.hidden = true; return; }
-    var who = d.sender ? " de la <b>" + escapeHtml(d.sender) + "</b>" : "";
+    var who = d.sender ? " from <b>" + escapeHtml(d.sender) + "</b>" : "";
     var exp = "";
     if (d.expires_at) {
       var mins = Math.max(1, Math.round((new Date(d.expires_at).getTime() - Date.now()) / 60000));
-      exp = " (expiră în " + mins + " min)";
+      exp = " (expires in " + mins + " min)";
     }
     var replaced = (myLastId && d.current_message_id !== myLastId && (Date.now() - myLastAt) < 6000)
-      ? "<br>⚠ Mesajul tău tocmai a fost înlocuit de altcineva." : "";
+      ? "<br>⚠ Your message was just replaced by someone else." : "";
     b.hidden = false;
-    b.innerHTML = "Pe ecran acum: un mesaj" + who + exp + ". Dacă trimiți, îl înlocuiești." + replaced;
+    b.innerHTML = "On screen now: a message" + who + exp + ". Sending replaces it." + replaced;
   }
 
   function renderBannerFromMessage(raw) {
@@ -95,16 +95,16 @@
     if (!text || text === "{}") { updateBannerFromStatus(lastStatus); return; }
     var d; try { d = JSON.parse(text); } catch (e) { return; }
     if (!d || !d.text) { updateBannerFromStatus(lastStatus); return; }
-    var who = d.sender ? " de la <b>" + escapeHtml(d.sender) + "</b>" : "";
+    var who = d.sender ? " from <b>" + escapeHtml(d.sender) + "</b>" : "";
     var exp = "";
     if (d.expires_at) {
       var mins = Math.max(1, Math.round((new Date(d.expires_at).getTime() - Date.now()) / 60000));
-      exp = " (expiră în " + mins + " min)";
+      exp = " (expires in " + mins + " min)";
     }
     var replaced = (myLastId && d.id && d.id !== myLastId && (Date.now() - myLastAt) < 6000)
-      ? "<br>⚠ Mesajul tău tocmai a fost înlocuit de altcineva." : "";
+      ? "<br>⚠ Your message was just replaced by someone else." : "";
     b.hidden = false;
-    b.innerHTML = "Pe ecran acum: „<b>" + escapeHtml(d.text) + "</b>”" + who + exp + ". Dacă trimiți, îl înlocuiești." + replaced;
+    b.innerHTML = "On screen now: “<b>" + escapeHtml(d.text) + "</b>”" + who + exp + ". Sending replaces it." + replaced;
   }
 
   /* ---------- mqtt ---------- */
@@ -127,14 +127,14 @@
 
   function connect() {
     var c = creds();
-    if (!c.broker || !c.token) { el("sendHint").textContent = "Lipsește brokerul sau tokenul."; return; }
+    if (!c.broker || !c.token) { el("sendHint").textContent = "Broker or token missing."; return; }
     localStorage.setItem(LS.broker, c.broker);
     localStorage.setItem(LS.token, c.token);
     localStorage.setItem(LS.sender, c.name);
 
     if (client) { try { client.end(true); } catch (e) {} }
     setConnected(false);
-    el("sendHint").textContent = "Se conectează…";
+    el("sendHint").textContent = "Connecting…";
 
     client = mqtt.connect(c.broker, {
       username: c.token,
@@ -146,12 +146,12 @@
     });
     client.on("connect", function () {
       setConnected(true);
-      el("sendHint").textContent = "Conectat.";
+      el("sendHint").textContent = "Connected.";
       client.subscribe([TOPIC.status, TOPIC.message], { qos: 1 });
     });
-    client.on("reconnect", function () { el("sendHint").textContent = "Se reconectează…"; });
+    client.on("reconnect", function () { el("sendHint").textContent = "Reconnecting…"; });
     client.on("close", function () { setConnected(false); });
-    client.on("error", function (err) { setConnected(false); el("sendHint").textContent = "Eroare: " + err.message; });
+    client.on("error", function (err) { setConnected(false); el("sendHint").textContent = "Error: " + err.message; });
     client.on("message", function (topic, payload) {
       if (topic === TOPIC.status) {
         try { lastStatus = JSON.parse(payload.toString()); renderDiag(lastStatus); updateBannerFromStatus(lastStatus); }
@@ -165,9 +165,9 @@
   function publishMessage() {
     var name = (localStorage.getItem(LS.sender) || el("sender").value || "").trim();
     var text = el("text").value.trim();
-    if (!name) { el("sendHint").textContent = "Scrie numele tău (în Setări)."; return; }
-    if (!text) { el("sendHint").textContent = "Scrie un mesaj."; return; }
-    if (!client || !client.connected) { el("sendHint").textContent = "Nu ești conectat."; return; }
+    if (!name) { el("sendHint").textContent = "Enter your name (in Settings)."; return; }
+    if (!text) { el("sendHint").textContent = "Type a message."; return; }
+    if (!client || !client.connected) { el("sendHint").textContent = "You are not connected."; return; }
 
     var now = Date.now();
     var payload = {
@@ -181,13 +181,13 @@
     client.publish(TOPIC.message, JSON.stringify(payload), { qos: 1, retain: true });
     myLastId = payload.id; myLastAt = Date.now();
     el("text").value = "";
-    el("sendHint").textContent = "Trimis — apare pe ecran.";
+    el("sendHint").textContent = "Sent — it is on the screen.";
   }
 
   function clearDisplay() {
-    if (!client || !client.connected) { el("sendHint").textContent = "Nu ești conectat."; return; }
+    if (!client || !client.connected) { el("sendHint").textContent = "You are not connected."; return; }
     client.publish(TOPIC.message, "", { qos: 1, retain: true });
-    el("sendHint").textContent = "Ecran șters.";
+    el("sendHint").textContent = "Screen cleared.";
   }
 
   /* ---------- first run ---------- */
@@ -195,8 +195,8 @@
     var name = el("setupName").value.trim();
     var token = el("setupToken").value.trim();
     var broker = el("setupBroker").value.trim() || DEFAULT_BROKER;
-    if (!name) { el("setupHint").textContent = "Scrie numele tău."; return; }
-    if (!token) { el("setupHint").textContent = "Lipsește tokenul."; return; }
+    if (!name) { el("setupHint").textContent = "Enter your name."; return; }
+    if (!token) { el("setupHint").textContent = "Token missing."; return; }
     localStorage.setItem(LS.sender, name);
     localStorage.setItem(LS.token, token);
     localStorage.setItem(LS.broker, broker);
@@ -214,7 +214,7 @@
     el("token").value = "";
     el("setupToken").value = "";
     showView("setup");
-    el("setupHint").textContent = "Token uitat. Introdu-l din nou.";
+    el("setupHint").textContent = "Token forgotten. Enter it again.";
   }
 
   /* ---------- service worker (offline app shell) ---------- */
@@ -227,7 +227,7 @@
   /* ---------- wire up ---------- */
   function init() {
     registerSW();
-    if (typeof mqtt === "undefined") { el("setupHint").textContent = "Eroare: mqtt.min.js nu s-a încărcat."; showView("setup"); return; }
+    if (typeof mqtt === "undefined") { el("setupHint").textContent = "Error: mqtt.min.js failed to load."; showView("setup"); return; }
 
     buildPresets();
     setMinutes(DEFAULT_MIN);

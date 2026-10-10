@@ -1,137 +1,194 @@
+<div align="center">
+
 # Grandpa Pager
 
-Turn an old Android phone (Xiaomi Mi A1, Android 9) into an **always-on,
-locked-down, remotely-controlled full-screen message pager** for an elderly
-relative, using a **free private MQTT broker**, a **zero-backend static web
-sender**, and a single custom Kotlin app.
+**Turn any old Android phone into an always-on, locked-down message pager for an elderly relative.**
 
-- Messages appear **full-screen** in large high-contrast text, attributed to the
-  **sender** (`Maria`).
-- Messages **auto-expire** (default 4 h, per-message override) and the phone
-  returns to a neutral clock.
-- Grandpa **cannot escape** the app (device-owner kiosk / lock task mode).
-- The phone publishes **diagnostics** (online/offline, battery, charging, Wi-Fi,
-  MQTT, current message, last seen) so family can see the device at a glance.
-- An **admin console** remotely tunes the display, the new-message cue
-  (glow / chime / vibration / torch), the default duration and the kiosk lock.
+A static web sender, a token-gated admin console, and a custom Android app — all
+talking over a **private MQTT broker**. No server to run, nothing to maintain.
 
-Design and decisions:
+![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
+![Platform: Android 7+](https://img.shields.io/badge/platform-Android%207%2B-3ddc84.svg)
+![MQTT 3.1.1](https://img.shields.io/badge/MQTT-3.1.1-660066.svg)
+![No backend](https://img.shields.io/badge/backend-none-success.svg)
 
-- [`docs/architecture.md`](docs/architecture.md) — components, topics, payloads, expiry, security.
-- [`docs/decisions.md`](docs/decisions.md) — why each choice was made.
-- [`docs/runbook.md`](docs/runbook.md) — build, test, deploy, undo, troubleshooting.
-- [`docs/flespi-setup.md`](docs/flespi-setup.md) — broker + token setup.
-- `.scratch/` — the wayfinder maps, tickets and research for the
-  [receiver](.scratch/grandpa-pager/), [web sender](.scratch/web-sender/) and
-  [admin mode](.scratch/admin-mode/).
+</div>
+
+Family sends a message from any browser in seconds; it appears **full-screen** in
+large, high-contrast text, attributed to the sender, and clears itself when it
+expires. Grandpa can't quit the app, change settings, or wander into other apps.
+The phone reports its battery, Wi-Fi, link state and current message so you always
+know it's healthy — and an admin can reconfigure it remotely without touching the
+device.
+
+## Features
+
+- **Full-screen, high-contrast messages** with the sender's name, auto-sized to
+  fill the screen.
+- **Automatic expiry** (default 4 h, per-message override) enforced *on the
+  device* — never trusting broker retention.
+- **Remote clear** and a non-blocking "a message is already showing" warning.
+- **Attention cue** on a new message: a slow amber glow, a chime, a double
+  vibration and a torch pulse.
+- **Live diagnostics**: online/offline, battery + charging, Wi-Fi, MQTT, current
+  message and how long ago it was last seen.
+- **Admin console** (browser): text size, orientation, countdown, the arrival
+  cue, the default duration, and the kiosk lock.
+- **Kiosk lockdown** via device-owner Lock Task Mode, re-armed on every boot,
+  with a hidden admin escape gesture.
+- **Self-healing**: survives reboots, Wi-Fi loss and long broker outages
+  (a 30 s reconnect watchdog).
+- **Zero backend** and **MIT** licensed.
+
+## Screenshots
+
+<table>
+<tr>
+<td align="center" width="50%"><img src="docs/screenshots/sender.png" width="230" alt="Web sender"><br><sub>Send a message</sub></td>
+<td align="center" width="50%"><img src="docs/screenshots/admin.png" width="230" alt="Admin console"><br><sub>Admin console</sub></td>
+</tr>
+<tr>
+<td align="center" width="50%"><img src="docs/screenshots/receiver-message.png" width="230" alt="Message on the phone"><br><sub>Message on the phone</sub></td>
+<td align="center" width="50%"><img src="docs/screenshots/receiver-idle.png" width="230" alt="Idle clock"><br><sub>Idle screen</sub></td>
+</tr>
+</table>
+
+## How it works
+
+```
+   family / admin (browser)                  Grandpa's phone (Android, kiosk)
+   ┌───────────────────────┐                 ┌──────────────────────────────┐
+   │ index.html · sender.js │                 │ ReceiverActivity (full screen)│
+   │ admin.html · admin.js  │                 │ PagerService (foreground)     │
+   │  publish message/config│                 │  subscribe message/command/   │
+   │  subscribe status      │                 │            config             │
+   └───────────┬───────────┘                 └───────────────┬──────────────┘
+               │                                             │
+               └──────────────►  MQTT broker  ◄──────────────┘
+                        TLS 8883 · WSS 443 · per-topic ACL tokens
+                         (Flespi in production, Aedes for tests)
+```
+
+Four topics carry everything:
+
+| Topic | Direction | Purpose |
+|---|---|---|
+| `grandpa/message` | senders → phone | the latest message (retained; empty clears) |
+| `grandpa/command` | senders → phone | `{"action":"clear"}` |
+| `grandpa/config` | admin → phone | versioned remote config (retained) |
+| `grandpa/status` | phone → everyone | diagnostics + config acknowledgement |
+
+The phone validates and clamps anything it receives, so a bad config is rejected
+and never half-applied. Details in [`docs/architecture.md`](docs/architecture.md).
 
 ## User guide
 
-### 1. Send a message (family)
+### 1 · Send a message (family)
 
-Open **https://catalinggb.github.io/grandpa-pager/**, type your name and the
-family token **once** (both stay in your browser only). Then type the message,
-choose how long it should stay on screen, and tap **Trimite pe ecran**. A banner
-warns you if a message is already showing (sending replaces it), and the status
-panel shows the phone's battery, Wi-Fi, MQTT link and when it was last seen.
+Open the sender page, type your name and the family token **once** (they stay in
+your browser), then type the message, choose how long it should stay on screen,
+and tap **Send to screen**. A banner warns if a message is already showing, and
+the status panel mirrors the phone.
 
-![Web sender](docs/screenshots/sender.png)
+### 2 · Configure the pager (admin)
 
-### 2. Configure the pager (admin)
+Open **Admin** (the link at the bottom of the sender) and enter the admin token.
+Tune the display, the new-message cue, the default duration and the kiosk lock,
+then **Apply to phone** — the phone validates, applies and confirms it back.
 
-Open the **Admin** link at the bottom of the page (or `…/admin.html`) and enter
-the admin token. Tune the text size, orientation and countdown; the new-message
-cue (glow, chime, vibration, torch); the default duration; and the kiosk lock.
-**Aplică pe telefon** publishes the config, which the phone validates, applies and
-confirms back in the status line. **Reset** restores the recommended defaults.
+### 3 · On Grandpa's phone
 
-![Admin console](docs/screenshots/admin.png)
+A new message fills the screen with the sender's name above it and fires the
+attention cue. When it expires or is cleared, the phone returns to a calm
+date-and-clock idle screen.
 
-### 3. On Grandpa's phone
+### 4 · Monitor &amp; control
 
-A new message fills the screen with the sender's name above it and a one-shot
-attention cue (a slow amber glow, a chime, a double vibration and a torch pulse).
-When the message expires — or is cleared — the screen returns to a calm
-date-and-clock idle view. A soft *„Probleme cu conexiunea"* line appears on idle
-if the link drops.
+The **Device status** panel shows `state` (`idle` / `showing` / `offline`), the
+MQTT link, battery + charging, Wi-Fi, the current sender and last-seen age.
+**Clear the message** wipes the screen remotely.
 
-![Message on Grandpa's phone](docs/screenshots/receiver-message.png)
-![Idle clock](docs/screenshots/receiver-idle.png)
+## Repository layout
 
-### 4. Monitor and control
+```
+index.html · sender.js         web sender      (GitHub Pages, MQTT.js over WSS)
+admin.html · admin.js          web admin       (token-gated remote config)
+mqtt.min.js · sw.js · manifest vendored lib + PWA shell + icons
+android/                       Kotlin app (roles: receiver / admin / family)
+  app/src/main/java/…          PagerService, MqttController, RemoteConfig, activities
+  app/src/test/…               JVM unit tests
+docs/                          architecture · decisions · runbook · flespi-setup · screenshots
+tools/broker/                  local Aedes TLS/WSS broker (tests)
+tools/scripts/                 e2e MQTT client + example prefs
+.github/workflows/             CI (build + test) and tagged releases
+.scratch/                      design maps, tickets and research (receiver · sender · admin)
+```
 
-Signals appear on the sender's **Starea dispozitivului** panel: `state`
-(`idle` / `showing` / `offline`), `mqtt`, battery + charging, Wi-Fi, the current
-sender and how long ago the phone was last seen. **Șterge mesajul de pe ecran**
-clears the display remotely.
-
-## Status
-
-Implemented and e2e-tested on the real Mi A1: TLS messaging, full-screen display
-with sender + auto-sized text, arrival cue (glow/chime/vibration/torch), remote
-clear, expiry, reboot recovery, online/offline diagnostics, the browser sender
-and admin console over WSS, and device-owner kiosk provisioning. 8 JVM unit tests
-pass. Evidence in [`docs/evidence/`](docs/evidence/), screenshots in
-[`docs/screenshots/`](docs/screenshots/).
-
-## Quick start
+## Quick start (developer)
 
 ```bash
-# 1. test broker (TLS + WSS, local)
+# 1. local test broker (TLS + WSS)
 cd tools/broker && npm install
 setsid node server.js </dev/null >/tmp/broker.log 2>&1 &
 
-# 2. build + install
+# 2. build + install the app
 cd ../../android && ANDROID_HOME=$HOME/Android/Sdk ./gradlew assembleDebug
-S=$(adb devices | awk 'NR==2{print $1}')
+S=$(adb devices | awk 'NR==2{print $1}')          # the connected phone
 adb -s $S install -r app/build/outputs/apk/debug/app-debug.apk
-adb -s $S reverse tcp:8883 tcp:8883
+adb -s $S reverse tcp:8883 tcp:8883                 # phone -> host broker over USB
 
-# 3. configure as receiver (see tools/scripts/prefs-receiver.xml)
-adb -s $S push ../tools/scripts/prefs-receiver.xml /data/local/tmp/pager.xml
-adb -s $S shell "run-as com.grandpapager cp /data/local/tmp/pager.xml shared_prefs/pager.xml"
-adb -s $S shell am start -n com.grandpapager/.ReceiverActivity
-
-# 4. send a message
+# 3. configure it as the receiver, then send a message
 cd ../tools && NODE_PATH=$PWD/broker/node_modules node scripts/mqtt.js send "Lunch is ready" 120 "Maria"
 ```
 
-## Layout
+Full build/test/deploy/undo steps and a troubleshooting table are in
+[`docs/runbook.md`](docs/runbook.md).
 
-```
-index.html, sender.js         web sender   (GitHub Pages, WSS → broker)
-admin.html, admin.js          web admin    (token-gated remote config)
-mqtt.min.js                   vendored MQTT.js (no CDN dependency)
-sw.js, manifest.webmanifest   PWA shell + icons
-android/                      single-module Kotlin app (roles: receiver/admin/family)
-  app/src/main/java/…         PagerService, MqttController, RemoteConfig, activities
-  app/src/test/…              JVM unit tests
-docs/                         architecture, decision log, runbook, evidence, screenshots
-tools/broker/                 local Aedes TLS/WSS broker (test)
-tools/certs/                  test CA + server cert (local only — do not commit keys)
-tools/scripts/                e2e MQTT client + example prefs
-.github/workflows/            CI (build + tests) and tagged releases
-```
+## Deploy to production
+
+1. **Broker** — create a free [Flespi](https://flespi.com) account and mint three
+   **scoped ACL tokens** (receiver, web sender, admin); never ship the Master
+   token. Exact ACL JSON is in [`docs/flespi-setup.md`](docs/flespi-setup.md).
+2. **Receiver** — configure the app on the phone with the receiver token
+   (`mqtt.flespi.io:8883`, TLS), then lock it down:
+   ```bash
+   adb shell dpm set-device-owner com.grandpapager/.PagerDeviceAdminReceiver
+   ```
+3. **Web** — publish the repo to GitHub Pages. Family open the sender, admins
+   open `…/admin.html`; both connect over `wss://mqtt.flespi.io:443`.
+4. **Power** — enable *Stay awake* and grant the battery-optimization exemption
+   (offered in setup).
+
+## Security
+
+- **TLS only**; the bundled test CA is trusted in debug builds only, and the
+  socket factory forces HTTPS endpoint identification.
+- **Least-privilege tokens**: receiver, sender and admin each get their own
+  per-topic ACL token, origin-locked for the browser ones. The Master token never
+  leaves your PC.
+- **Hardened web page**: strict Content-Security-Policy, no third-party scripts
+  (MQTT.js is vendored), admin token kept in `sessionStorage`.
+- **Kiosk**: device-owner Lock Task Mode; remote config can only toggle the lock
+  — never credentials or device-owner status.
+
+Full audit and residual risks: [`SECURITY.md`](SECURITY.md).
+
+## Documentation
+
+- [`docs/architecture.md`](docs/architecture.md) — components, topics, payloads, remote config.
+- [`docs/decisions.md`](docs/decisions.md) — why each choice was made.
+- [`docs/runbook.md`](docs/runbook.md) — build, test, deploy, undo, troubleshooting.
+- [`docs/flespi-setup.md`](docs/flespi-setup.md) — broker and token setup.
+- [`.scratch/`](.scratch/) — the wayfinder maps, tickets and research.
 
 ## Releases
 
-Tag a version (`git tag v1.0 && git push --tags`) and the release workflow builds
-`app-release.apk` and attaches it to a GitHub Release. By default it is signed
-with the debug key; provide the `KEYSTORE_B64` / `KEYSTORE_PASSWORD` /
-`KEY_ALIAS` / `KEY_PASSWORD` repo secrets (or a local
-`android/keystore.properties`) for a real signing key. See
-[`docs/runbook.md`](docs/runbook.md) §5b.
-
-## Production note
-
-Point the app at a managed broker (recommended: **EMQX Cloud Serverless**;
-EU alternative: **flespi**) with per-topic ACLs, then provision device owner for
-the kiosk. Details in [`docs/runbook.md`](docs/runbook.md) and
-[`docs/flespi-setup.md`](docs/flespi-setup.md).
-
-> Security: never use a public MQTT broker for family messages. Never commit the
-> test CA private key, the keystore, or production credentials.
+Push a `v*` tag and GitHub Actions builds `app-release.apk` and attaches it to a
+Release. It signs with the debug key by default; set the `KEYSTORE_B64` /
+`KEYSTORE_PASSWORD` / `KEY_ALIAS` / `KEY_PASSWORD` repo secrets (or a local
+`android/keystore.properties`) for a real key. Every push and PR runs the CI
+workflow (debug build + unit tests).
 
 ## License
 
-[MIT](LICENSE).
+[MIT](LICENSE) © Catalin Bivolaru

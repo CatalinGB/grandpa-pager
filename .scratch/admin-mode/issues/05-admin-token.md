@@ -10,7 +10,7 @@ Create the least-privilege token the browser admin mode will use.
 
 ## Answer
 
-Created ACL token **`grandpa-admin`** (id 110319493) via the Master token:
+Created ACL token **`grandpa-admin`** via the Master token:
 
 - `mqtt`: `publish` + `subscribe` on `grandpa/config`;
   `subscribe` on `grandpa/status`.

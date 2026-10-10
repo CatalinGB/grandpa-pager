@@ -48,15 +48,15 @@
   }
 
   function build() {
-    el("sec-display").innerHTML = seg("display.orientation", "Orientare", ["auto", "portrait", "landscape"]) +
-      slider("display.name_size_sp", "Mărime nume", 20, 120, 2) + sw("display.countdown", "Arată contorul");
-    el("sec-cue").innerHTML = slider("cue.glow_ms", "Strălucire", 0, 20000, 500, "ms") +
-      sw("cue.chime", "Sunet") + sw("cue.vibrate", "Vibrație") + sw("cue.torch.enabled", "Lanternă") +
-      slider("cue.torch.on_ms", "Aprins", 200, 5000, 100, "ms") +
-      slider("cue.torch.off_ms", "Stins", 200, 5000, 100, "ms") +
-      stepper("cue.torch.pulses", "Pulsuri", 1, 10, 1);
-    el("sec-defaults").innerHTML = stepper("defaults.duration_minutes", "Durată implicită", 5, 1440, 30, "h");
-    el("sec-kiosk").innerHTML = sw("kiosk.locked", "Blocat (kiosk)", "oprit = deschide launcherul");
+    el("sec-display").innerHTML = seg("display.orientation", "Orientation", ["auto", "portrait", "landscape"]) +
+      slider("display.name_size_sp", "Name size", 20, 120, 2) + sw("display.countdown", "Show countdown");
+    el("sec-cue").innerHTML = slider("cue.glow_ms", "Glow", 0, 20000, 500, "ms") +
+      sw("cue.chime", "Sound") + sw("cue.vibrate", "Vibration") + sw("cue.torch.enabled", "Torch") +
+      slider("cue.torch.on_ms", "On", 200, 5000, 100, "ms") +
+      slider("cue.torch.off_ms", "Off", 200, 5000, 100, "ms") +
+      stepper("cue.torch.pulses", "Pulses", 1, 10, 1);
+    el("sec-defaults").innerHTML = stepper("defaults.duration_minutes", "Default duration", 5, 1440, 30, "h");
+    el("sec-kiosk").innerHTML = sw("kiosk.locked", "Locked (kiosk)", "off = open the launcher");
     preview();
   }
   function preview() { el("jsonPreview").textContent = JSON.stringify(cfg, null, 1); }
@@ -78,38 +78,38 @@
     var seen = s.last_seen ? new Date(s.last_seen).getTime() : 0;
     var age = Math.max(0, Math.round((Date.now() - seen) / 1000));
     var online = s.state !== "offline" && age < 90;
-    el("devStatus").innerHTML = '<span class="pill ' + (online ? "on" : "off") + '">' + (online ? "conectat" : "offline") + '</span>' +
-      "<span>baterie " + s.battery + "%</span><span>wifi " + s.wifi + "</span><span>mqtt " + s.mqtt + "</span>" +
-      (s.sender ? "<span>mesaj: " + s.sender + "</span>" : "") + "<span>văzut " + age + "s</span>";
+    el("devStatus").innerHTML = '<span class="pill ' + (online ? "on" : "off") + '">' + (online ? "connected" : "offline") + '</span>' +
+      "<span>battery " + s.battery + "%</span><span>wifi " + s.wifi + "</span><span>mqtt " + s.mqtt + "</span>" +
+      (s.sender ? "<span>message: " + s.sender + "</span>" : "") + "<span>seen " + age + "s</span>";
   }
 
   function connect() {
     var token = el("adminToken").value.trim();
-    if (!token) { el("unlockHint").textContent = "Introdu tokenul."; return; }
+    if (!token) { el("unlockHint").textContent = "Enter the token."; return; }
     sessionStorage.setItem("gp_admin", token);
     if (client) { try { client.end(true); } catch (e) {} }
-    el("unlockHint").textContent = "Se conectează…";
+    el("unlockHint").textContent = "Connecting…";
     client = mqtt.connect(BROKER, { username: token, clientId: "grandpa-admin-" + Math.random().toString(16).slice(2), clean: true, reconnectPeriod: 5000, connectTimeout: 12000, protocolVersion: 4 });
     client.on("connect", function () {
       el("unlock").hidden = true; el("admin").hidden = false;
-      el("connPill").textContent = "conectat"; el("connPill").className = "pill on";
+      el("connPill").textContent = "connected"; el("connPill").className = "pill on";
       client.subscribe([TOPIC.status, TOPIC.config], { qos: 1 });
     });
-    client.on("error", function (e) { el("unlockHint").textContent = "Eroare: " + e.message; });
-    client.on("close", function () { el("connPill").textContent = "neconectat"; el("connPill").className = "pill off"; });
+    client.on("error", function (e) { el("unlockHint").textContent = "Error: " + e.message; });
+    client.on("close", function () { el("connPill").textContent = "disconnected"; el("connPill").className = "pill off"; });
     client.on("message", function (topic, payload) {
       if (topic !== TOPIC.status) return;
       var s; try { s = JSON.parse(payload.toString()); } catch (e) { return; }
       renderDevice(s);
-      if (!dirty && s.config) { cfg = JSON.parse(JSON.stringify(s.config)); cfg.schema = cfg.schema || 1; build(); el("applied").textContent = "config curent preluat de pe telefon"; }
+      if (!dirty && s.config) { cfg = JSON.parse(JSON.stringify(s.config)); cfg.schema = cfg.schema || 1; build(); el("applied").textContent = "current config loaded from the phone"; }
     });
   }
 
   function apply() {
-    if (!client || !client.connected) { el("applied").textContent = "Nu ești conectat."; return; }
+    if (!client || !client.connected) { el("applied").textContent = "You are not connected."; return; }
     client.publish(TOPIC.config, JSON.stringify(cfg), { qos: 1, retain: true });
     dirty = false;
-    el("applied").textContent = "Trimis — telefonul va aplica și va confirma în status.";
+    el("applied").textContent = "Sent — the phone will apply it and confirm in status.";
   }
   function reset() { cfg = JSON.parse(JSON.stringify(DEF)); dirty = true; build(); }
 
@@ -119,7 +119,7 @@
 
   document.addEventListener("DOMContentLoaded", function () {
     var q = new URLSearchParams(location.search);
-    if (q.get("demo") === "1") { showForm(); el("applied").textContent = "mod demo (fără broker)"; }
+    if (q.get("demo") === "1") { showForm(); el("applied").textContent = "demo mode (no broker)"; }
     el("unlockBtn").addEventListener("click", connect);
     el("apply").addEventListener("click", apply);
     el("reset").addEventListener("click", reset);

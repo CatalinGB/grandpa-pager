@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ro">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -59,20 +59,20 @@
   <!-- First run: name + token -->
   <section id="setupView" hidden>
     <div class="card">
-      <h1>Bine ai venit</h1>
-      <div class="sub">Introdu numele tău și tokenul o singură dată. Sunt salvate doar în acest browser.</div>
+      <h1>Welcome</h1>
+      <div class="sub">Enter your name and token once. They are saved only in this browser.</div>
 
-      <div class="label">Numele tău (apare pe ecranul lui Bunicu)</div>
-      <input id="setupName" type="text" placeholder="ex. Maria" autocomplete="name">
+      <div class="label">Your name (shown on Grandpa's screen)</div>
+      <input id="setupName" type="text" placeholder="e.g. Maria" autocomplete="name">
 
-      <div class="label">Token broker</div>
+      <div class="label">Broker token</div>
       <input id="setupToken" type="password" placeholder="token" autocomplete="off">
 
       <div class="label">Broker</div>
       <input id="setupBroker" type="text" value="wss://mqtt.flespi.io:443">
 
       <div style="height:14px"></div>
-      <button class="primary" id="setupSave">Salvează</button>
+      <button class="primary" id="setupSave">Save</button>
       <div class="hint" id="setupHint"></div>
       <div class="hint" style="margin-top:14px"><a href="./admin.html" style="color:var(--muted)">Admin</a></div>
     </div>
@@ -82,47 +82,47 @@
   <section id="mainView" hidden>
     <div class="card">
       <h1>Grandpa Pager</h1>
-      <div class="sub">Trimite un mesaj pe ecranul lui Bunicu. <span id="connPill" class="pill off">neconectat</span></div>
+      <div class="sub">Send a message to Grandpa's screen. <span id="connPill" class="pill off">disconnected</span></div>
 
       <div id="banner" class="banner" hidden></div>
 
-      <div class="label">Mesaj</div>
-      <textarea id="text" placeholder="Scrie mesajul…"></textarea>
+      <div class="label">Message</div>
+      <textarea id="text" placeholder="Type the message…"></textarea>
 
-      <div class="label">Cât timp să rămână pe ecran?</div>
+      <div class="label">How long should it stay on screen?</div>
       <div class="stepper">
-        <button class="big" id="minus" aria-label="mai puțin">−</button>
+        <button class="big" id="minus" aria-label="less">−</button>
         <div class="value" id="durValue">4 h</div>
-        <button class="big" id="plus" aria-label="mai mult">+</button>
+        <button class="big" id="plus" aria-label="more">+</button>
       </div>
       <div class="presets" id="presets"></div>
 
       <div style="height:14px"></div>
-      <button class="primary" id="send">Trimite pe ecran</button>
+      <button class="primary" id="send">Send to screen</button>
       <div style="height:8px"></div>
-      <button class="ghost" id="clear" style="width:100%">Șterge mesajul de pe ecran</button>
+      <button class="ghost" id="clear" style="width:100%">Clear the message</button>
       <div class="hint" id="sendHint"></div>
     </div>
 
     <div class="card">
-      <div class="label" style="margin-top:0">Starea dispozitivului</div>
-      <div class="diag" id="diag">Niciun status încă.</div>
+      <div class="label" style="margin-top:0">Device status</div>
+      <div class="diag" id="diag">No status yet.</div>
     </div>
 
     <div class="card">
       <details id="settings">
-        <summary><strong>Setări</strong></summary>
-        <div class="label">Numele tău</div>
-        <input id="sender" type="text" placeholder="ex. Maria">
+        <summary><strong>Settings</strong></summary>
+        <div class="label">Your name</div>
+        <input id="sender" type="text" placeholder="e.g. Maria">
         <div class="label">Token</div>
         <input id="token" type="password" placeholder="token" autocomplete="off">
         <div class="label">Broker</div>
         <input id="brokerUrl" type="text" value="wss://mqtt.flespi.io:443">
         <div class="row" style="margin-top:12px">
-          <button class="ghost" id="connect">Reconectează</button>
-          <button class="ghost" id="forget">Uită tokenul</button>
+          <button class="ghost" id="connect">Reconnect</button>
+          <button class="ghost" id="forget">Forget token</button>
         </div>
-        <div class="hint">Tokenul e salvat doar în acest browser.</div>
+        <div class="hint">The token is saved only in this browser.</div>
       </details>
     </div>
   </section>

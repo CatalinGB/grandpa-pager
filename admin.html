@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ro">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -46,30 +46,30 @@
 <div id="app">
   <section id="unlock" class="card">
     <h1>Admin · Pager</h1>
-    <div class="sub">Introdu tokenul de admin pentru a configura pagerul.</div>
+    <div class="sub">Enter the admin token to configure the pager.</div>
     <div style="height:12px"></div>
-    <input id="adminToken" type="password" placeholder="token admin" autocomplete="off">
+    <input id="adminToken" type="password" placeholder="admin token" autocomplete="off">
     <div style="height:12px"></div>
-    <button class="apply" style="width:100%" id="unlockBtn">Conectează</button>
-    <div class="hint" id="unlockHint">Tokenul e ținut doar în acest browser (sesiune).</div>
+    <button class="apply" style="width:100%" id="unlockBtn">Connect</button>
+    <div class="hint" id="unlockHint">The token is kept only in this browser (session).</div>
   </section>
 
   <section id="admin" hidden>
     <div class="card">
-      <div class="row" style="border:0;padding-top:0"><h1>Admin · Pager</h1><span id="connPill" class="pill off">neconectat</span></div>
+      <div class="row" style="border:0;padding-top:0"><h1>Admin · Pager</h1><span id="connPill" class="pill off">disconnected</span></div>
       <div class="statusline" id="devStatus">—</div>
     </div>
     <div class="card">
-      <div class="sec" style="margin-top:0">Afișare</div>
+      <div class="sec" style="margin-top:0">Display</div>
       <div id="sec-display"></div>
-      <div class="sec">Semnal la mesaj nou</div>
+      <div class="sec">New-message cue</div>
       <div id="sec-cue"></div>
-      <div class="sec">Mesaje</div>
+      <div class="sec">Messages</div>
       <div id="sec-defaults"></div>
       <div class="sec">Kiosk</div>
       <div id="sec-kiosk"></div>
       <div style="height:12px"></div>
-      <div class="rowbtns"><button class="ghost" id="reset">Reset</button><button class="apply" id="apply">Aplică pe telefon</button></div>
+      <div class="rowbtns"><button class="ghost" id="reset">Reset</button><button class="apply" id="apply">Apply to phone</button></div>
       <div class="hint" id="applied"></div>
       <pre id="jsonPreview"></pre>
     </div>

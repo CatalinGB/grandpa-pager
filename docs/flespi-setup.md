@@ -117,7 +117,7 @@ port `8883`, **TLS on**, username = the **receiver token**. Role: Receiver.
 
 ## 4. Point the web sender at Flespi
 
-Open the Pages site → **Setări broker** → broker `wss://mqtt.flespi.io:443`,
+Open the Pages site → **Settings** → broker `wss://mqtt.flespi.io:443`,
 token = the **sender token**. It is stored only in that browser's
 `localStorage`.
 
