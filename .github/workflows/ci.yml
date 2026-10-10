@@ -16,7 +16,15 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK packages
+        # Use the SDK pre-installed on the runner (setup-android@v3 now fails on
+        # the removed 'tools' package). ANDROID_HOME/ANDROID_SDK_ROOT are set.
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$SDKMANAGER" ] || SDKMANAGER="$(command -v sdkmanager)"
+          echo "Using $SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
       - name: Build debug APK + run unit tests
         working-directory: android
