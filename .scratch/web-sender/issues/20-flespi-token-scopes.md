@@ -1,7 +1,7 @@
 # 20 — Flespi token scopes (publish-only can't receive) + no Last Will
 
 Type: task
-Status: open
+Status: resolved
 Blocked by:
 
 ## Question
@@ -11,29 +11,34 @@ delivered. Why?
 
 ## Answer
 
-Two independent causes were found and confirmed against Flespi:
+**Root cause: the `.env` token's ACL was the untouched Flespi template.**
+`GET /auth/info` returned an ACL (type 2) granting only:
 
-1. **Broker mismatch (fixed).** The web app was on **Flespi**; the phone was on
-   the **local** test broker (`ssl://127.0.0.1:8883`). Moved the phone to Flespi
-   (`mqtt.flespi.io:8883`, TLS).
-2. **The `.env` FLESPI_TOKEN is publish-only.** Publishing returns a QoS1 puback,
-   but a subscriber (even `#`, even same token) receives **nothing** — the ACL
-   does not grant subscribe/delivery. So the receiver can never get a message
-   with this token.
-3. **Flespi rejects a CONNECT that carries a Last Will** for a scoped token
-   ("Not authorized (5)"), for *any* will topic/QoS. **Fixed** by removing the
-   LWT from the receiver (`MqttController`); offline detection now relies on
-   status staleness (~90 s).
+```json
+{ "uri":"mqtt", "topic":"replace/this/topic/with/your/own/#", "actions":["publish","subscribe"] }
+{ "uri":"mqtt", "topic":"you/can/add/multiple/topics/#",     "actions":["subscribe"] }
+```
 
-## What the owner must do (accounts only they can touch)
+Those literals match nothing in `grandpa/*`, so the broker accepted the CONNECT
+and pub-acked publishes but **delivered nothing**. (Also: Flespi rejects any
+CONNECT carrying a **Last Will** for a scoped token → the receiver sets no LWT;
+offline detection uses status staleness.)
 
-Create two scoped tokens in Flespi (`docs/flespi-setup.md`):
+**Resolved** by creating two scoped ACL tokens (with the account's Master token):
 
-- **Receiver** — subscribe `grandpa/message` + `grandpa/command`, publish
-  `grandpa/status`. Put it on the phone.
-- **Sender** — publish `grandpa/message`, subscribe `grandpa/status` (so the web
-  status panel works). The current `.env` token can publish, so it can already
-  send; it just can't read status.
+- `grandpa-phone-receiver` — subscribe `grandpa/message` + `grandpa/command`,
+  publish `grandpa/status`; `origins: []`.
+- `grandpa-web-sender` — publish `grandpa/message`, subscribe `grandpa/status`;
+  `origins: ["https://catalingb.github.io"]`.
 
-Then the phone (with the receiver token) will receive messages and both sides
-work on Flespi.
+Both `ttl: 31536000, expire: 0` (1 y, rolling). The secret is the token object's
+**`key`** field; the display name field is **`info`**. Saved locally to
+`.env.tokens` (gitignored). Verified end-to-end on Flespi: the sender token's
+publish reached the phone (receiver token) and the sender received the phone's
+status.
+
+### Confirmed ACL schema
+```json
+{ "uri": "mqtt", "topic": "grandpa/message", "actions": ["publish"] }
+```
+

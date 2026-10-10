@@ -1,5 +1,16 @@
 # Flespi setup — what to change from the defaults
 
+> **Confirmed ACL schema (2026-10):** each ACL entry is
+> `{ "uri": "mqtt", "topic": "grandpa/#", "actions": ["publish","subscribe"] }`
+> (ACL is **default-deny**). The token **display name field is `info`**, and the
+> secret value is the token object's **`key`** (64 chars).
+>
+> **#1 gotcha:** the stock token's ACL is a *template* pointing at
+> `replace/this/topic/with/your/own/#` and `you/can/add/multiple/topics/#` —
+> which match nothing. Replace those topics with `grandpa/#` (or the specific
+> topics below) or **nothing is ever delivered** (CONNECT succeeds, publishes are
+> acked, but the broker routes nothing).
+
 Research: `.scratch/web-sender/research/flespi-hardening.md`.
 Everything runs on **one Flespi broker**. The defaults are too permissive — you
 must scope them down.
