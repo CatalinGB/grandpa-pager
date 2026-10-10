@@ -44,6 +44,7 @@ A1. The Android receiver and its schema are unchanged. (Execution effort.)
 - [19 First-run onboarding](issues/19-onboarding.md): first screen asks name + token, then message box + picker with a settings box at the bottom.
 - [20 Flespi token scopes](issues/20-flespi-token-scopes.md): the `.env` token is publish-only (subscribers get nothing); Flespi rejects a Last Will for scoped tokens. Need a receiver token (subscribe `grandpa/message`) + a sender token (publish `grandpa/message`, subscribe `grandpa/status`); LWT removed.
 - [21 Notify when a message already exists](issues/21-notify-existing.md): non-blocking banner showing the current message + overwrite warning; requires a subscribe-capable token.
+- [22 Install as app (PWA)](issues/22-pwa-install.md): manifest + service worker + bottom install popup; native install on Chrome Android, manual hint on Firefox.
 
 ## Built & shipped
 
