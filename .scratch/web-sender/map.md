@@ -42,6 +42,7 @@ A1. The Android receiver and its schema are unchanged. (Execution effort.)
 - [10 Duration picker](issues/10-duration-picker.md): Variant B (− / value / + stepper + presets).
 - [18 Vendor MQTT.js](issues/18-vendor-mqttjs.md): MQTT.js vendored into the repo; page fails loudly if the library is missing.
 - [19 First-run onboarding](issues/19-onboarding.md): first screen asks name + token, then message box + picker with a settings box at the bottom.
+- [20 Flespi token scopes](issues/20-flespi-token-scopes.md): the `.env` token is publish-only (subscribers get nothing); Flespi rejects a Last Will for scoped tokens. Need a receiver token (subscribe `grandpa/message`) + a sender token (publish `grandpa/message`, subscribe `grandpa/status`); LWT removed.
 
 ## Built & shipped
 

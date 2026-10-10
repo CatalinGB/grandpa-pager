@@ -45,15 +45,11 @@ class MqttController(
             if (cfg.password.isNotBlank()) password = cfg.password.toCharArray()
             if (cfg.useTls) socketFactory = TlsUtil.socketFactory(context)
 
-            // Last Will → status "offline" so senders notice immediately.
-            val lwt = PagerJson.diagnostics(
-                DiagnosticsPayload(
-                    state = "offline", sender = null, battery = 0, charging = false,
-                    wifi = false, mqtt = false, current_message_id = null,
-                    expires_at = null, last_seen = TimeUtil.nowIso(), app = cfg.role.name.lowercase()
-                )
-            ).toByteArray(Charsets.UTF_8)
-            setWill(Topics.STATUS, lwt, 1, true)
+            // NOTE: Flespi rejects a CONNECT that carries a Last Will when the
+            // token is a scoped (ACL) token ("Not authorized"), so we do NOT set
+            // one. Offline detection falls back to diagnostics staleness (the
+            // senders flag a status older than ~90 s). Re-enable here if a
+            // will-capable token is created.
         }
 
         c.setCallback(object : MqttCallbackExtended {

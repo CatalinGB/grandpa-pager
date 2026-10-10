@@ -73,6 +73,13 @@ from any other website**. Use `[]` to block browsers entirely.
 
 ACL is **default-deny**: only the listed topic+action pairs are permitted.
 
+> **Two hard-won gotchas (verified):**
+> - A **publish-only** token can send but its subscribers receive **nothing**.
+>   The receiver MUST have **subscribe** on `grandpa/message` (+`grandpa/command`).
+> - **Flespi rejects any CONNECT that carries a Last Will** for a scoped token
+>   ("Not authorized"). The receiver therefore sets **no LWT**; offline detection
+>   uses status staleness instead.
+
 ## 3. Point the receiver at Flespi
 
 In the app's setup screen (or via ADB prefs): broker host `mqtt.flespi.io`,
