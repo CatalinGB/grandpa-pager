@@ -209,13 +209,6 @@
     if (!bar) return;
     var deferred = null;
 
-    // Dev/testing: force-show the install popup via ?install=1
-    if (new URLSearchParams(location.search).get("install") === "1") {
-      text.textContent = "Instalează „Grandpa Pager” ca aplicație pe telefon.";
-      go.hidden = false;
-      bar.hidden = false;
-    }
-
     var standalone = function () {
       return (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true;
     };
@@ -223,36 +216,56 @@
       var t = parseInt(localStorage.getItem("gp_install_dismiss") || "0", 10);
       return t && (Date.now() - t) < 7 * 24 * 3600 * 1000; // nag at most weekly
     };
+    function instructions() {
+      var ua = navigator.userAgent;
+      if (/Android/i.test(ua)) {
+        return /Firefox/i.test(ua)
+          ? "În Firefox: apasă meniul ⋮ (sus-dreapta) → <b>Instalează</b> sau <b>Adaugă pe ecranul principal</b>."
+          : "În Chrome: apasă meniul ⋮ (sus-dreapta) → <b>Instalează aplicația</b> sau <b>Adaugă pe ecranul principal</b>.";
+      }
+      if (/iPhone|iPad|iPod/i.test(ua)) {
+        return "În Safari: butonul Partajare ⤴ → <b>Adaugă la ecranul principal</b>.";
+      }
+      return "Pe calculator nu se instalează ca aplicație. Deschide pagina pe telefon (Chrome sau Firefox) și alege <b>Adaugă pe ecranul principal</b>.";
+    }
+    function promptCta() {
+      text.textContent = "Instalează „Grandpa Pager” ca aplicație pe telefon.";
+      go.hidden = false;
+      bar.hidden = false;
+    }
+
+    // Dev/testing: ?install=1 → CTA popup, ?install=help → instructions.
+    var force = new URLSearchParams(location.search).get("install");
+    if (force === "1") { promptCta(); }
+    else if (force === "help") { text.innerHTML = instructions(); go.hidden = true; bar.hidden = false; }
 
     window.addEventListener("beforeinstallprompt", function (e) {
       e.preventDefault();
       deferred = e;
-      if (!standalone() && !dismissed()) {
-        text.textContent = "Instalează „Grandpa Pager” ca aplicație pe telefon.";
-        go.hidden = false;
-        bar.hidden = false;
-      }
+      if (!standalone() && !dismissed()) promptCta();
     });
     window.addEventListener("appinstalled", function () { localStorage.setItem("gp_installed", "1"); bar.hidden = true; });
 
     go.addEventListener("click", function () {
-      if (!deferred) return;
-      deferred.prompt();
-      deferred.userChoice.then(function () { deferred = null; bar.hidden = true; });
+      if (deferred) {
+        deferred.prompt();
+        deferred.userChoice.then(function () { deferred = null; bar.hidden = true; });
+      } else {
+        // No native prompt (Firefox, some Brave builds, desktop): show how-to.
+        text.innerHTML = instructions();
+        go.hidden = true;
+      }
     });
     no.addEventListener("click", function () {
       localStorage.setItem("gp_install_dismiss", String(Date.now()));
       bar.hidden = true;
     });
 
-    // Firefox (and others) don't fire beforeinstallprompt: show a manual hint on Android.
-    if (!standalone() && !localStorage.getItem("gp_installed") && !dismissed() && /Android/i.test(navigator.userAgent)) {
+    // Phones without an auto prompt (Firefox/Android, iOS): surface the manual path.
+    if (!standalone() && !localStorage.getItem("gp_installed") && !dismissed() &&
+        /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
       setTimeout(function () {
-        if (bar.hidden && !deferred) {
-          text.innerHTML = "Adaugă pe ecranul principal: meniul browserului (⋮) → „Adaugă pe ecranul principal”.";
-          go.hidden = true;
-          bar.hidden = false;
-        }
+        if (bar.hidden && !deferred) { text.innerHTML = instructions(); go.hidden = true; bar.hidden = false; }
       }, 5000);
     }
   }
