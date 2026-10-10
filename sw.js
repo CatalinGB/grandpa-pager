@@ -6,7 +6,12 @@ var ASSETS = [
 ];
 
 self.addEventListener("install", function (e) {
-  e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(ASSETS); }).then(function () { return self.skipWaiting(); }));
+  e.waitUntil(
+    caches.open(CACHE).then(function (c) {
+      // Cache each asset independently; a single failure must not abort install.
+      return Promise.all(ASSETS.map(function (u) { return c.add(u).catch(function () {}); }));
+    }).then(function () { return self.skipWaiting(); })
+  );
 });
 
 self.addEventListener("activate", function (e) {

@@ -265,7 +265,10 @@
     if (!standalone() && !localStorage.getItem("gp_installed") && !dismissed() &&
         /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
       setTimeout(function () {
-        if (bar.hidden && !deferred) { text.innerHTML = instructions(); go.hidden = true; bar.hidden = false; }
+        // Re-check at fire time: the user may have dismissed it meanwhile.
+        if (bar.hidden && !deferred && !dismissed() && !localStorage.getItem("gp_installed") && !standalone()) {
+          text.innerHTML = instructions(); go.hidden = true; bar.hidden = false;
+        }
       }, 5000);
     }
   }
