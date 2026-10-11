@@ -10,13 +10,21 @@ data class RemoteConfig(
     val display: Display = Display(),
     val cue: Cue = Cue(),
     val defaults: Defaults = Defaults(),
-    val kiosk: Kiosk = Kiosk()
+    val kiosk: Kiosk = Kiosk(),
+    val power: Power = Power(),
+    val telemetry: Telemetry = Telemetry()
 ) {
     data class Display(val name_size_sp: Int = 46, val countdown: Boolean = false, val orientation: String = "auto")
     data class Cue(val glow_ms: Int = 9000, val chime: Boolean = true, val vibrate: Boolean = true, val torch: Torch = Torch())
     data class Torch(val enabled: Boolean = true, val on_ms: Int = 1500, val off_ms: Int = 1500, val pulses: Int = 3)
     data class Defaults(val duration_minutes: Int = 240)
     data class Kiosk(val locked: Boolean = true)
+
+    /** Let the display sleep when idle; a new message wakes it via full-screen intent. */
+    data class Power(val screen_off_when_idle: Boolean = true)
+
+    /** How often the receiver publishes grandpa/status when nothing else happens. */
+    data class Telemetry(val interval_minutes: Int = 15)
 }
 
 object RemoteConfigCodec {
@@ -40,6 +48,8 @@ object RemoteConfigCodec {
             val t = c?.getAsJsonObject("torch")
             val de = root.getAsJsonObject("defaults")
             val k = root.getAsJsonObject("kiosk")
+            val p = root.getAsJsonObject("power")
+            val te = root.getAsJsonObject("telemetry")
 
             RemoteConfig(
                 schema = 1,
@@ -60,7 +70,9 @@ object RemoteConfigCodec {
                     )
                 ),
                 defaults = RemoteConfig.Defaults(duration_minutes = int(de, "duration_minutes", 240, 5, 1440)),
-                kiosk = RemoteConfig.Kiosk(locked = bool(k, "locked", true))
+                kiosk = RemoteConfig.Kiosk(locked = bool(k, "locked", true)),
+                power = RemoteConfig.Power(screen_off_when_idle = bool(p, "screen_off_when_idle", true)),
+                telemetry = RemoteConfig.Telemetry(interval_minutes = int(te, "interval_minutes", 15, 1, 1440))
             )
         } catch (e: Exception) {
             null

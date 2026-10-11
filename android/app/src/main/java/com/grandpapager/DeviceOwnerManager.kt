@@ -2,11 +2,14 @@ package com.grandpapager
 
 import android.app.Activity
 import android.app.admin.DevicePolicyManager
+import android.bluetooth.BluetoothManager
 import android.content.ComponentName
+import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
+import android.os.UserManager
 import android.util.Log
 
 /**
@@ -53,6 +56,7 @@ object DeviceOwnerManager {
             }
             Log.i(TAG, "kiosk configured (lock task + persistent home)")
         }.onFailure { Log.e(TAG, "kiosk configuration failed", it) }
+        applyRestrictions(context)
     }
 
     /** Enter lock task (true kiosk when device owner, screen pinning otherwise). */
@@ -61,5 +65,45 @@ object DeviceOwnerManager {
             activity.startLockTask()
             Log.i(TAG, "startLockTask() called")
         }.onFailure { Log.w(TAG, "startLockTask failed", it) }
+    }
+
+    /** The restrictions we add, so apply/clear stay in sync. */
+    private val RESTRICTIONS = listOf(
+        UserManager.DISALLOW_MODIFY_ACCOUNTS,        // no adding/removing accounts
+        UserManager.DISALLOW_BLUETOOTH,              // no Bluetooth (fewer radios/attack surface)
+        UserManager.DISALLOW_SHARE_LOCATION,         // no location sharing
+        UserManager.DISALLOW_CONFIG_LOCATION,        // cannot toggle location providers
+        UserManager.DISALLOW_PRINTING,               // no printing services
+        UserManager.DISALLOW_CONFIG_MOBILE_NETWORKS, // no mobile-network config
+        UserManager.DISALLOW_CONFIG_TETHERING,       // no tethering
+        UserManager.DISALLOW_DATA_ROAMING            // no roaming
+    )
+
+    /**
+     * Strip non-essential functionality on an always-on pager: no account changes,
+     * Bluetooth, location, printing or mobile-network config, and auto-sync off.
+     * Purely reversible — see [clearRestrictions]. Safe to call repeatedly.
+     */
+    fun applyRestrictions(context: Context) {
+        if (!isDeviceOwner(context)) return
+        val d = dpm(context)
+        val a = admin(context)
+        for (r in RESTRICTIONS) runCatching { d.addUserRestriction(a, r) }
+        runCatching { ContentResolver.setMasterSyncAutomatically(false) }
+        runCatching {
+            val bm = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+            @Suppress("DEPRECATION", "MissingPermission") bm.adapter?.disable()
+        }
+        Log.i(TAG, "device restrictions applied (${RESTRICTIONS.size})")
+    }
+
+    /** Undo [applyRestrictions] (used by the RELEASE_KIOSK escape hatch). */
+    fun clearRestrictions(context: Context) {
+        if (!isDeviceOwner(context)) return
+        val d = dpm(context)
+        val a = admin(context)
+        for (r in RESTRICTIONS) runCatching { d.clearUserRestriction(a, r) }
+        runCatching { ContentResolver.setMasterSyncAutomatically(true) }
+        Log.i(TAG, "device restrictions cleared")
     }
 }

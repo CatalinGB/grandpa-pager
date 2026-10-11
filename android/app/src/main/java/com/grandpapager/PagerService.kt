@@ -12,11 +12,13 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.net.ConnectivityManager
 import android.net.NetworkInfo
+import android.net.wifi.WifiManager
 import android.os.BatteryManager
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.PowerManager
 import android.util.Log
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -35,15 +37,26 @@ class PagerService : Service(), MqttController.Listener {
     companion object {
         private const val TAG = "PagerService"
         const val CHANNEL_ID = "pager_status"
+        const val ALERT_CHANNEL_ID = "pager_alert"
         const val NOTIF_ID = 1001
+        const val ALERT_NOTIF_ID = 1002
         const val ACTION_SEND = "com.grandpapager.action.SEND"
         const val ACTION_CLEAR = "com.grandpapager.action.CLEAR"
         const val ACTION_EXPIRY = "com.grandpapager.action.EXPIRY"
         const val EXTRA_TEXT = "text"
         const val EXTRA_DURATION = "duration"
         const val EXTRA_EXPECTED_ID = "expectedId"
-        private const val HEARTBEAT_MS = 30_000L
-        private const val STATUS_STALE_MS = 90_000L
+
+        /**
+         * The reconnect watchdog and the status cadence are deliberately separate:
+         * the socket is kept alive by the MQTT keepalive, so status can be slow
+         * (admin-configurable, default 15 min) without delaying reconnection.
+         */
+        private const val WATCHDOG_MS = 30_000L
+
+        /** Show a message that arrived (briefly) after its TTL, up to this late. */
+        private const val LATE_GRACE_MS = 10 * 60_000L
+        private const val LATE_MIN_SHOW_MS = 60_000L
         fun start(ctx: Context) = launch(ctx, Intent(ctx, PagerService::class.java))
 
         fun send(ctx: Context, text: String, duration: Int) = launch(
@@ -68,6 +81,9 @@ class PagerService : Service(), MqttController.Listener {
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
     private val handler = Handler(Looper.getMainLooper())
     private var watchdog: Runnable? = null
+    private var statusTimer: Runnable? = null
+    private var wakeLock: PowerManager.WakeLock? = null
+    private var wifiLock: WifiManager.WifiLock? = null
     private val started = java.util.concurrent.atomic.AtomicBoolean(false)
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -85,6 +101,7 @@ class PagerService : Service(), MqttController.Listener {
             return START_NOT_STICKY
         }
         startForeground(NOTIF_ID, buildNotification())
+        acquireLocks()
 
         when (intent?.action) {
             ACTION_SEND -> {
@@ -154,6 +171,7 @@ class PagerService : Service(), MqttController.Listener {
         if (cfg.role == Role.RECEIVER) {
             restoreReceiverState()
             publishStatus()
+            startStatusTimer()
         }
         startWatchdog()
         PagerBus.notifyChanged()
@@ -175,6 +193,8 @@ class PagerService : Service(), MqttController.Listener {
 
     override fun onDestroy() {
         stopWatchdog()
+        stopStatusTimer()
+        releaseLocks()
         Link.connected = false
         runCatching { mqtt?.disconnect() }
         executor.shutdownNow()
@@ -230,19 +250,48 @@ class PagerService : Service(), MqttController.Listener {
             cfg.remoteConfigAppliedAt = TimeUtil.nowIso()
             cfg.remoteConfigError = null
             Log.i(TAG, "config applied: ${cfg.remoteConfigJson}")
+            // Switching the idle screen back on (clock mode) must wake the
+            // activity, which is paused while the display was asleep.
+            if (!parsed.power.screen_off_when_idle) wakeReceiverActivity()
         }
+        if (started.get()) startStatusTimer() // cadence may have changed
         publishStatus()
         PagerBus.notifyChanged()
     }
 
-    // ------------------------------------------------------------ message ops
+    /**
+     * Bring ReceiverActivity forward (and hence light the screen). Used when a
+     * config change re-enables the idle clock while the display is asleep; the
+     * activity is paused at that point and cannot re-evaluate on its own.
+     */
+    private fun wakeReceiverActivity() {
+        if (cfg.role != Role.RECEIVER) return
+        runCatching {
+            startActivity(
+                Intent(this, ReceiverActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            )
+        }.onFailure { Log.w(TAG, "wakeReceiverActivity failed", it) }
+    }
 
+    // ------------------------------------------------------------ message ops
     private fun showMessage(msg: MessagePayload) {
-        val expiresAt = TimeUtil.fromIso(msg.expires_at)
-            ?: Expiry.expiresAt(System.currentTimeMillis(), msg.duration_minutes)
-        if (Expiry.isExpired(expiresAt, System.currentTimeMillis())) {
-            clearMessage("expired")
-            return
+        val now = System.currentTimeMillis()
+        var expiresAt = TimeUtil.fromIso(msg.expires_at)
+            ?: Expiry.expiresAt(now, msg.duration_minutes)
+        if (Expiry.isExpired(expiresAt, now)) {
+            // A brief offline blip can make a just-sent message arrive just after
+            // its TTL. Rather than silently lose it, show a never-seen message
+            // once, re-dated to a short readable window. Older messages are dropped.
+            val lateBy = now - expiresAt
+            val unseen = msg.id != cfg.lastCuedMessageId
+            if (unseen && lateBy <= LATE_GRACE_MS) {
+                expiresAt = now + LATE_MIN_SHOW_MS
+                Log.i(TAG, "message ${msg.id} arrived ${lateBy / 1000}s late; showing briefly")
+            } else {
+                clearMessage("expired")
+                return
+            }
         }
         cfg.currentMessageId = msg.id
         cfg.currentMessageText = msg.text
@@ -251,6 +300,7 @@ class PagerService : Service(), MqttController.Listener {
         scheduleExpiry(msg.id, expiresAt)
         publishStatus()
         PagerBus.notifyChanged()
+        showWakeNotification(msg)
         Log.i(TAG, "showing message ${msg.id} from ${msg.sender}")
     }
 
@@ -271,6 +321,7 @@ class PagerService : Service(), MqttController.Listener {
         // Republish an empty retained message only if we actually held one, and
         // never in response to receiving an empty message (avoids an echo loop).
         if (republish && hadMessage) mqtt?.clearRetained(Topics.MESSAGE)
+        cancelWakeNotification()
         publishStatus()
         PagerBus.notifyChanged()
     }
@@ -304,37 +355,96 @@ class PagerService : Service(), MqttController.Listener {
             app = "receiver",
             config = cfg.remoteConfig(),
             config_applied_at = cfg.remoteConfigAppliedAt,
-            config_error = cfg.remoteConfigError
+            config_error = cfg.remoteConfigError,
+            battery_temp_c = batteryTempC()
         )
         m.publish(Topics.STATUS, PagerJson.diagnostics(d), retained = true)
     }
 
     /**
-     * Periodic self-healing check for BOTH roles: verifies the link is alive
-     * (recreating the client if Paho's automaticReconnect has given up) and, for
-     * the receiver, keeps the diagnostics heartbeat flowing so senders can detect
-     * it. This is what makes the service recover from a long broker outage.
+     * Reconnect watchdog for BOTH roles: verifies the link is alive and recreates
+     * the client if Paho's automaticReconnect has given up. It does NOT publish
+     * status — that is the separate, admin-configurable status timer below.
      */
     private fun startWatchdog() {
         stopWatchdog()
         val r = object : Runnable {
             override fun run() {
                 executor.execute {
-                    runCatching {
-                        ensureConnected()
-                        if (cfg.role == Role.RECEIVER) publishStatus()
-                    }.onFailure { Log.w(TAG, "watchdog reconnect failed", it) }
+                    runCatching { ensureConnected() }
+                        .onFailure { Log.w(TAG, "watchdog reconnect failed", it) }
                 }
-                handler.postDelayed(this, HEARTBEAT_MS)
+                handler.postDelayed(this, WATCHDOG_MS)
             }
         }
         watchdog = r
-        handler.postDelayed(r, HEARTBEAT_MS)
+        handler.postDelayed(r, WATCHDOG_MS)
     }
 
     private fun stopWatchdog() {
         watchdog?.let { handler.removeCallbacks(it) }
         watchdog = null
+    }
+
+    /**
+     * Publish diagnostics on the admin-configured cadence (default 15 min). The
+     * MQTT keepalive — not this timer — is what keeps the socket alive, and
+     * event-driven publishes (connect/show/clear/apply) still happen immediately.
+     */
+    private fun startStatusTimer() {
+        stopStatusTimer()
+        if (cfg.role != Role.RECEIVER) return
+        val intervalMs = cfg.remoteConfig().telemetry.interval_minutes.coerceIn(1, 1440) * 60_000L
+        val r = object : Runnable {
+            override fun run() {
+                executor.execute { runCatching { publishStatus() } }
+                handler.postDelayed(this, intervalMs)
+            }
+        }
+        statusTimer = r
+        handler.postDelayed(r, intervalMs)
+        Log.i(TAG, "status interval = ${intervalMs / 60_000L} min")
+    }
+
+    private fun stopStatusTimer() {
+        statusTimer?.let { handler.removeCallbacks(it) }
+        statusTimer = null
+    }
+
+    // --------------------------------------------------------------- power
+
+    /**
+     * Keep the CPU and Wi-Fi radio awake for the whole lifetime of the service so
+     * the TLS socket stays up and a new message can be delivered immediately even
+     * while the display is asleep. The display itself is allowed to sleep (see
+     * ReceiverActivity); only the screen backlight is the big draw.
+     */
+    private fun acquireLocks() {
+        if (wakeLock == null) {
+            runCatching {
+                val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "grandpa:pager").apply {
+                    setReferenceCounted(false)
+                    acquire()
+                }
+            }.onFailure { Log.w(TAG, "wake lock failed", it) }
+        }
+        if (wifiLock == null) {
+            runCatching {
+                val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+                wifiLock = wm.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "grandpa:wifi").apply {
+                    setReferenceCounted(false)
+                    acquire()
+                }
+            }.onFailure { Log.w(TAG, "wifi lock failed", it) }
+        }
+    }
+
+    private fun releaseLocks() {
+        runCatching { if (wakeLock?.isHeld == true) wakeLock?.release() }
+        wakeLock = null
+        runCatching { if (wifiLock?.isHeld == true) wifiLock?.release() }
+        wifiLock = null
     }
 
     private fun batteryLevel(): Int {
@@ -349,6 +459,13 @@ class PagerService : Service(), MqttController.Listener {
         val status = i.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
         return status == BatteryManager.BATTERY_STATUS_CHARGING ||
             status == BatteryManager.BATTERY_STATUS_FULL
+    }
+
+    /** Battery temperature in °C; BatteryManager reports tenths of a degree. */
+    private fun batteryTempC(): Double? {
+        val i = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return null
+        val tenths = i.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE)
+        return if (tenths == Int.MIN_VALUE) null else tenths / 10.0
     }
 
     @Suppress("DEPRECATION")
@@ -401,7 +518,55 @@ class PagerService : Service(), MqttController.Listener {
                 ch.setShowBadge(false)
                 nm.createNotificationChannel(ch)
             }
+            if (nm.getNotificationChannel(ALERT_CHANNEL_ID) == null) {
+                // HIGH is required for a full-screen intent to wake the screen.
+                // Silent + no vibration: the app plays its own arrangement cue.
+                val ch = NotificationChannel(ALERT_CHANNEL_ID, "Message alert", NotificationManager.IMPORTANCE_HIGH)
+                ch.setShowBadge(false)
+                ch.setSound(null, null)
+                ch.enableVibration(false)
+                ch.lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                nm.createNotificationChannel(ch)
+            }
         }
+    }
+
+    /**
+     * Post (or refresh) the full-screen-intent notification that wakes the screen
+     * and brings ReceiverActivity to the front for a new message. This is the
+     * system-sanctioned way to turn the display on from the background.
+     */
+    private fun showWakeNotification(msg: MessagePayload) {
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val intent = Intent(this, ReceiverActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        val pi = PendingIntent.getActivity(
+            this, 3001, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Notification.Builder(this, ALERT_CHANNEL_ID)
+        } else {
+            @Suppress("DEPRECATION")
+            Notification.Builder(this).setPriority(Notification.PRIORITY_HIGH)
+        }
+        val n = builder
+            .setContentTitle(msg.sender.ifBlank { getString(R.string.app_name) })
+            .setContentText(msg.text)
+            .setSmallIcon(android.R.drawable.ic_dialog_email)
+            .setCategory(Notification.CATEGORY_MESSAGE)
+            .setContentIntent(pi)
+            .setFullScreenIntent(pi, true)
+            .setAutoCancel(true)
+            .build()
+        runCatching { nm.notify(ALERT_NOTIF_ID, n) }
+            .onFailure { Log.w(TAG, "wake notification failed", it) }
+    }
+
+    private fun cancelWakeNotification() {
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        runCatching { nm.cancel(ALERT_NOTIF_ID) }
     }
 
     private fun buildNotification(): Notification {

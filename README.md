@@ -33,9 +33,13 @@ device.
 - **Live diagnostics**: online/offline, battery + charging, Wi-Fi, MQTT, current
   message and how long ago it was last seen.
 - **Admin console** (browser): text size, orientation, countdown, the arrival
-  cue, the default duration, and the kiosk lock.
+  cue, the default duration, the status cadence (default 15 min), the idle
+  screen-off toggle, and the kiosk lock.
 - **Kiosk lockdown** via device-owner Lock Task Mode, re-armed on every boot,
   with a hidden admin escape gesture.
+- **Power-aware**: the display sleeps when idle and wakes instantly on a new
+  message (full-screen intent); the socket stays up on a wake/Wi-Fi lock. As
+  device owner it also strips accounts, Bluetooth, location, printing and sync.
 - **Self-healing**: survives reboots, Wi-Fi loss and long broker outages
   (a 30 s reconnect watchdog).
 - **Zero backend** and **MIT** licensed.
@@ -90,6 +94,26 @@ your browser), then type the message, choose how long it should stay on screen,
 and tap **Send to screen**. A banner warns if a message is already showing, and
 the status panel mirrors the phone.
 
+Admins can skip the typing by handing out a one-tap **invitation link** with the
+token (and the person's name) baked in:
+
+```
+https://<your-pages-site>/index.html#token=<family-token>&sender=Maria
+```
+
+The admin console takes one too (token only, no name):
+
+```
+https://<your-pages-site>/admin.html#token=<admin-token>
+```
+
+The token goes in the URL **fragment** (`#…`) on purpose: a fragment is never
+sent to the server and never leaks in the `Referer` header. The page reads it,
+saves it locally, strips it from the address bar and connects automatically. A
+`?token=…` query string also works if you prefer, but the fragment is safer.
+**Treat the link itself as the secret** — anyone who has it can send messages
+(and, for the admin link, reconfigure the device).
+
 ### 2 · Configure the pager (admin)
 
 Open **Admin** (the link at the bottom of the sender) and enter the admin token.
@@ -99,8 +123,9 @@ then **Apply to phone** — the phone validates, applies and confirms it back.
 ### 3 · On Grandpa's phone
 
 A new message fills the screen with the sender's name above it and fires the
-attention cue. When it expires or is cleared, the phone returns to a calm
-date-and-clock idle screen.
+attention cue. When it expires or is cleared the display goes back to sleep
+(`power.screen_off_when_idle`); turn that off in the admin console to keep the
+idle date-and-clock lit instead.
 
 ### 4 · Monitor &amp; control
 
@@ -156,8 +181,13 @@ Full build/test/deploy/undo steps and a troubleshooting table are in
    ```
 3. **Web** — publish the repo to GitHub Pages. Family open the sender, admins
    open `…/admin.html`; both connect over `wss://mqtt.flespi.io:443`.
-4. **Power** — enable *Stay awake* and grant the battery-optimization exemption
-   (offered in setup).
+4. **Power &amp; longevity** — grant the battery-optimization exemption (offered
+   in setup) and enable *Stay awake*. Because the phone runs plugged in 24/7,
+   keep it near 70% charge with the bundled
+   [`tools/scripts/charge-controller.js`](tools/scripts/charge-controller.js)
+   (drives a smart plug from the `grandpa/status` battery readings) — full
+   physical/thermal/network hardening in
+   [`docs/device-hardening.md`](docs/device-hardening.md).
 
 ## Security
 
@@ -168,6 +198,11 @@ Full build/test/deploy/undo steps and a troubleshooting table are in
   leaves your PC.
 - **Hardened web page**: strict Content-Security-Policy, no third-party scripts
   (MQTT.js is vendored), admin token kept in `sessionStorage`.
+- **Invitation links** carry a sender token in the URL. The fragment form is
+  preferred (not sent to the server, not in `Referer`); the page strips the
+  params from history on load, and the service worker no longer caches URLs that
+  carry a query string. A leaked invite link is a leaked sender token — recreate
+  the token to revoke it.
 - **Kiosk**: device-owner Lock Task Mode; remote config can only toggle the lock
   — never credentials or device-owner status.
 
@@ -179,6 +214,7 @@ Full audit and residual risks: [`SECURITY.md`](SECURITY.md).
 - [`docs/decisions.md`](docs/decisions.md) — why each choice was made.
 - [`docs/runbook.md`](docs/runbook.md) — build, test, deploy, undo, troubleshooting.
 - [`docs/flespi-setup.md`](docs/flespi-setup.md) — broker and token setup.
+- [`docs/device-hardening.md`](docs/device-hardening.md) — 24/7 battery, thermal, fire, OS and network hardening (with a manual checklist).
 - [`.scratch/`](.scratch/) — the wayfinder maps, tickets and research.
 
 ## Releases

@@ -1,9 +1,18 @@
 /* Grandpa Pager — service worker (enables PWA install + basic offline shell). */
-var CACHE = "grandpa-pager-v4";
+var CACHE = "grandpa-pager-v6";
 var ASSETS = [
   "./", "./index.html", "./sender.js", "./admin.html", "./admin.js", "./mqtt.min.js",
   "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png"
 ];
+
+/* Never cache under a URL that carries a query string: an invitation link
+   (?token=… or #token=…) would otherwise be persisted in Cache Storage. Strip
+   the search/hash so same-origin assets share one clean cache key. */
+function cacheKey(url) {
+  var u = new URL(url);
+  if (u.origin === self.location.origin) { u.search = ""; u.hash = ""; }
+  return u.href;
+}
 
 self.addEventListener("install", function (e) {
   e.waitUntil(
@@ -28,11 +37,12 @@ self.addEventListener("fetch", function (e) {
     fetch(e.request).then(function (resp) {
       if (e.request.url.indexOf(self.location.origin) === 0) {
         var copy = resp.clone();
-        caches.open(CACHE).then(function (c) { c.put(e.request, copy); });
+        var key = cacheKey(e.request.url);
+        caches.open(CACHE).then(function (c) { c.put(key, copy); });
       }
       return resp;
     }).catch(function () {
-      return caches.match(e.request).then(function (r) {
+      return caches.match(cacheKey(e.request.url)).then(function (r) {
         return r || (e.request.mode === "navigate" ? caches.match("./index.html") : undefined);
       });
     })

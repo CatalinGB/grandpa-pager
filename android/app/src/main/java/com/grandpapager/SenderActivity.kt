@@ -31,7 +31,10 @@ class SenderActivity : Activity() {
         clearButton = findViewById(R.id.clearButton)
 
         senderInput.setText(cfg.senderName)
-        durationInput.setText(Expiry.DEFAULT_DURATION_MINUTES.toString())
+        // Default the duration to the admin's configured default, if we have seen it.
+        val remoteDefault = cfg.lastStatusJson
+            ?.let { PagerJson.toDiagnostics(it)?.config?.defaults?.duration_minutes }
+        durationInput.setText((remoteDefault ?: Expiry.DEFAULT_DURATION_MINUTES).toString())
 
         if (cfg.role == Role.SENDER_FAMILY) {
             senderInput.isEnabled = false
@@ -85,10 +88,11 @@ class SenderActivity : Activity() {
         val online = d.state != "offline" && ageSec < 90
         val stale = if (online) "" else "  " + getString(R.string.stale_suffix, ageSec)
         val charging = if (d.charging) " " + getString(R.string.charging_suffix) else ""
+        val temp = d.battery_temp_c?.let { "  " + getString(R.string.temp_suffix, it) } ?: ""
         val sb = StringBuilder()
         sb.appendLine(getString(R.string.lbl_state) + " " + d.state + stale)
         sb.appendLine(getString(R.string.lbl_mqtt) + " " + d.mqtt)
-        sb.appendLine(getString(R.string.lbl_battery) + " " + d.battery + "%" + charging)
+        sb.appendLine(getString(R.string.lbl_battery) + " " + d.battery + "%" + charging + temp)
         sb.appendLine(getString(R.string.lbl_wifi) + " " + d.wifi)
         sb.appendLine(getString(R.string.lbl_message) + " " + (d.sender ?: "-"))
         sb.appendLine(getString(R.string.lbl_msg_id) + " " + (d.current_message_id ?: "-"))

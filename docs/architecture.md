@@ -83,7 +83,7 @@ Diagnostics — `grandpa/status`:
 ```json
 {
   "state": "showing | idle | offline",
-  "sender": "Maria", "battery": 68, "charging": true,
+  "sender": "Maria", "battery": 68, "charging": true, "battery_temp_c": 34.5,
   "wifi": true, "mqtt": true,
   "current_message_id": "8f2c…", "expires_at": "2026-10-10T16:54:45Z",
   "last_seen": "2026-10-10T14:54:45Z", "app": "receiver",
@@ -91,6 +91,11 @@ Diagnostics — `grandpa/status`:
   "config_applied_at": "2026-10-10T14:54:45Z", "config_error": null
 }
 ```
+
+`battery_temp_c` is the battery temperature in °C (`null` if unknown). For a
+device that is powered on permanently it is the best early-warning signal for a
+degrading cell; `tools/scripts/charge-controller.js` can also gate a smart plug
+on it. See [`device-hardening.md`](device-hardening.md).
 
 Remote config — `grandpa/config` (v1):
 
@@ -100,15 +105,19 @@ Remote config — `grandpa/config` (v1):
   "cue": { "glow_ms": 9000, "chime": true, "vibrate": true,
            "torch": { "enabled": true, "on_ms": 1500, "off_ms": 1500, "pulses": 3 } },
   "defaults": { "duration_minutes": 240 },
+  "telemetry": { "interval_minutes": 15 },
+  "power": { "screen_off_when_idle": true },
   "kiosk": { "locked": true } }
 ```
 
 The receiver **clamps** numerics to bounds and **ignores** unknown/wrong-type
 fields; a `schema` other than `1` rejects the whole config (error acked in
 `status.config_error`). Bounds: `name_size_sp` 20–120; `glow_ms` 0–20000;
-torch `on_ms`/`off_ms` 200–5000; `pulses` 1–10; `duration_minutes` 5–1440. It
-persists the accepted config, re-applies it on every (re)connect and reboot, and
-**echoes the effective config** in `status.config` so the admin UI prefills.
+torch `on_ms`/`off_ms` 200–5000; `pulses` 1–10; `duration_minutes` 5–1440;
+`interval_minutes` 1–1440. It persists the accepted config, re-applies it on
+every (re)connect and reboot, and **echoes the effective config** in
+`status.config` so the admin UI prefills. Adding an optional field under
+`schema: 1` is backward-compatible (old receivers ignore it and default it).
 
 ## Expiry model (application-level)
 
@@ -122,9 +131,38 @@ The receiver never trusts broker TTL.
    message to `grandpa/message`, and re-publishes `idle` status.
 5. On reboot the service restores the persisted message; if already expired it
    clears instead of redisplaying.
+6. **Late arrival.** A message that arrives *already expired* is normally dropped,
+   but a never-seen message that expired within the last 10 minutes is shown once,
+   re-dated to a 60 s window — so a brief offline blip cannot make a just-sent
+   message vanish. Older messages are dropped.
 
 Default duration is **240 minutes**, overridable per message (sender) or per
 device via `defaults.duration_minutes` (admin).
+
+## Power & wake
+
+- **Idle screen-off.** When no message is active and `power.screen_off_when_idle`
+  is set, `ReceiverActivity` clears `FLAG_KEEP_SCREEN_ON` and puts the display to
+  sleep with `DevicePolicyManager.lockNow()` (device owner); the idle clock is not
+  shown. If the app is not device owner it falls back to the idle clock rather
+  than risk a stuck black screen.
+- **Guaranteed wake.** `PagerService` keeps the socket alive with a
+  `PARTIAL_WAKE_LOCK` + `WifiLock(WIFI_MODE_FULL_HIGH_PERF)` for its lifetime.
+  On `showMessage` it posts a **full-screen-intent** notification on a dedicated
+  `IMPORTANCE_HIGH` channel (`pager_alert`); the system turns the screen on and
+  brings `ReceiverActivity` forward, which is marked `showWhenLocked` /
+  `turnScreenOn`. The notification is cancelled on clear/expiry. This was
+  verified on the Mi A1: the display goes `Dozing` when idle and wakes on a new
+  message.
+- **Status cadence.** Diagnostics are published every
+  `telemetry.interval_minutes` (default 15) plus immediately on
+  connect/show/clear/config-apply. The cadence is deliberately **decoupled** from
+  the reconnect watchdog — the MQTT keepalive, not the status publish, keeps the
+  socket up, so a slow cadence does not delay reconnection.
+- **Device hardening.** As device owner the app applies a reversible set of
+  `UserManager` restrictions (accounts, Bluetooth, location, printing,
+  mobile-network config, tethering, roaming) and disables master sync; see
+  [`device-hardening.md`](device-hardening.md). Cleared by the release gesture.
 
 ## Reliability
 
@@ -132,7 +170,7 @@ device via `defaults.duration_minutes` (admin).
   messages survive brief disconnects.
 - Paho `automaticReconnect` **plus a 30 s watchdog** for both roles that
   recreates the client if the link is dead (Paho's auto-reconnect can give up
-  after a long outage) and keeps the receiver's diagnostics heartbeat flowing.
+  after a long outage). Status publishing runs on its own timer (above).
 - `BootReceiver` restarts the service on `BOOT_COMPLETED` / app update.
 - Foreground service (low-importance, ongoing notification) resists being killed;
   battery-optimization exemption requested at setup.
@@ -165,6 +203,9 @@ device via `defaults.duration_minutes` (admin).
   keep the broker swappable (host/port/user/pass are runtime config).
 - **Factory reset** via stock recovery (vol+power) wipes the device regardless of
   device owner — an accepted physical-escape risk.
+- **EOL device** — Android 9 (Mi A1) no longer receives security patches; a
+  permanently internet-connected receiver is therefore contained (dedicated
+  VLAN/SSID) rather than patched. See [`device-hardening.md`](device-hardening.md).
 - **Sender identity is not authenticated** — the `sender` name is typed; anyone
   holding a token can claim any name (adequate for a family, not identity).
 - **Family onboarding / remote OTA** are not yet specified.

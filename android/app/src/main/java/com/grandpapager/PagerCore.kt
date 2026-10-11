@@ -50,7 +50,11 @@ data class DiagnosticsPayload(
     val app: String,
     val config: RemoteConfig? = null,
     val config_applied_at: String? = null,
-    val config_error: String? = null
+    val config_error: String? = null,
+    /** Battery temperature in °C (tenths from BatteryManager), or null if unknown.
+     *  Always-on devices run hot while charging — the single best early-warning
+     *  signal for a degrading cell. A charge-controller can also gate on it. */
+    val battery_temp_c: Double? = null
 )
 
 /** ISO-8601 UTC helpers that work down to API 24 (no java.time). */

@@ -16,6 +16,7 @@
   var client = null;
   var minutes = DEFAULT_MIN;
   var myLastId = null, myLastAt = 0, lastStatus = null;
+  var userChangedDuration = false;
 
   function escapeHtml(s) { return String(s).replace(/[&<>"]/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]; }); }
 
@@ -29,6 +30,37 @@
     var token = (el("token").value || localStorage.getItem(LS.token) || "").trim();
     var broker = (el("brokerUrl").value || localStorage.getItem(LS.broker) || DEFAULT_BROKER).trim();
     return { name: name, token: token, broker: broker };
+  }
+
+  /* ---------- invitation links ----------
+     A family member opens a link with the token (and optionally their name)
+     baked in:  index.html#token=…&sender=Maria
+     The fragment is used in preference to the query string because it is never
+     sent to the server nor passed in Referer. Whatever the source, the params
+     are stripped from the address bar as soon as they are read (they would
+     otherwise linger in history and in any shared/screenshot URL). */
+  var INVITE_KEYS = ["token", "t", "sender", "name", "n", "broker", "b"];
+  function readInvite() {
+    var q = new URLSearchParams(location.search);
+    var h = new URLSearchParams((location.hash || "").replace(/^#/, ""));
+    function pick() {
+      for (var i = 0; i < arguments.length; i++) {
+        var v = q.get(arguments[i]); if (v == null) v = h.get(arguments[i]);
+        if (v) return String(v).trim();
+      }
+      return "";
+    }
+    var token = pick("token", "t");
+    if (!token) return null;
+    return { token: token, name: pick("sender", "name", "n"), broker: pick("broker", "b") };
+  }
+  function clearInviteParams() {
+    if (!history.replaceState) return;
+    var q = new URLSearchParams(location.search);
+    var h = new URLSearchParams((location.hash || "").replace(/^#/, ""));
+    INVITE_KEYS.forEach(function (k) { q.delete(k); h.delete(k); });
+    var qs = q.toString(), hs = h.toString();
+    history.replaceState(null, "", location.pathname + (qs ? "?" + qs : "") + (hs ? "#" + hs : ""));
   }
 
   /* ---------- duration (stepper B) ---------- */
@@ -47,7 +79,7 @@
     PRESETS.forEach(function (m) {
       var b = document.createElement("button");
       b.dataset.min = m; b.textContent = fmt(m);
-      b.addEventListener("click", function () { setMinutes(m); });
+      b.addEventListener("click", function () { userChangedDuration = true; setMinutes(m); });
       el("presets").appendChild(b);
     });
   }
@@ -58,17 +90,29 @@
     p.textContent = ok ? "connected" : "disconnected";
     p.className = "pill " + (ok ? "on" : "off");
   }
+  function staleAfterSeconds(d) {
+    var m = (d && d.config && d.config.telemetry && d.config.telemetry.interval_minutes) || 15;
+    return Math.max(90, m * 60 * 2 + 60);
+  }
   function renderDiag(d) {
     var seen = d.last_seen ? new Date(d.last_seen).getTime() : 0;
     var age = Math.max(0, Math.round((Date.now() - seen) / 1000));
-    var online = d.state !== "offline" && age < 90;
+    var online = d.state !== "offline" && age < staleAfterSeconds(d);
+    var temp = (typeof d.battery_temp_c === "number") ? " " + d.battery_temp_c.toFixed(1) + "°C" : "";
     el("diag").textContent =
       "state:    " + d.state + (online ? "" : "   (STALE " + age + "s)") + "\n" +
       "mqtt:     " + d.mqtt + "\n" +
-      "battery:  " + d.battery + "%" + (d.charging ? " (charging)" : "") + "\n" +
+      "battery:  " + d.battery + "%" + (d.charging ? " (charging)" : "") + temp + "\n" +
       "wifi:     " + d.wifi + "\n" +
       "message:  " + (d.sender || "-") + "\n" +
       "seen:     " + age + "s ago";
+  }
+
+  /* Adopt the admin-configured default duration until the user picks their own. */
+  function applyRemoteDefault(d) {
+    if (userChangedDuration) return;
+    var m = d && d.config && d.config.defaults && d.config.defaults.duration_minutes;
+    if (typeof m === "number") setMinutes(m);
   }
 
   /* Non-blocking notice that a message is already on the display (option B).
@@ -154,7 +198,7 @@
     client.on("error", function (err) { setConnected(false); el("sendHint").textContent = "Error: " + err.message; });
     client.on("message", function (topic, payload) {
       if (topic === TOPIC.status) {
-        try { lastStatus = JSON.parse(payload.toString()); renderDiag(lastStatus); updateBannerFromStatus(lastStatus); }
+        try { lastStatus = JSON.parse(payload.toString()); renderDiag(lastStatus); updateBannerFromStatus(lastStatus); applyRemoteDefault(lastStatus); }
         catch (e) { el("diag").textContent = payload.toString(); }
       } else if (topic === TOPIC.message) {
         renderBannerFromMessage(payload.toString());
@@ -238,20 +282,40 @@
     el("brokerUrl").value = localStorage.getItem(LS.broker) || DEFAULT_BROKER;
     el("token").value = localStorage.getItem(LS.token) || "";
 
-    el("minus").addEventListener("click", function () { setMinutes(minutes - 60); });
-    el("plus").addEventListener("click", function () { setMinutes(minutes + 60); });
+    el("minus").addEventListener("click", function () { userChangedDuration = true; setMinutes(minutes - 60); });
+    el("plus").addEventListener("click", function () { userChangedDuration = true; setMinutes(minutes + 60); });
     el("send").addEventListener("click", publishMessage);
     el("clear").addEventListener("click", clearDisplay);
     el("connect").addEventListener("click", connect);
     el("forget").addEventListener("click", forget);
     el("setupSave").addEventListener("click", setupSave);
 
+    if (applyInvite()) return;
     if (localStorage.getItem(LS.sender) && localStorage.getItem(LS.token)) {
       showView("main");
       connect();
     } else {
       showView("setup");
     }
+  }
+
+  /* A link carrying the token (and usually the name) onboards in one tap. Read
+     it before the stored-credentials branch above, then strip it from the URL. */
+  function applyInvite() {
+    var inv = readInvite();
+    if (!inv) return false;
+    localStorage.setItem(LS.token, inv.token);
+    if (inv.broker) localStorage.setItem(LS.broker, inv.broker);
+    if (inv.name) localStorage.setItem(LS.sender, inv.name);
+    el("setupToken").value = inv.token;
+    el("token").value = inv.token;
+    if (inv.broker) { el("setupBroker").value = inv.broker; el("brokerUrl").value = inv.broker; }
+    if (inv.name) { el("setupName").value = inv.name; el("sender").value = inv.name; }
+    clearInviteParams();
+    if (inv.name) { showView("main"); connect(); return true; }
+    showView("setup");
+    el("setupHint").textContent = "Token applied — enter your name to start.";
+    return true;
   }
 
   document.addEventListener("DOMContentLoaded", init);

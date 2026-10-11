@@ -81,7 +81,52 @@ Possession of the token equals its authority — keep it narrow and rotatable.
 
 ## D11 — No Last Will; offline via staleness
 Flespi rejects a CONNECT that carries a Last Will for a scoped (ACL) token, so
-the receiver sets **no Will**. Offline detection is **status staleness**: senders
-flag a `status` older than ~90 s as offline. The 30 s watchdog keeps status
-fresh. (Supersedes the LWT plan in the original D4 text.)
+the receiver sets **no Will**. Offline detection is **status staleness**:
+senders flag a `status` older than the derived threshold (below), not a fixed
+90 s. (Supersedes the LWT plan in the original D4 text.)
+
+## D12 — Idle screen-off with a guaranteed wake
+The display sleeps when idle (device-owner `lockNow()`, no clock) to cut heat and
+panel wear; a new message wakes it with a **full-screen-intent** notification on
+an `IMPORTANCE_HIGH` channel plus `setTurnScreenOn`/`setShowWhenLocked`, while a
+`PARTIAL_WAKE_LOCK` + `WifiLock` keep the socket alive. Rationale: on a
+permanently-powered pager the backlight is the dominant idle draw; the socket
+must stay up for immediate delivery, so the screen is the only thing that can
+safely sleep. It is admin-toggleable (`power.screen_off_when_idle`). *Change if*
+the device is ever used off-mains, where a permanent wake lock would matter.
+(Research: `.scratch/grandpa-pager/research/power-and-metrics.md`.)
+
+## D13 — Configurable metrics cadence (default 15 min)
+Status is published on `telemetry.interval_minutes` (1–1440, default 15) plus
+immediately on connect/show/clear/apply. The status timer is decoupled from the
+30 s reconnect watchdog, because the MQTT keepalive — not the status publish —
+keeps the socket up. Both web clients derive their "stale" threshold from the
+config (`2×interval + 60 s`, min 90 s) instead of a hard-coded 90 s. Added as an
+optional field under `schema: 1` (backward-compatible).
+
+## D14 — In-app device hardening (device owner)
+When device owner the app applies a **reversible** set of user restrictions
+(no account changes, no Bluetooth, no location, no printing, no mobile-network
+config, no tethering, no roaming), disables master sync and turns off Bluetooth,
+to cut background activity and attack surface on a 24/7 device. Cleared by the
+`RELEASE_KIOSK` gesture. Deliberately **not** applied: factory-reset blocking or
+anything irreversible. (Battery/heat guidance lives in `device-hardening.md`.)
+
+## D15 — Delivery-reliability hardening
+Four small guards so a message is not silently lost or duplicated:
+- **Late arrival:** a never-seen message that arrives up to 10 min after its TTL
+  is shown once for 60 s (see `architecture.md`), so a brief offline blip does not
+  erase it.
+- **Battery exemption:** the app warns on start if the doze whitelist is missing
+  and asks once outside kiosk; Android 9 has no device-owner API for it, so the
+  deterministic path (`adb shell dumpsys deviceidle whitelist +<pkg>`) is
+  documented in `device-hardening.md`/`runbook.md`.
+- **One duration default:** the web sender adopts `defaults.duration_minutes` from
+  `status.config` (until the user overrides it), and the Android sender does the
+  same — the admin default now governs all senders instead of only the app.
+- **Silent wake channel:** the `pager_alert` channel is silent and non-vibrating so
+  the notification that carries the full-screen intent does not double the app's
+  own chime/vibration.
+
+
 

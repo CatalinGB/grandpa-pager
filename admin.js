@@ -10,6 +10,8 @@
     display: { name_size_sp: 46, countdown: false, orientation: "auto" },
     cue: { glow_ms: 9000, chime: true, vibrate: true, torch: { enabled: true, on_ms: 1500, off_ms: 1500, pulses: 3 } },
     defaults: { duration_minutes: 240 },
+    telemetry: { interval_minutes: 15 },
+    power: { screen_off_when_idle: true },
     kiosk: { locked: true }
   };
   var el = function (id) { return document.getElementById(id); };
@@ -56,6 +58,8 @@
       slider("cue.torch.off_ms", "Off", 200, 5000, 100, "ms") +
       stepper("cue.torch.pulses", "Pulses", 1, 10, 1);
     el("sec-defaults").innerHTML = stepper("defaults.duration_minutes", "Default duration", 5, 1440, 30, "h");
+    el("sec-telemetry").innerHTML = stepper("telemetry.interval_minutes", "Status interval (min)", 1, 1440, 5);
+    el("sec-power").innerHTML = sw("power.screen_off_when_idle", "Screen off when idle", "sleep the display; wake on a new message");
     el("sec-kiosk").innerHTML = sw("kiosk.locked", "Locked (kiosk)", "off = open the launcher");
     preview();
   }
@@ -73,14 +77,26 @@
     preview();
   }
 
+  /* A device is "stale" relative to its configured status cadence (default
+     15 min): 2 intervals + 1 min, never below 90 s. */
+  function staleAfterSeconds(s) {
+    var m = (s && s.config && s.config.telemetry && s.config.telemetry.interval_minutes) || 15;
+    return Math.max(90, m * 60 * 2 + 60);
+  }
   function renderDevice(s) {
     if (!s) { el("devStatus").textContent = "—"; return; }
     var seen = s.last_seen ? new Date(s.last_seen).getTime() : 0;
     var age = Math.max(0, Math.round((Date.now() - seen) / 1000));
-    var online = s.state !== "offline" && age < 90;
-    el("devStatus").innerHTML = '<span class="pill ' + (online ? "on" : "off") + '">' + (online ? "connected" : "offline") + '</span>' +
-      "<span>battery " + s.battery + "%</span><span>wifi " + s.wifi + "</span><span>mqtt " + s.mqtt + "</span>" +
-      (s.sender ? "<span>message: " + s.sender + "</span>" : "") + "<span>seen " + age + "s</span>";
+    var online = s.state !== "offline" && age < staleAfterSeconds(s);
+    var parts = [];
+    parts.push('<span class="pill ' + (online ? "on" : "off") + '">' + (online ? "connected" : "offline") + '</span>');
+    parts.push("<span>battery " + s.battery + "%" + (typeof s.battery_temp_c === "number" ? " · " + s.battery_temp_c.toFixed(1) + "°C" : "") + "</span>");
+    parts.push("<span>" + (s.charging ? "charging" : "on battery") + "</span>");
+    parts.push("<span>wifi " + s.wifi + "</span>");
+    parts.push("<span>mqtt " + s.mqtt + "</span>");
+    if (s.sender) parts.push("<span>message: " + s.sender + "</span>");
+    parts.push("<span>seen " + age + "s ago</span>");
+    el("devStatus").innerHTML = parts.join('<span class="sep">·</span>');
   }
 
   function connect() {
@@ -115,6 +131,25 @@
 
   function showForm() { el("unlock").hidden = true; el("admin").hidden = false; build(); }
 
+  /* Invitation link: admin.html#token=<admin-token> (fragment preferred — never
+     sent to the server nor leaked in Referer; ?token= also works). The token is
+     read, kept in sessionStorage, then stripped from the address bar. */
+  var INVITE_KEYS = ["token", "t"];
+  function readInvite() {
+    var q = new URLSearchParams(location.search);
+    var h = new URLSearchParams((location.hash || "").replace(/^#/, ""));
+    var v = q.get("token") || q.get("t") || h.get("token") || h.get("t");
+    return v ? String(v).trim() : "";
+  }
+  function clearInviteParams() {
+    if (!history.replaceState) return;
+    var q = new URLSearchParams(location.search);
+    var h = new URLSearchParams((location.hash || "").replace(/^#/, ""));
+    INVITE_KEYS.forEach(function (k) { q.delete(k); h.delete(k); });
+    var qs = q.toString(), hs = h.toString();
+    history.replaceState(null, "", location.pathname + (qs ? "?" + qs : "") + (hs ? "#" + hs : ""));
+  }
+
   window.A = { toggle: toggle, slide: slide, choose: choose, step: step };
 
   document.addEventListener("DOMContentLoaded", function () {
@@ -124,6 +159,8 @@
     el("apply").addEventListener("click", apply);
     el("reset").addEventListener("click", reset);
     var saved = sessionStorage.getItem("gp_admin");
+    var invite = readInvite();
+    if (invite) { sessionStorage.setItem("gp_admin", invite); clearInviteParams(); saved = invite; }
     if (saved) el("adminToken").value = saved;
     if (saved && !q.get("demo")) connect();
 

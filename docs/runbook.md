@@ -94,11 +94,19 @@ Observed results (2026-10-10, Mi A1 / Android 9, via `adb reverse`):
 3. **Lock it down** (device owner; requires **no Google accounts** on the phone):
    ```bash
    adb shell dpm set-device-owner com.grandpapager/.PagerDeviceAdminReceiver
+   # also whitelist battery optimization — the #1 reliability lever (no DO API on 9):
+   adb shell dumpsys deviceidle whitelist +com.grandpapager
+   adb shell dumpsys deviceidle whitelist | grep grandpapager   # verify
    ```
-   Launch the receiver once — it applies lock task, persistent home, and
-   disables the status bar automatically.
-4. Power: enable **Stay awake**, and grant battery-optimization exemption
-   (offered at setup). The service already keeps the screen on while in the app.
+   Launch the receiver once — it applies lock task, persistent home, the safe
+   user restrictions and disables the status bar automatically.
+4. Power &amp; longevity: confirm the battery-optimization exemption took (above),
+   and optionally enable **Stay awake** if you want the panel always lit (the app
+   otherwise sleeps it when idle and wakes it on a message). Because the phone
+   runs plugged in 24/7, cap its charge near 70% with
+   `tools/scripts/charge-controller.js` (drives a smart plug from the
+   `grandpa/status` battery readings) and complete the physical/thermal/network
+   checklist in [`device-hardening.md`](device-hardening.md).
 
 ## 5b. Release build
 
@@ -145,17 +153,35 @@ the retained `grandpa/config`; the receiver validates, clamps, persists, applies
 and echoes it in `status.config`.
 
 The receiver **re-subscribes on every (re)connect** and re-applies the persisted
-config at boot, so settings survive reboot/offline. To test on the local broker
-(broker URL is hard-coded to Flespi in `admin.js`, so point a copy at the local
-WSS for local testing):
+config at boot, so settings survive reboot/offline. Configurable: display
+(`name_size_sp`, `countdown`, `orientation`), the arrival cue, the default
+duration, `telemetry.interval_minutes` (status cadence, default 15) and
+`power.screen_off_when_idle`. To test on the local broker (broker URL is
+hard-coded to Flespi in `admin.js`, so point a copy at the local WSS for local
+testing):
 
 ```bash
 # clear the retained config, or set one directly
 NODE_PATH=tools/broker/node_modules node -e '
 const mqtt=require("mqtt");const c=mqtt.connect("mqtts://127.0.0.1:8883",{username:"grandpa",password:"grandpa",rejectUnauthorized:false});
-c.on("connect",()=>c.publish("grandpa/config",JSON.stringify({schema:1,display:{name_size_sp:90,countdown:true}}),{qos:1,retain:true},()=>c.end()));'
+c.on("connect",()=>c.publish("grandpa/config",JSON.stringify({schema:1,display:{name_size_sp:90,countdown:true},telemetry:{interval_minutes:1},power:{screen_off_when_idle:true}}),{qos:1,retain:true},()=>c.end()));'
 # then read the ack:
 NODE_PATH=tools/broker/node_modules node tools/scripts/mqtt.js status
+```
+
+### Verifying power & telemetry on-device
+
+```bash
+S=$(adb devices | awk 'NR==2{print $1}')
+adb -s $S install -r android/app/build/outputs/apk/debug/app-debug.apk
+adb -s $S shell dumpsys deviceidle whitelist +com.grandpapager   # battery exemption
+adb -s $S shell dpm set-device-owner com.grandpapager/.PagerDeviceAdminReceiver
+adb -s $S reboot && adb -s $S wait-for-device                     # kiosk re-arms + applies config
+
+adb -s $S shell dumpsys power | grep mWakefulness                 # Dozing when idle
+# send a message; the screen should wake and show it, then go back to Dozing on clear
+adb -s $S logcat -s PagerService MqttController DeviceOwnerManager # "status interval = N min", "restrictions applied"
+adb -s $S shell dumpsys user | grep -A20 Restrictions             # no_bluetooth, no_modify_accounts, …
 ```
 
 ## 6. Undo / maintenance

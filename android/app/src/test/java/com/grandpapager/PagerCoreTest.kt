@@ -73,6 +73,21 @@ class PagerCoreTest {
     }
 
     @Test
+    fun diagnostics_carriesBatteryTemperature() {
+        val d = DiagnosticsPayload(
+            state = "idle", sender = null, battery = 68, charging = true,
+            wifi = true, mqtt = true, current_message_id = null,
+            expires_at = null, last_seen = "2026-01-01T00:00:00Z",
+            app = "receiver", battery_temp_c = 34.5
+        )
+        val json = PagerJson.diagnostics(d)
+        assertTrue(json.contains("\"battery_temp_c\":34.5"))
+        val back = PagerJson.toDiagnostics(json)
+        assertNotNull(back)
+        assertEquals(34.5, back!!.battery_temp_c!!, 0.001)
+    }
+
+    @Test
     fun topics_areStable() {
         assertEquals("grandpa/message", Topics.MESSAGE)
         assertEquals("grandpa/command", Topics.COMMAND)
@@ -83,5 +98,34 @@ class PagerCoreTest {
     fun blankMessageJson_isNull() {
         assertEquals(null, PagerJson.toMessage(""))
         assertEquals(null, PagerJson.toMessage("{}"))
+    }
+
+    @Test
+    fun remoteConfig_defaultsIncludePowerAndTelemetry() {
+        val c = RemoteConfigCodec.parse("{\"schema\":1}")
+        assertNotNull(c)
+        assertEquals(15, c!!.telemetry.interval_minutes)
+        assertTrue(c.power.screen_off_when_idle)
+    }
+
+    @Test
+    fun remoteConfig_clampsTelemetryInterval() {
+        assertEquals(1440, RemoteConfigCodec.parse("{\"schema\":1,\"telemetry\":{\"interval_minutes\":999999}}")!!.telemetry.interval_minutes)
+        assertEquals(1, RemoteConfigCodec.parse("{\"schema\":1,\"telemetry\":{\"interval_minutes\":0}}")!!.telemetry.interval_minutes)
+        assertEquals(30, RemoteConfigCodec.parse("{\"schema\":1,\"telemetry\":{\"interval_minutes\":30}}")!!.telemetry.interval_minutes)
+    }
+
+    @Test
+    fun remoteConfig_roundTripsPowerAndTelemetry() {
+        val c = RemoteConfigCodec.parse("{\"schema\":1,\"power\":{\"screen_off_when_idle\":false},\"telemetry\":{\"interval_minutes\":5}}")!!
+        assertFalse(c.power.screen_off_when_idle)
+        assertEquals(5, c.telemetry.interval_minutes)
+        assertEquals(c, RemoteConfigCodec.parse(RemoteConfigCodec.toJson(c)))
+    }
+
+    @Test
+    fun remoteConfig_rejectsUnsupportedSchema() {
+        assertEquals(null, RemoteConfigCodec.parse("{\"schema\":2}"))
+        assertEquals(null, RemoteConfigCodec.parse("{}"))
     }
 }

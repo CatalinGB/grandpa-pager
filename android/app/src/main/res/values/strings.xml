@@ -57,6 +57,7 @@
     <string name="lbl_expires">expires:</string>
     <string name="lbl_seen">seen:</string>
     <string name="charging_suffix">(charging)</string>
+    <string name="temp_suffix">%1$.1f°C</string>
     <string name="stale_suffix">(STALE %1$ds)</string>
     <string name="seen_ago">%1$ds ago</string>
 

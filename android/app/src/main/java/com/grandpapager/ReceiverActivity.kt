@@ -14,13 +14,16 @@ import android.graphics.Paint
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.provider.Settings
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
@@ -63,6 +66,7 @@ class ReceiverActivity : Activity() {
 
     private var clearRequested = false
     private var lastCuedId: String? = null
+    private var screenSlept = false
     private var glowAnim: ValueAnimator? = null
     private var releaseReceiver: BroadcastReceiver? = null
     private val cornerTaps = ArrayDeque<Long>()
@@ -118,7 +122,19 @@ class ReceiverActivity : Activity() {
         countdownView = findViewById(R.id.countdownView)
         glowOverlay = findViewById(R.id.glowOverlay)
         area = findViewById(R.id.area)
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // Let a new message be shown and turn the display on over a sleeping /
+        // locked screen. The manifest carries the API-27+ attributes; these are
+        // the legacy window-flag equivalents for older devices.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        } else {
+            @Suppress("DEPRECATION")
+            window.addFlags(
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+            )
+        }
         lastCuedId = cfg.lastCuedMessageId
 
         releaseReceiver = object : BroadcastReceiver() {
@@ -127,12 +143,41 @@ class ReceiverActivity : Activity() {
         registerReceiver(releaseReceiver, IntentFilter(ACTION_RELEASE_KIOSK))
 
         if (cfg.role == Role.RECEIVER) {
+            ensureBatteryExemption()
             if (DeviceOwnerManager.isDeviceOwner(this)) {
                 DeviceOwnerManager.applyKiosk(this)
                 DeviceOwnerManager.enterLockTask(this)
             }
             PagerService.start(this)
         }
+    }
+
+    /**
+     * Battery-optimization exemption is what keeps the socket from being frozen
+     * by Doze/App Standby when the phone is on battery. Stock Android 9 has no
+     * device-owner API to grant it silently, so: warn loudly, and (outside kiosk
+     * lock task) ask once via the system dialog. The deterministic path is the
+     * documented `adb shell dumpsys deviceidle whitelist +<pkg>`.
+     */
+    private fun ensureBatteryExemption() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        if (pm.isIgnoringBatteryOptimizations(packageName)) return
+        Log.w(
+            TAG,
+            "battery exemption NOT granted — Doze may delay messages on battery; " +
+                "grant via: adb shell dumpsys deviceidle whitelist +$packageName"
+        )
+        val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        if (am.lockTaskModeState != ActivityManager.LOCK_TASK_MODE_NONE) return
+        if (cfg.batteryExemptionAsked) return
+        cfg.batteryExemptionAsked = true
+        runCatching {
+            startActivity(
+                Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                    .setData(Uri.parse("package:$packageName"))
+            )
+        }.onFailure { Log.w(TAG, "battery exemption request failed", it) }
     }
 
     override fun onResume() {
@@ -157,7 +202,10 @@ class ReceiverActivity : Activity() {
 
     private fun refresh() {
         applyRemoteConfig()
+        val rc = cfg.remoteConfig()
         if (cfg.hasActiveMessage()) {
+            screenSlept = false
+            keepScreenOn(true)
             val id = cfg.currentMessageId
             if (id != null && id != lastCuedId) {
                 lastCuedId = id
@@ -175,7 +223,7 @@ class ReceiverActivity : Activity() {
             warnView.visibility = View.GONE
             // The "clears in …" countdown is a dev aid; the admin can also enable it.
             countdownView.text = getString(R.string.clears_in, remainingLabel())
-            countdownView.visibility = if (BuildConfig.DEBUG || cfg.remoteConfig().display.countdown) View.VISIBLE else View.GONE
+            countdownView.visibility = if (BuildConfig.DEBUG || rc.display.countdown) View.VISIBLE else View.GONE
         } else {
             if (cfg.currentMessageId != null && !clearRequested) {
                 clearRequested = true
@@ -183,18 +231,46 @@ class ReceiverActivity : Activity() {
             }
             nameView.visibility = View.GONE
             messageView.visibility = View.GONE
-            dateView.visibility = View.VISIBLE
-            clockView.visibility = View.VISIBLE
-            sizeIdleViews(System.currentTimeMillis())
-            if (Link.connected) {
-                warnView.visibility = View.GONE
-            } else {
-                warnView.visibility = View.VISIBLE
-                warnView.text = getString(R.string.conn_problem)
-            }
             countdownView.text = ""
             countdownView.visibility = View.GONE
+            // Only sleep the display when we can actually do it (device owner);
+            // otherwise fall back to the idle clock, never a stuck black screen.
+            val canSleep = rc.power.screen_off_when_idle && DeviceOwnerManager.isDeviceOwner(this)
+            if (canSleep) {
+                dateView.visibility = View.GONE
+                clockView.visibility = View.GONE
+                warnView.visibility = View.GONE
+                keepScreenOn(false)
+                if (!screenSlept) {
+                    screenSlept = true
+                    sleepDisplay()
+                }
+            } else {
+                // Clock mode: keep the display lit showing date + clock.
+                keepScreenOn(true)
+                dateView.visibility = View.VISIBLE
+                clockView.visibility = View.VISIBLE
+                sizeIdleViews(System.currentTimeMillis())
+                if (Link.connected) {
+                    warnView.visibility = View.GONE
+                } else {
+                    warnView.visibility = View.VISIBLE
+                    warnView.text = getString(R.string.conn_problem)
+                }
+            }
         }
+    }
+
+    private fun keepScreenOn(on: Boolean) {
+        if (on) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
+
+    /** Device owner: put the display to sleep (no keyguard; the kiosk stays front). */
+    private fun sleepDisplay() {
+        val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+        runCatching { dpm.lockNow() }
+            .onFailure { Log.w(TAG, "lockNow failed", it) }
     }
 
     /**
@@ -339,6 +415,7 @@ class ReceiverActivity : Activity() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 runCatching { dpm.setStatusBarDisabled(admin, false) }
             }
+            DeviceOwnerManager.clearRestrictions(this)
             runCatching { dpm.clearDeviceOwnerApp(packageName) }
         }
     }

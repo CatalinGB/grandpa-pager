@@ -65,6 +65,21 @@ sender **and admin console**, and the tokens.
 13. **The admin page has no CSP yet.** `admin.js` uses inline `onclick`
     attributes, which a strict `script-src 'self'` would block; hardening it
     (event delegation + CSP) is recommended but pending.
+14. **The receiver runs an end-of-life OS.** Android 9 (Mi A1) is out of security
+    support, and the phone is a permanently-connected node. This is contained
+    (dedicated SSID/VLAN, no Google account, USB debugging off, egress limited)
+    rather than patched. Physical access can still read the receiver token
+    (finding 5), so treat a lost device as a compromised token. Full operational
+    hardening, including 24/7 battery/thermal/fire safety, is in
+    [`docs/device-hardening.md`](docs/device-hardening.md).
+15. **Invitation links embed a token in the URL.** These are a convenience
+    for onboarding family (sender) and admins. The token is carried in the URL
+    **fragment** so it is never sent to the server nor leaked via `Referer`; the
+    page reads it and immediately strips it from the address bar, and `sw.js` no
+    longer caches URLs that carry a query string. Residual risk: the link itself
+    is a secret — whoever holds it can send messages (or, for the admin link,
+    reconfigure the device), and it may survive in the sender's
+    clipboard/history before the first load. Revoke by recreating the token.
 
 ## Recommended actions (priority order)
 1. Create **scoped ACL tokens** and set **`origins`** exactly as in
@@ -76,6 +91,8 @@ sender **and admin console**, and the tokens.
 5. **Rotate** the sender/admin token if a device is lost (recreate the token).
 6. For a real release build, provide a **release keystore**
    (`android/keystore.properties`, gitignored) instead of the debug-key fallback.
+7. Follow [`docs/device-hardening.md`](docs/device-hardening.md): isolate the
+   receiver on a dedicated network, keep it near 70% charge, and cable-lock it.
 
 ## Notes on the test that couldn't run here
 The sandbox's headless Chromium cannot open *external* WebSockets (it opens a

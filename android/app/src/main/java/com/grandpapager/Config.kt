@@ -45,6 +45,11 @@ class Config(context: Context) {
         get() = p.getBoolean("useTls", true)
         set(v) = p.edit().putBoolean("useTls", v).apply()
 
+    /** Whether we have already shown the battery-optimization request dialog. */
+    var batteryExemptionAsked: Boolean
+        get() = p.getBoolean("battAsked", false)
+        set(v) = p.edit().putBoolean("battAsked", v).apply()
+
     // --- receiver state (persisted so expiry survives reboot) ---
     var currentMessageId: String?
         get() = p.getString("curId", null)
