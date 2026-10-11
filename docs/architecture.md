@@ -8,21 +8,31 @@ the device remotely over MQTT. No Home Assistant, no server.
 
 ## Components
 
-```
-   Family (browser, GitHub Pages)          Grandpa's phone (Mi A1, Android 9)
-   ┌────────────────────────────┐          ┌──────────────────────────────┐
-   │ index.html + sender.js      │          │  ReceiverActivity (kiosk)    │
-   │  publish grandpa/message ───┼──┐       │  PagerService (foreground)   │
-   └────────────────────────────┘  │       │   (role: receiver)           │
-   ┌────────────────────────────┐  │       └──────────────┬───────────────┘
-   │ admin.html + admin.js       │  │                      │
-   │  publish grandpa/config  ───┼──┤    ┌──────────────┐  │ publish status
-   │  subscribe status/config ←──┼──┼───▶│  MQTT broker │◀─┘ (incl. config ack)
-   └────────────────────────────┘  │    │  prod: Flespi │
-   ┌────────────────────────────┐  │    │  test: Aedes  │
-   │ Android SenderActivity      │  │    │  TLS / WSS     │
-   │  publish message / clear ───┼──┘    └──────────────┘
-   └────────────────────────────┘
+```mermaid
+flowchart LR
+  subgraph web["GitHub Pages (browser)"]
+    sender["index.html · sender.js"]
+    admin["admin.html · admin.js"]
+  end
+  subgraph apk["Android app — one APK, three roles"]
+    senderAct["SenderActivity"]
+    subgraph recv["Receiver role"]
+      pagerSvc["PagerService<br/>foreground · Paho mqttv3"]
+      recvAct["ReceiverActivity<br/>variant-C kiosk"]
+      guard["ConfigGuard<br/>probe → switch → commit / revert"]
+    end
+  end
+  broker(["MQTT broker<br/>Flespi prod · Aedes test<br/>TLS 8883 / WSS 443 · ACL tokens"])
+
+  sender -->|"grandpa/message"| broker
+  admin -->|"grandpa/config · grandpa/command"| broker
+  senderAct -->|"grandpa/message · grandpa/command"| broker
+  broker -->|"message · command · config"| pagerSvc
+  pagerSvc -->|"grandpa/status"| broker
+  guard -.-> pagerSvc
+  recvAct -.-> pagerSvc
+  broker -->|"grandpa/status"| sender
+  broker -->|"grandpa/status"| admin
 ```
 
 Foreground `PagerService` owns the MQTT connection in every Android role. The
@@ -153,6 +163,24 @@ is device owner (see below); each toggle adds **or clears** its restriction, in
 both directions (so relaxing takes effect too, and `restrict_bluetooth` turns the
 radio back on). The receiver reports `status.device_owner` so the console can show
 whether the toggles can act.
+
+## Message flow
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant S as Sender (web / Android)
+  participant B as MQTT broker
+  participant P as PagerService (receiver)
+  participant R as ReceiverActivity
+  S->>B: publish grandpa/message (retained · QoS 1)
+  B-->>P: grandpa/message
+  P->>P: parse · persist · schedule expiry alarm
+  P->>B: grandpa/status (state=showing)
+  P->>R: full-screen intent + arrival cue (glow/chime/vibrate/torch)
+  Note over P: expiry alarm fires (or remote clear)
+  P->>B: empty retained grandpa/message + grandpa/status (idle)
+```
 
 ## Remote connection change (guarded)
 

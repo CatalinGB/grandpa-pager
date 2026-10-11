@@ -70,18 +70,21 @@ device.
 
 ## How it works
 
-```
-   family / admin (browser)                  Grandpa's phone (Android, kiosk)
-   ┌───────────────────────┐                 ┌──────────────────────────────┐
-   │ index.html · sender.js │                 │ ReceiverActivity (full screen)│
-   │ admin.html · admin.js  │                 │ PagerService (foreground)     │
-   │  publish message/config│                 │  subscribe message/command/   │
-   │  subscribe status      │                 │            config             │
-   └───────────┬───────────┘                 └───────────────┬──────────────┘
-               │                                             │
-               └──────────────►  MQTT broker  ◄──────────────┘
-                        TLS 8883 · WSS 443 · per-topic ACL tokens
-                         (Flespi in production, Aedes for tests)
+```mermaid
+flowchart LR
+  S["Web sender<br/>index.html · sender.js"]
+  A["Web admin<br/>admin.html · admin.js"]
+  P["Android app<br/>SenderActivity (admin / family)"]
+  B(["MQTT broker<br/>TLS 8883 · WSS 443<br/>Flespi (prod) · Aedes (test)"])
+  R["Grandpa's phone<br/>ReceiverActivity + PagerService (kiosk)"]
+
+  S -->|"publish grandpa/message"| B
+  A -->|"publish grandpa/config · command"| B
+  P -->|"publish grandpa/message · command"| B
+  B -->|"message · command · config"| R
+  R -->|"grandpa/status"| B
+  B -->|"grandpa/status"| S
+  B -->|"grandpa/status · config"| A
 ```
 
 Four topics carry everything:
