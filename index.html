@@ -7,9 +7,14 @@
 <meta name="theme-color" content="#0f1115">
 <!-- This page holds a broker token, so lock the document down: only our own
      scripts, only encrypted WebSocket connections (any broker host the user
-     configures), no frames/forms/base tricks. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' wss:; manifest-src 'self'; worker-src 'self'">
+     configures), no frames/forms/base tricks. `worker-src ... blob:` is required
+     by MQTT.js v5, which runs its (unthrottled) timers in a blob URL Web Worker;
+     without it a backgrounded tab throttles the reconnect timer and the link
+     stalls until a refresh. Blob workers here are only ever created by our own
+     same-origin script. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' wss:; manifest-src 'self'; worker-src 'self' blob:">
 <link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icon-192.png">
 <link rel="apple-touch-icon" href="./icon-192.png">
 <!-- Shared helpers (loaded before the page script). MQTT.js vendored locally
      (no CDN dependency). v5.16.0 -->
@@ -130,6 +135,6 @@
   </section>
 </div>
 
-<script src="sender.js?v=6"></script>
+<script src="sender.js?v=7"></script>
 </body>
 </html>

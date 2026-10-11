@@ -14,6 +14,9 @@
 
   var el = function (id) { return document.getElementById(id); };
   var client = null;
+  var manualClose = false;      // set by "Forget token" so we stop auto-connecting
+  var disconnectedSince = 0;    // epoch ms when the link dropped (0 = healthy)
+  var lastAttempt = 0;          // epoch ms of the last connect() call
   var minutes = DEFAULT_MIN;
   var myLastId = null, myLastAt = 0, lastStatus = null;
   var userChangedDuration = false;
@@ -284,6 +287,9 @@
     localStorage.setItem(LS.token, c.token);
     localStorage.setItem(LS.sender, c.name);
 
+    manualClose = false;
+    disconnectedSince = 0;
+    lastAttempt = Date.now();
     if (client) { try { client.end(true); } catch (e) {} }
     setConnected(false);
     el("sendHint").textContent = t("connecting");
@@ -292,17 +298,26 @@
       username: c.token,
       clientId: clientId(),
       clean: true,
+      keepalive: 30,
       reconnectPeriod: 5000,
       connectTimeout: 12000,
       protocolVersion: 4,
     });
     client.on("connect", function () {
+      disconnectedSince = 0;
       setConnected(true);
       el("sendHint").textContent = t("connectedMsg");
       client.subscribe([TOPIC.status, TOPIC.message], { qos: 1 });
     });
     client.on("reconnect", function () { el("sendHint").textContent = t("reconnecting"); });
-    client.on("close", function () { setConnected(false); });
+    client.on("close", function () {
+      setConnected(false);
+      if (!disconnectedSince) disconnectedSince = Date.now();
+    });
+    client.on("offline", function () {
+      setConnected(false);
+      if (!disconnectedSince) disconnectedSince = Date.now();
+    });
     client.on("error", function (err) { setConnected(false); el("sendHint").textContent = t("errorPrefix") + err.message; });
     client.on("message", function (topic, payload) {
       if (topic === TOPIC.status) {
@@ -312,6 +327,24 @@
         renderBannerFromMessage(payload.toString());
       }
     });
+  }
+
+  /* Auto-connect. The page can be opened before the network is up, restored from
+     the back/forward cache, or resumed after the OS suspended the tab (which
+     throttles JS timers, so mqtt.js's own reconnect never fires) — in all of
+     those the one-shot connect() leaves the pill stuck on "disconnected" until a
+     manual refresh. ensureConnected() heals any of them without a reload. It is
+     idempotent: it never tears down a healthy link and never stacks retries. */
+  function ensureConnected() {
+    if (manualClose || !localStorage.getItem(LS.token)) return;
+    if (!client) { connect(); return; }
+    if (client.connected) return;
+    if (client.reconnecting) return;        // mqtt.js is already retrying
+    if (Date.now() - lastAttempt < 13000) return; // let the current attempt finish
+    // Not connected and not retrying: rebuild a client that has been dead for a
+    // while, otherwise just nudge the existing one to retry now.
+    if (disconnectedSince && Date.now() - disconnectedSince > 60000) { connect(); return; }
+    try { client.reconnect(); } catch (e) { connect(); }
   }
 
   function publishMessage() {
@@ -360,9 +393,11 @@
   }
 
   function forget() {
+    manualClose = true;
     localStorage.removeItem(LS.token);
     if (client) { try { client.end(true); } catch (e) {} client = null; }
     setConnected(false);
+    disconnectedSince = 0;
     el("token").value = "";
     el("setupToken").value = "";
     showView("setup");
@@ -398,6 +433,17 @@
     el("connect").addEventListener("click", connect);
     el("forget").addEventListener("click", forget);
     el("setupSave").addEventListener("click", setupSave);
+
+    // Heal a dropped/never-established link without a manual refresh: when the
+    // tab is shown again, the network returns, the page is restored from the
+    // bfcache, and as a slow safety net on a timer.
+    window.addEventListener("online", ensureConnected);
+    window.addEventListener("focus", ensureConnected);
+    window.addEventListener("pageshow", ensureConnected);
+    document.addEventListener("visibilitychange", function () {
+      if (!document.hidden) ensureConnected();
+    });
+    setInterval(ensureConnected, 15000);
 
     if (applyInvite()) return;
     if (localStorage.getItem(LS.sender) && localStorage.getItem(LS.token)) {

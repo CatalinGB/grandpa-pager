@@ -28,7 +28,7 @@
   };
   var el = function (id) { return document.getElementById(id); };
   var cfg = JSON.parse(JSON.stringify(DEF));
-  var dirty = false, client = null;
+  var dirty = false, client = null, lastAttempt = 0;
 
   /* Shared helper (common.js). */
   var staleAfterSeconds = GP.staleAfterSeconds;
@@ -158,12 +158,13 @@
   }
 
   function connect() {
-    var token = el("adminToken").value.trim();
+    var token = el("adminToken").value.trim() || sessionStorage.getItem("gp_admin") || "";
     if (!token) { el("unlockHint").textContent = "Enter the token."; return; }
     sessionStorage.setItem("gp_admin", token);
+    lastAttempt = Date.now();
     if (client) { try { client.end(true); } catch (e) {} }
     el("unlockHint").textContent = "Connecting…";
-    client = mqtt.connect(BROKER, { username: token, clientId: "grandpa-admin-" + Math.random().toString(16).slice(2), clean: true, reconnectPeriod: 5000, connectTimeout: 12000, protocolVersion: 4 });
+    client = mqtt.connect(BROKER, { username: token, clientId: "grandpa-admin-" + Math.random().toString(16).slice(2), clean: true, keepalive: 30, reconnectPeriod: 5000, connectTimeout: 12000, protocolVersion: 4 });
     client.on("connect", function () {
       el("unlock").hidden = true; el("admin").hidden = false;
       el("connPill").textContent = "connected"; el("connPill").className = "pill on";
@@ -179,6 +180,17 @@
       if (s.command && s.command.last) el("actionHint").textContent = s.command.last + ": " + (s.command.result || "");
       if (!dirty && s.config) { cfg = JSON.parse(JSON.stringify(s.config)); cfg.schema = cfg.schema || 1; build(); el("applied").textContent = "current config loaded from the phone"; }
     });
+  }
+
+  /* Auto-connect (same rationale as the sender): heal a dropped or
+     never-established link when the tab is resumed, the network returns, or the
+     page is restored from the bfcache — without a manual refresh. Idempotent. */
+  function ensureConnected() {
+    if (!sessionStorage.getItem("gp_admin")) return;
+    if (!client) { connect(); return; }
+    if (client.connected || client.reconnecting) return;
+    if (Date.now() - lastAttempt < 13000) return;
+    try { client.reconnect(); } catch (e) { connect(); }
   }
 
   function apply() {
@@ -274,6 +286,11 @@
     el("applyConn").addEventListener("click", applyConn);
     el("restartApp").addEventListener("click", function () { sendAction("restart_app", "Restart the receiver app"); });
     el("rebootDevice").addEventListener("click", function () { sendAction("reboot_device", "Reboot the phone (it will be offline for ~a minute)"); });
+    window.addEventListener("online", ensureConnected);
+    window.addEventListener("focus", ensureConnected);
+    window.addEventListener("pageshow", ensureConnected);
+    document.addEventListener("visibilitychange", function () { if (!document.hidden) ensureConnected(); });
+    setInterval(ensureConnected, 15000);
     var saved = sessionStorage.getItem("gp_admin");
     var invite = readInvite();
     if (invite) { sessionStorage.setItem("gp_admin", invite); clearInviteParams(); saved = invite; }

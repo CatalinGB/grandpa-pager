@@ -8,9 +8,11 @@
 <!-- The admin page holds the most powerful token, so lock it down like the
      sender: only our own scripts, only encrypted WebSocket connections, no
      frames/forms/base tricks. Controls use event delegation, not inline
-     handlers, so script-src needs no 'unsafe-inline'. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' wss:; manifest-src 'self'; worker-src 'self'">
+     handlers, so script-src needs no 'unsafe-inline'. `worker-src ... blob:` is
+     required by MQTT.js v5's blob-URL timer worker (see index.html). -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' wss:; manifest-src 'self'; worker-src 'self' blob:">
 <link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icon-192.png">
 <link rel="apple-touch-icon" href="./icon-192.png">
 <script src="./common.js?v=2"></script>
 <script src="./mqtt.min.js"></script>
@@ -113,6 +115,6 @@
     </div>
   </section>
 </div>
-<script src="admin.js?v=6"></script>
+<script src="admin.js?v=7"></script>
 </body>
 </html>
