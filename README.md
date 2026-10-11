@@ -92,6 +92,7 @@ Four topics carry everything:
 | Topic | Direction | Purpose |
 |---|---|---|
 | `grandpa/message` | senders → phone | the latest message (retained; empty clears) |
+| `grandpa/last` | senders → sender/admin | the last message, kept even after a clear (history) |
 | `grandpa/command` | senders/admin → phone | `clear` · `set_connection` · `restart_app` · `reboot_device` |
 | `grandpa/config` | admin → phone | versioned remote config (retained) |
 | `grandpa/status` | phone → everyone | diagnostics + config acknowledgement |

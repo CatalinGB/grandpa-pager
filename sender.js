@@ -7,7 +7,7 @@
   "use strict";
 
   var LS = { token: "gp_token", sender: "gp_sender", broker: "gp_broker" };
-  var TOPIC = { message: "grandpa/message", command: "grandpa/command", status: "grandpa/status" };
+  var TOPIC = { message: "grandpa/message", command: "grandpa/command", status: "grandpa/status", last: "grandpa/last" };
   var DEFAULT_BROKER = "wss://mqtt.flespi.io:443";
   var DEFAULT_MIN = 240;
   var PRESETS = [60, 240, 480, 1440];
@@ -21,6 +21,7 @@
   var minutes = DEFAULT_MIN;
   var myLastId = null, myLastAt = 0, lastStatus = null;
   var lastMessageText = null;
+  var lastCleanSender = null, lastCleanText = null; // from grandpa/last (never cleared)
   var userChangedDuration = false;
 
   /* Shared helpers (common.js). */
@@ -80,6 +81,7 @@
       diagWifi: "wifi:",
       diagMessage: "message:",
       diagSeen: "seen:",
+      diagLast: "last:",
       chargingSuffix: "(charging)",
       staleSuffix: "(STALE {s}s)",
       seenAgo: "{s}s ago",
@@ -140,6 +142,7 @@
       diagWifi: "wifi:",
       diagMessage: "mesaj:",
       diagSeen: "văzut:",
+      diagLast: "ultimul:",
       chargingSuffix: "(se încarcă)",
       staleSuffix: "(ÎNVECHIT {s}s)",
       seenAgo: "acum {s}s",
@@ -245,6 +248,7 @@
       t("diagBattery") + " " + d.battery + "%" + (d.charging ? " " + t("chargingSuffix") : "") + temp + "\n" +
       t("diagWifi") + " " + d.wifi + "\n" +
       t("diagMessage") + " " + (d.sender || "-") + (msg ? " — " + msg : "") + "\n" +
+      t("diagLast") + " " + (lastCleanSender || "-") + (lastCleanText ? " — " + lastCleanText : "") + "\n" +
       t("diagSeen") + " " + t("seenAgo", { s: age });
   }
 
@@ -329,7 +333,7 @@
       disconnectedSince = 0;
       setConnected(true);
       el("sendHint").textContent = t("connectedMsg");
-      client.subscribe([TOPIC.status, TOPIC.message], { qos: 1 });
+      client.subscribe([TOPIC.status, TOPIC.message, TOPIC.last], { qos: 1 });
     });
     client.on("reconnect", function () { el("sendHint").textContent = t("reconnecting"); });
     client.on("close", function () {
@@ -352,6 +356,12 @@
         try { var m = raw ? JSON.parse(raw) : null; lastMessageText = (m && m.text) ? m.text : null; }
         catch (e) { lastMessageText = null; }
         renderBannerFromMessage(raw);
+        if (lastStatus) renderDiag(lastStatus);
+      } else if (topic === TOPIC.last) {
+        var rawl = payload.toString();
+        try { var l = rawl ? JSON.parse(rawl) : null; lastCleanSender = (l && l.sender) ? l.sender : null; lastCleanText = (l && l.text) ? l.text : null; }
+        catch (e) { lastCleanSender = null; lastCleanText = null; }
+        if (lastStatus) renderDiag(lastStatus);
       }
     });
   }
@@ -391,6 +401,9 @@
       duration_minutes: minutes,
     };
     client.publish(TOPIC.message, JSON.stringify(payload), { qos: 1, retain: true });
+    // Also keep it as the "last message" (history). A clear empties
+    // grandpa/message but never touches grandpa/last, so it stays retrievable.
+    client.publish(TOPIC.last, JSON.stringify(payload), { qos: 1, retain: true });
     myLastId = payload.id; myLastAt = Date.now();
     el("text").value = "";
     el("sendHint").textContent = t("sentMsg");

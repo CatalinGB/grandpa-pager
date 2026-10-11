@@ -5,7 +5,7 @@
 (function () {
   "use strict";
   var BROKER = "wss://mqtt.flespi.io:443";
-  var TOPIC = { config: "grandpa/config", command: "grandpa/command", status: "grandpa/status", message: "grandpa/message" };
+  var TOPIC = { config: "grandpa/config", command: "grandpa/command", status: "grandpa/status", message: "grandpa/message", last: "grandpa/last" };
   var DEF = {
     schema: 1,
     display: {
@@ -30,7 +30,7 @@
   var el = function (id) { return document.getElementById(id); };
   var cfg = JSON.parse(JSON.stringify(DEF));
   var dirty = false, client = null, lastAttempt = 0;
-  var lastMsgSender = null, lastMsgText = null, lastStatusObj = null, mqttUp = false;
+  var lastMsgSender = null, lastMsgText = null, lastStatusObj = null, mqttUp = false, lastHistSender = null, lastHistText = null;
 
   /* The admin token is persisted in localStorage (the phone is often out of
      physical reach, so re-entering it on every tab is painful). A token left in
@@ -201,6 +201,9 @@
     if (mSender || mText) {
       parts.push("<span>message: " + (mText ? "“" + GP.escapeHtml(mText) + "” " : "") + (mSender ? "— " + GP.escapeHtml(mSender) : "") + "</span>");
     }
+    if (lastHistSender || lastHistText) {
+      parts.push("<span>last: " + (lastHistText ? "“" + GP.escapeHtml(lastHistText) + "” " : "") + (lastHistSender ? "— " + GP.escapeHtml(lastHistSender) : "") + "</span>");
+    }
     parts.push("<span>seen " + age + "s ago</span>");
     el("devStatus").innerHTML = parts.join('<span class="sep">·</span>');
   }
@@ -216,7 +219,7 @@
     client.on("connect", function () {
       el("unlock").hidden = true; el("admin").hidden = false;
       setMqtt(true);
-      client.subscribe([TOPIC.status, TOPIC.config, TOPIC.message], { qos: 1 });
+      client.subscribe([TOPIC.status, TOPIC.config, TOPIC.message, TOPIC.last], { qos: 1 });
     });
     client.on("error", function (e) { el("unlockHint").textContent = "Error: " + e.message; });
     client.on("close", function () { setMqtt(false); });
@@ -228,6 +231,16 @@
           lastMsgSender = (m && m.sender) ? m.sender : null;
           lastMsgText = (m && m.text) ? m.text : null;
         } catch (e) { lastMsgSender = null; lastMsgText = null; }
+        if (lastStatusObj) renderDevice(lastStatusObj);
+        return;
+      }
+      if (topic === TOPIC.last) {
+        var rawl = payload.toString();
+        try {
+          var l = rawl ? JSON.parse(rawl) : null;
+          lastHistSender = (l && l.sender) ? l.sender : null;
+          lastHistText = (l && l.text) ? l.text : null;
+        } catch (e) { lastHistSender = null; lastHistText = null; }
         if (lastStatusObj) renderDevice(lastStatusObj);
         return;
       }

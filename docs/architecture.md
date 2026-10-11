@@ -65,13 +65,18 @@ notified through the in-process `PagerBus` and by re-reading `SharedPreferences`
 | Topic | Retain | QoS | Direction | Purpose |
 |---|---|---|---|---|
 | `grandpa/message` | yes | 1 | senders → receiver | Latest message (empty payload clears). |
+| `grandpa/last` | yes | 1 | senders → sender/admin | The last non-cleared message (history). A clear empties `grandpa/message` but never touches this, so the last message stays retrievable. |
 | `grandpa/command` | no | 1 | senders/admin → receiver | `{"action":"clear"}` · `set_connection` · `restart_app` · `reboot_device`. |
 | `grandpa/config` | yes | 1 | admin → receiver | Versioned remote config (see below). |
 | `grandpa/status` | yes | 1 | receiver → senders/admin | Diagnostics + config ack. |
 
 There is **no MQTT Last Will**: Flespi rejects a CONNECT carrying a Will for a
-scoped (ACL) token. Offline is detected by **status staleness** (senders treat a
-status older than ~90 s as offline).
+scoped (ACL) token. Offline is detected by **status staleness**.
+
+`grandpa/last` is a retained **history** topic: the web sender mirrors every sent
+message there, so the last message survives a clear (which empties only
+`grandpa/message`) and any sender/admin can still read it. It is the "last
+message" the web clients show alongside the current one.
 
 ## Payloads
 
