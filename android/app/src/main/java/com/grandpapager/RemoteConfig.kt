@@ -16,7 +16,7 @@ data class RemoteConfig(
     val device_owner: DeviceOwner = DeviceOwner()
 ) {
     data class Display(
-        val name_size_sp: Int = 46,
+        val name_size_sp: Int = 58,
         val countdown: Boolean = false,
         val orientation: String = "auto",
         val message_size_min_sp: Int = 10,
@@ -99,7 +99,7 @@ object RemoteConfigCodec {
             RemoteConfig(
                 schema = 1,
                 display = RemoteConfig.Display(
-                    name_size_sp = int(d, "name_size_sp", 46, 20, 120),
+                    name_size_sp = int(d, "name_size_sp", 58, 20, 120),
                     countdown = bool(d, "countdown", false),
                     orientation = orient(d, "orientation"),
                     message_size_min_sp = sizeMin,

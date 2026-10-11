@@ -179,17 +179,29 @@ object Stale {
 
 /**
  * Per-sender name colours for the receiver display. A sender's name is hashed to
- * a stable index into [PALETTE]; every palette entry is chosen to clear the WCAG
- * AA contrast ratio (>= 4.5:1) against the receiver's black background, so the
- * name is readable and Grandpa can tell who sent a message at a glance. The same
- * name always maps to the same colour, across reboots, senders and message apps.
+ * a stable index into [PALETTE]; every palette entry clears the WCAG **AAA**
+ * contrast ratio (>= 7:1) against the receiver's black background, so the name is
+ * always clearly readable and Grandpa can tell who sent a message at a glance.
+ * The same name always maps to the same colour, across reboots and senders.
  */
 object SenderColors {
-    /** Light, saturated colours, every one >= 4.5:1 on black (#AARRGGBB). */
+    /** 15 vivid, light colours — every one >= 7:1 on black (#AARRGGBB). */
     val PALETTE: List<String> = listOf(
-        "#FFFF6B6B", "#FFFF8A65", "#FFFFD180", "#FFFFD54F",
-        "#FFC6FF00", "#FF76FF03", "#FF64FFDA", "#FF84FFFF",
-        "#FF80D8FF", "#FFB388FF", "#FFF48FB1", "#FFFFAB91"
+        "#FFFF6B6B", // red
+        "#FFFF9E80", // coral
+        "#FFFFAB91", // deep orange
+        "#FFFFCC80", // orange
+        "#FFFFEB3B", // yellow
+        "#FFEEFF41", // lime
+        "#FFB2FF59", // light green
+        "#FF76FF03", // green
+        "#FF8AFFC1", // mint
+        "#FF64FFDA", // teal
+        "#FF84FFFF", // cyan
+        "#FF90CAF9", // blue
+        "#FF9FA8DA", // indigo
+        "#FFB39DDB", // lavender
+        "#FFF48FB1"  // pink
     )
 
     /** The colour for [sender], or null when the name is blank. */

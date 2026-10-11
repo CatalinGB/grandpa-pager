@@ -239,10 +239,17 @@ class PagerCoreTest {
     }
 
     @Test
-    fun senderColors_everyPaletteColourClearsAaOnBlack() {
+    fun senderColors_paletteIsFifteenAndEveryColourClearsAaaOnBlack() {
+        assertEquals(15, SenderColors.PALETTE.size)
         for (c in SenderColors.PALETTE) {
-            assertTrue("$c contrast=${contrastOnBlack(c)}", contrastOnBlack(c) >= 4.5)
+            assertTrue("$c contrast=${contrastOnBlack(c)}", contrastOnBlack(c) >= 7.0)
         }
+    }
+
+    @Test
+    fun remoteConfig_defaultNameSizeIsFiftyEight() {
+        assertEquals(58, RemoteConfig().display.name_size_sp)
+        assertEquals(58, RemoteConfigCodec.parse("{\"schema\":1}")!!.display.name_size_sp)
     }
 
     @Test

@@ -31,7 +31,7 @@
                 android:includeFontPadding="false"
                 android:singleLine="true"
                 android:textColor="#FFFAB005"
-                android:textSize="46sp"
+                android:textSize="58sp"
                 android:textStyle="bold"
                 android:visibility="gone" />
 

@@ -121,7 +121,7 @@ Remote config — `grandpa/config` (v1):
 
 ```json
 { "schema": 1, "updated_at": "2026-10-10T14:54:45Z",
-  "display": { "name_size_sp": 46, "countdown": false, "orientation": "auto",
+  "display": { "name_size_sp": 58, "countdown": false, "orientation": "auto",
                "message_size_min_sp": 10, "message_size_max_sp": 64,
                "name_color": "#FFFAB005", "per_sender_colors": true,
                "message_color": "#FFFFFFFF",

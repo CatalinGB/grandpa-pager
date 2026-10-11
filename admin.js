@@ -8,7 +8,7 @@
   var DEF = {
     schema: 1,
     display: {
-      name_size_sp: 46, countdown: false, orientation: "auto",
+      name_size_sp: 58, countdown: false, orientation: "auto",
       message_size_min_sp: 10, message_size_max_sp: 64,
       name_color: "#FFFAB005", per_sender_colors: true, message_color: "#FFFFFFFF",
       warn_color: "#FFFFB300", countdown_color: "#FF9E9E9E",
