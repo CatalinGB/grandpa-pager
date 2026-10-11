@@ -394,8 +394,11 @@ class ReceiverActivity : Activity() {
         // A stable colour per sender makes it obvious who wrote at a glance; the
         // configured name_color is the fallback (and the whole palette is chosen
         // to contrast on black). See SenderColors.
-        val perSender = if (rc.display.per_sender_colors) SenderColors.colorFor(cfg.currentSender) else null
-        nameView.setTextColor(Color.parseColor(perSender ?: rc.display.name_color))
+        nameView.setTextColor(
+            Color.parseColor(
+                SenderColors.nameColor(rc.display.per_sender_colors, cfg.currentSender, rc.display.name_color)
+            )
+        )
         messageView.setTextColor(Color.parseColor(rc.display.message_color))
         warnView.setTextColor(Color.parseColor(rc.display.warn_color))
         countdownView.setTextColor(Color.parseColor(rc.display.countdown_color))

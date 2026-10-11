@@ -199,6 +199,13 @@ object SenderColors {
         return PALETTE[(fnv1a(name) % PALETTE.size).toInt()]
     }
 
+    /**
+     * The colour to draw a sender's name: the per-sender colour when enabled and
+     * the name is non-blank, otherwise the configured fallback (`name_color`).
+     */
+    fun nameColor(perSenderColors: Boolean, sender: String?, fallback: String): String =
+        (if (perSenderColors) colorFor(sender) else null) ?: fallback
+
     /** 32-bit FNV-1a over UTF-8 bytes — stable across platforms and versions. */
     private fun fnv1a(s: String): Long {
         var h = 0x811c9dc5L

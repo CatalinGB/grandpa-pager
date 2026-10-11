@@ -35,6 +35,21 @@
 
   var get = function (path) { return path.split(".").reduce(function (o, k) { return o[k]; }, cfg); };
   function setPath(path, v) { var p = path.split("."); var o = cfg; for (var i = 0; i < p.length - 1; i++) o = o[p[i]]; o[p[p.length - 1]] = v; dirty = true; }
+  /* Deep-merge a (possibly older) phone config over the defaults, so fields the
+     receiver never sent — e.g. per_sender_colors on an older build — still show
+     their true default instead of an undefined/"off" control. */
+  function deepMerge(base, over) {
+    if (!over || typeof over !== "object") return base;
+    Object.keys(over).forEach(function (k) {
+      var v = over[k];
+      if (v && typeof v === "object" && !Array.isArray(v)) {
+        base[k] = deepMerge(base[k] && typeof base[k] === "object" ? base[k] : {}, v);
+      } else if (v !== undefined) {
+        base[k] = v;
+      }
+    });
+    return base;
+  }
   function fmtH(m) { return m >= 60 ? ((m % 60) ? +(m / 60).toFixed(1) : (m / 60)) + " h" : m + " min"; }
   function fmtMs(ms) { return (ms / 1000) + " s"; }
   function fmtOf(fmt, v) { return fmt === "ms" ? fmtMs(v) : fmt === "h" ? fmtH(v) : "" + v; }
@@ -178,7 +193,7 @@
       renderDevice(s);
       if (s.connection) renderConnection(s.connection);
       if (s.command && s.command.last) el("actionHint").textContent = s.command.last + ": " + (s.command.result || "");
-      if (!dirty && s.config) { cfg = JSON.parse(JSON.stringify(s.config)); cfg.schema = cfg.schema || 1; build(); el("applied").textContent = "current config loaded from the phone"; }
+      if (!dirty && s.config) { cfg = deepMerge(JSON.parse(JSON.stringify(DEF)), s.config); cfg.schema = cfg.schema || 1; build(); el("applied").textContent = "current config loaded from the phone"; }
     });
   }
 

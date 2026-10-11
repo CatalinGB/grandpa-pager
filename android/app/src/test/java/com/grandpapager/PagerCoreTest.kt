@@ -252,6 +252,18 @@ class PagerCoreTest {
         assertTrue("only ${distinct.size} distinct colours", distinct.size >= 3)
     }
 
+    @Test
+    fun senderColors_nameColorRespectsToggleAndFallback() {
+        val fallback = "#FFFAB005"
+        // Toggle off -> always the configured fallback.
+        assertEquals(fallback, SenderColors.nameColor(false, "Maria", fallback))
+        // Toggle on with a name -> the per-sender palette colour.
+        assertEquals(SenderColors.colorFor("Maria"), SenderColors.nameColor(true, "Maria", fallback))
+        // Toggle on but no name -> the fallback.
+        assertEquals(fallback, SenderColors.nameColor(true, null, fallback))
+        assertEquals(fallback, SenderColors.nameColor(true, "   ", fallback))
+    }
+
     /** WCAG relative-luminance contrast of a #AARRGGBB colour against black. */
     private fun contrastOnBlack(hex: String): Double {
         fun lin(c: Int): Double {
