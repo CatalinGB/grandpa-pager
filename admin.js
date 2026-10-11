@@ -1,6 +1,7 @@
 /* Grandpa Pager — admin mode. Publishes a versioned config to grandpa/config
  * (retained) with the admin token, and reads the receiver's status back to
- * prefill. Token is kept in sessionStorage only. */
+ * prefill. The token is kept in localStorage so the console stays signed in
+ * across tabs and restarts (the phone may be out of physical reach). */
 (function () {
   "use strict";
   var BROKER = "wss://mqtt.flespi.io:443";
@@ -29,6 +30,16 @@
   var el = function (id) { return document.getElementById(id); };
   var cfg = JSON.parse(JSON.stringify(DEF));
   var dirty = false, client = null, lastAttempt = 0;
+
+  /* The admin token is persisted in localStorage (the phone is often out of
+     physical reach, so re-entering it on every tab is painful). A token left in
+     sessionStorage by an older build is migrated once. */
+  function loadAdminToken() {
+    try { return localStorage.getItem("gp_admin") || sessionStorage.getItem("gp_admin") || ""; } catch (e) { return ""; }
+  }
+  function storeAdminToken(t) {
+    try { localStorage.setItem("gp_admin", t); sessionStorage.removeItem("gp_admin"); } catch (e) {}
+  }
 
   /* Shared helper (common.js). */
   var staleAfterSeconds = GP.staleAfterSeconds;
@@ -173,9 +184,9 @@
   }
 
   function connect() {
-    var token = el("adminToken").value.trim() || sessionStorage.getItem("gp_admin") || "";
+    var token = el("adminToken").value.trim() || loadAdminToken();
     if (!token) { el("unlockHint").textContent = "Enter the token."; return; }
-    sessionStorage.setItem("gp_admin", token);
+    storeAdminToken(token);
     lastAttempt = Date.now();
     if (client) { try { client.end(true); } catch (e) {} }
     el("unlockHint").textContent = "Connecting…";
@@ -201,7 +212,7 @@
      never-established link when the tab is resumed, the network returns, or the
      page is restored from the bfcache — without a manual refresh. Idempotent. */
   function ensureConnected() {
-    if (!sessionStorage.getItem("gp_admin")) return;
+    if (!loadAdminToken()) return;
     if (!client) { connect(); return; }
     if (client.connected || client.reconnecting) return;
     if (Date.now() - lastAttempt < 13000) return;
@@ -306,9 +317,9 @@
     window.addEventListener("pageshow", ensureConnected);
     document.addEventListener("visibilitychange", function () { if (!document.hidden) ensureConnected(); });
     setInterval(ensureConnected, 15000);
-    var saved = sessionStorage.getItem("gp_admin");
+    var saved = loadAdminToken();
     var invite = readInvite();
-    if (invite) { sessionStorage.setItem("gp_admin", invite); clearInviteParams(); saved = invite; }
+    if (invite) { storeAdminToken(invite); clearInviteParams(); saved = invite; }
     if (saved) el("adminToken").value = saved;
     if (saved && !q.get("demo")) connect();
 

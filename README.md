@@ -219,7 +219,7 @@ Full build/test/deploy/undo steps and a troubleshooting table are in
   leaves your PC.
 - **Hardened web pages**: strict Content-Security-Policy on the sender *and* the
   admin console, no third-party scripts (MQTT.js is vendored), admin token kept
-  in `sessionStorage`.
+  in `localStorage`.
 - **Invitation links** carry a sender token in the URL. The fragment form is
   preferred (not sent to the server, not in `Referer`); the page strips the
   params from history on load, and the service worker no longer caches URLs that

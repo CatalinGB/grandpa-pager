@@ -293,8 +293,8 @@ device via `defaults.duration_minutes` (admin).
   site; the receiver token is usable only from a native client.
 - The **web sender** and the **admin console** both ship a strict
   **Content-Security-Policy** (no inline event handlers) and load no third-party
-  scripts (MQTT.js is vendored). The **admin token** is kept in `sessionStorage`,
-  not `localStorage`.
+  scripts (MQTT.js is vendored). The **admin token** is kept in `localStorage`
+  (so the console stays signed in across restarts).
 - Lockdown: device-owner lock task removes the power menu, status bar and
   recents; persistent home re-arms the app at boot. The **retained config** cannot
   change the broker/credentials or device-owner status. Broker/credential changes

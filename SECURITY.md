@@ -14,8 +14,7 @@ sender **and admin console**, and the tokens.
 - **No secrets in the repo.** `.env` / `.env.tokens` (Flespi tokens) and the test
   CA private key are in `.gitignore`; a scan of the whole git history found no
   token value. The published site ships code only.
-- The web pages **have no token baked in** — the user types it; the sender keeps
-  it in `localStorage`, the admin in `sessionStorage`.
+- The web pages **have no token baked in** — the user types it; both the sender and the admin keep it in `localStorage`.
 
 ## Findings
 
@@ -62,7 +61,7 @@ sender **and admin console**, and the tokens.
     lock), issue device-control commands (`restart_app`, `reboot_device`) and
     request a **guarded broker/credential change** (`set_connection`). It is
     narrowly scoped (pub/sub `grandpa/config`, pub `grandpa/command`, sub
-    `grandpa/status`), origin-locked and held in `sessionStorage`. It cannot remove
+    `grandpa/status`), origin-locked and held in `localStorage` (so the console stays signed in across restarts). It cannot remove
     the device owner or perform a factory reset, and the retained `grandpa/config`
     cannot change broker/credentials — that path is only the guarded command, which
     probes the candidate and **auto-reverts** within the window, and which never
