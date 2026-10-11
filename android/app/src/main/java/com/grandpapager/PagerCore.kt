@@ -177,6 +177,39 @@ object Stale {
     }
 }
 
+/**
+ * Per-sender name colours for the receiver display. A sender's name is hashed to
+ * a stable index into [PALETTE]; every palette entry is chosen to clear the WCAG
+ * AA contrast ratio (>= 4.5:1) against the receiver's black background, so the
+ * name is readable and Grandpa can tell who sent a message at a glance. The same
+ * name always maps to the same colour, across reboots, senders and message apps.
+ */
+object SenderColors {
+    /** Light, saturated colours, every one >= 4.5:1 on black (#AARRGGBB). */
+    val PALETTE: List<String> = listOf(
+        "#FFFF6B6B", "#FFFF8A65", "#FFFFD180", "#FFFFD54F",
+        "#FFC6FF00", "#FF76FF03", "#FF64FFDA", "#FF84FFFF",
+        "#FF80D8FF", "#FFB388FF", "#FFF48FB1", "#FFFFAB91"
+    )
+
+    /** The colour for [sender], or null when the name is blank. */
+    fun colorFor(sender: String?): String? {
+        val name = sender?.trim()?.lowercase(Locale.ROOT).orEmpty()
+        if (name.isEmpty()) return null
+        return PALETTE[(fnv1a(name) % PALETTE.size).toInt()]
+    }
+
+    /** 32-bit FNV-1a over UTF-8 bytes — stable across platforms and versions. */
+    private fun fnv1a(s: String): Long {
+        var h = 0x811c9dc5L
+        for (b in s.toByteArray(Charsets.UTF_8)) {
+            h = h xor (b.toLong() and 0xffL)
+            h = (h * 0x01000193L) and 0xffffffffL
+        }
+        return h
+    }
+}
+
 /** JSON (de)serialisation for all wire payloads. */
 object PagerJson {    private val gson = Gson()
 

@@ -231,6 +231,41 @@ class PagerCoreTest {
     }
 
     @Test
+    fun senderColors_areStableAndNormalised() {
+        assertEquals(SenderColors.colorFor("Maria"), SenderColors.colorFor("  maria  "))
+        assertNull(SenderColors.colorFor(null))
+        assertNull(SenderColors.colorFor("   "))
+        assertTrue(SenderColors.PALETTE.contains(SenderColors.colorFor("Andrei")!!))
+    }
+
+    @Test
+    fun senderColors_everyPaletteColourClearsAaOnBlack() {
+        for (c in SenderColors.PALETTE) {
+            assertTrue("$c contrast=${contrastOnBlack(c)}", contrastOnBlack(c) >= 4.5)
+        }
+    }
+
+    @Test
+    fun senderColors_spreadAcrossTypicalNames() {
+        val names = listOf("Maria", "Andrei", "Ion", "Elena", "Vasile", "Ana", "Bunica")
+        val distinct = names.mapNotNull { SenderColors.colorFor(it) }.toSet()
+        assertTrue("only ${distinct.size} distinct colours", distinct.size >= 3)
+    }
+
+    /** WCAG relative-luminance contrast of a #AARRGGBB colour against black. */
+    private fun contrastOnBlack(hex: String): Double {
+        fun lin(c: Int): Double {
+            val x = c / 255.0
+            return if (x <= 0.03928) x / 12.92 else Math.pow((x + 0.055) / 1.055, 2.4)
+        }
+        val r = hex.substring(3, 5).toInt(16)
+        val g = hex.substring(5, 7).toInt(16)
+        val b = hex.substring(7, 9).toInt(16)
+        val l = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+        return (l + 0.05) / 0.05
+    }
+
+    @Test
     fun deviceOwnerConfig_defaultsAndRoundTrip() {
         val c = RemoteConfigCodec.parse("{\"schema\":1}")!!.device_owner
         assertTrue(c.lock_task)

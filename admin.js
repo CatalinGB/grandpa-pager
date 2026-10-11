@@ -10,7 +10,7 @@
     display: {
       name_size_sp: 46, countdown: false, orientation: "auto",
       message_size_min_sp: 10, message_size_max_sp: 64,
-      name_color: "#FFFAB005", message_color: "#FFFFFFFF",
+      name_color: "#FFFAB005", per_sender_colors: true, message_color: "#FFFFFFFF",
       warn_color: "#FFFFB300", countdown_color: "#FF9E9E9E",
       idle_clock_scale: 1.3, idle_date_format: "auto", warn_text: null
     },
@@ -84,7 +84,8 @@
       slider("display.name_size_sp", "Name size", 20, 120, 2) + sw("display.countdown", "Show received/expires time") +
       slider("display.message_size_min_sp", "Message size min", 8, 200, 2) +
       slider("display.message_size_max_sp", "Message size max", 8, 200, 2) +
-      color("display.name_color", "Name colour") + color("display.message_color", "Message colour") +
+      color("display.name_color", "Name colour") + sw("display.per_sender_colors", "Colour names per sender", "a distinct colour per sender; off = the one colour above") +
+      color("display.message_color", "Message colour") +
       color("display.warn_color", "Warning colour") + color("display.countdown_color", "Countdown colour") +
       slider("display.idle_clock_scale", "Idle clock scale", 1, 3, 0.1) +
       seg("display.idle_date_format", "Idle date format", ["auto", "dmy", "mdy", "ymd"]) +

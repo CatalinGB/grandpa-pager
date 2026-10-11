@@ -523,7 +523,7 @@ class PagerService : Service(), MqttController.Listener {
 
     private fun publishMessage(text: String, durationMinutes: Int) {
         if (text.isBlank()) return
-        val sender = cfg.senderName.ifBlank { cfg.role.name }
+        val sender = cfg.senderName.ifBlank { getString(cfg.role.labelRes()) }
         val msg = PagerJson.newMessage(sender, text, durationMinutes)
         mqtt?.publish(Topics.MESSAGE, PagerJson.message(msg), retained = true)
         PagerBus.notifyChanged()

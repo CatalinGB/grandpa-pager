@@ -59,5 +59,20 @@
     root.history.replaceState(null, "", root.location.pathname + (qs ? "?" + qs : "") + (hs ? "#" + hs : ""));
   };
 
+  /* Choose a UI locale from an allow-list. `?lang=` wins and is remembered; then
+     the remembered choice; then the browser/system language; else "en". */
+  GP.detectLocale = function (supported) {
+    function two(v) { return v ? String(v).slice(0, 2).toLowerCase() : ""; }
+    function ok(v) { return supported.indexOf(two(v)) !== -1; }
+    try {
+      var q = two(new URLSearchParams(root.location.search).get("lang"));
+      if (ok(q)) { root.localStorage.setItem("gp_lang", q); return q; }
+      var saved = two(root.localStorage.getItem("gp_lang"));
+      if (ok(saved)) return saved;
+    } catch (e) {}
+    var nav = two(root.navigator && root.navigator.language);
+    return ok(nav) ? nav : "en";
+  };
+
   root.GP = GP;
 })(window);

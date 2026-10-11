@@ -72,7 +72,7 @@ class SetupActivity : Activity() {
             if (role == Role.RECEIVER) DeviceOwnerManager.applyKiosk(this)
 
             PagerService.start(this)
-            status.text = getString(R.string.status_saved, role.name)
+            status.text = getString(R.string.status_saved, getString(role.labelRes()))
             route(role)
         }
 

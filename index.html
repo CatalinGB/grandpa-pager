@@ -13,7 +13,7 @@
 <link rel="apple-touch-icon" href="./icon-192.png">
 <!-- Shared helpers (loaded before the page script). MQTT.js vendored locally
      (no CDN dependency). v5.16.0 -->
-<script src="./common.js?v=1"></script>
+<script src="./common.js?v=2"></script>
 <script src="./mqtt.min.js"></script>
 <style>
   :root{
@@ -61,22 +61,22 @@
   <!-- First run: name + token -->
   <section id="setupView" hidden>
     <div class="card">
-      <h1>Welcome</h1>
-      <div class="sub">Enter your name and token once. They are saved only in this browser.</div>
+      <h1 data-i18n="welcome">Welcome</h1>
+      <div class="sub" data-i18n="setupIntro">Enter your name and token once. They are saved only in this browser.</div>
 
-      <div class="label">Your name (shown on Grandpa's screen)</div>
-      <input id="setupName" type="text" placeholder="e.g. Maria" autocomplete="name">
+      <div class="label" data-i18n="yourNameShown">Your name (shown on Grandpa's screen)</div>
+      <input id="setupName" type="text" placeholder="e.g. Maria" data-i18n-ph="namePlaceholder" autocomplete="name">
 
-      <div class="label">Broker token</div>
-      <input id="setupToken" type="password" placeholder="token" autocomplete="off">
+      <div class="label" data-i18n="brokerToken">Broker token</div>
+      <input id="setupToken" type="password" placeholder="token" data-i18n-ph="tokenPlaceholder" autocomplete="off">
 
-      <div class="label">Broker</div>
+      <div class="label" data-i18n="broker">Broker</div>
       <input id="setupBroker" type="text" value="wss://mqtt.flespi.io:443">
 
       <div style="height:14px"></div>
-      <button class="primary" id="setupSave">Save</button>
+      <button class="primary" id="setupSave" data-i18n="save">Save</button>
       <div class="hint" id="setupHint"></div>
-      <div class="hint" style="margin-top:14px"><a href="./admin.html" style="color:var(--muted)">Admin</a></div>
+      <div class="hint" style="margin-top:14px"><a href="./admin.html" style="color:var(--muted)" data-i18n="adminLink">Admin</a></div>
     </div>
   </section>
 
@@ -84,14 +84,14 @@
   <section id="mainView" hidden>
     <div class="card">
       <h1>Grandpa Pager</h1>
-      <div class="sub">Send a message to Grandpa's screen. <span id="connPill" class="pill off">disconnected</span></div>
+      <div class="sub"><span data-i18n="mainIntro">Send a message to Grandpa's screen.</span> <span id="connPill" class="pill off" data-i18n="connDisconnected">disconnected</span></div>
 
       <div id="banner" class="banner" hidden></div>
 
-      <div class="label">Message</div>
-      <textarea id="text" placeholder="Type the message…"></textarea>
+      <div class="label" data-i18n="message">Message</div>
+      <textarea id="text" placeholder="Type the message…" data-i18n-ph="messagePlaceholder"></textarea>
 
-      <div class="label">How long should it stay on screen?</div>
+      <div class="label" data-i18n="durationQuestion">How long should it stay on screen?</div>
       <div class="stepper">
         <button class="big" id="minus" aria-label="less">−</button>
         <div class="value" id="durValue">4 h</div>
@@ -100,36 +100,36 @@
       <div class="presets" id="presets"></div>
 
       <div style="height:14px"></div>
-      <button class="primary" id="send">Send to screen</button>
+      <button class="primary" id="send" data-i18n="sendButton">Send to screen</button>
       <div style="height:8px"></div>
-      <button class="ghost" id="clear" style="width:100%">Clear the message</button>
+      <button class="ghost" id="clear" style="width:100%" data-i18n="clearButton">Clear the message</button>
       <div class="hint" id="sendHint"></div>
     </div>
 
     <div class="card">
-      <div class="label" style="margin-top:0">Device status</div>
-      <div class="diag" id="diag">No status yet.</div>
+      <div class="label" style="margin-top:0" data-i18n="deviceStatus">Device status</div>
+      <div class="diag" id="diag" data-i18n="noStatus">No status yet.</div>
     </div>
 
     <div class="card">
       <details id="settings">
-        <summary><strong>Settings</strong></summary>
-        <div class="label">Your name</div>
-        <input id="sender" type="text" placeholder="e.g. Maria">
-        <div class="label">Token</div>
-        <input id="token" type="password" placeholder="token" autocomplete="off">
-        <div class="label">Broker</div>
+        <summary><strong data-i18n="settings">Settings</strong></summary>
+        <div class="label" data-i18n="yourName">Your name</div>
+        <input id="sender" type="text" placeholder="e.g. Maria" data-i18n-ph="namePlaceholder">
+        <div class="label" data-i18n="token">Token</div>
+        <input id="token" type="password" placeholder="token" data-i18n-ph="tokenPlaceholder" autocomplete="off">
+        <div class="label" data-i18n="broker">Broker</div>
         <input id="brokerUrl" type="text" value="wss://mqtt.flespi.io:443">
         <div class="row" style="margin-top:12px">
-          <button class="ghost" id="connect">Reconnect</button>
-          <button class="ghost" id="forget">Forget token</button>
+          <button class="ghost" id="connect" data-i18n="reconnect">Reconnect</button>
+          <button class="ghost" id="forget" data-i18n="forget">Forget token</button>
         </div>
-        <div class="hint">The token is saved only in this browser.</div>
+        <div class="hint" data-i18n="tokenSaved">The token is saved only in this browser.</div>
       </details>
     </div>
   </section>
 </div>
 
-<script src="sender.js?v=5"></script>
+<script src="sender.js?v=6"></script>
 </body>
 </html>

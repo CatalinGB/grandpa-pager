@@ -20,6 +20,10 @@
     <string name="role_receiver">Receiver (this is Grandpa\'s phone)</string>
     <string name="role_admin">Sender — Admin</string>
     <string name="role_family">Sender — Family</string>
+    <!-- Short role labels for the status line (status_saved). -->
+    <string name="role_label_receiver">Receiver</string>
+    <string name="role_label_admin">Sender — Admin</string>
+    <string name="role_label_family">Sender — Family</string>
     <string name="broker_host">Broker host (no scheme)</string>
     <string name="broker_host_hint" translatable="false">127.0.0.1 or xxxx.emqxcloud.com</string>
     <string name="port">Port</string>

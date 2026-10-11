@@ -23,6 +23,147 @@
   var uuid = GP.uuid;
   var staleAfterSeconds = GP.staleAfterSeconds;
 
+  /* ---------- i18n (system language; English fallback) ---------- */
+  var I18N = {
+    en: {
+      welcome: "Welcome",
+      setupIntro: "Enter your name and token once. They are saved only in this browser.",
+      yourName: "Your name",
+      yourNameShown: "Your name (shown on Grandpa's screen)",
+      namePlaceholder: "e.g. Maria",
+      brokerToken: "Broker token",
+      tokenPlaceholder: "token",
+      broker: "Broker",
+      save: "Save",
+      adminLink: "Admin",
+      mainIntro: "Send a message to Grandpa's screen.",
+      message: "Message",
+      messagePlaceholder: "Type the message…",
+      durationQuestion: "How long should it stay on screen?",
+      sendButton: "Send to screen",
+      clearButton: "Clear the message",
+      deviceStatus: "Device status",
+      noStatus: "No status yet.",
+      settings: "Settings",
+      token: "Token",
+      reconnect: "Reconnect",
+      forget: "Forget token",
+      tokenSaved: "The token is saved only in this browser.",
+      connConnected: "connected",
+      connDisconnected: "disconnected",
+      connecting: "Connecting…",
+      connectedMsg: "Connected.",
+      reconnecting: "Reconnecting…",
+      errorPrefix: "Error: ",
+      errNoMqtt: "Error: mqtt.min.js failed to load.",
+      errBrokerToken: "Broker or token missing.",
+      errEnterName: "Enter your name (in Settings).",
+      errSetupName: "Enter your name.",
+      errTokenMissing: "Token missing.",
+      errTypeMessage: "Type a message.",
+      errNotConnected: "You are not connected.",
+      sentMsg: "Sent — it is on the screen.",
+      clearedMsg: "Screen cleared.",
+      tokenForgotten: "Token forgotten. Enter it again.",
+      inviteApplied: "Token applied — enter your name to start.",
+      hourShort: "h",
+      minShort: "min",
+      diagState: "state:",
+      diagMqtt: "mqtt:",
+      diagBattery: "battery:",
+      diagWifi: "wifi:",
+      diagMessage: "message:",
+      diagSeen: "seen:",
+      chargingSuffix: "(charging)",
+      staleSuffix: "(STALE {s}s)",
+      seenAgo: "{s}s ago",
+      bannerOnScreen: "On screen now: a message",
+      bannerMsg: "On screen now: “{text}”",
+      bannerFrom: " from {name}",
+      bannerExpires: " (expires in {m} min)",
+      bannerReplaces: ". Sending replaces it.",
+      bannerReplaced: "⚠ Your message was just replaced by someone else."
+    },
+    ro: {
+      welcome: "Bun venit",
+      setupIntro: "Introdu o dată numele și tokenul. Sunt salvate doar în acest browser.",
+      yourName: "Numele tău",
+      yourNameShown: "Numele tău (apare pe ecranul lui Bunicu)",
+      namePlaceholder: "de ex. Maria",
+      brokerToken: "Token broker",
+      tokenPlaceholder: "token",
+      broker: "Broker",
+      save: "Salvează",
+      adminLink: "Admin",
+      mainIntro: "Trimite un mesaj pe ecranul lui Bunicu.",
+      message: "Mesaj",
+      messagePlaceholder: "Scrie mesajul…",
+      durationQuestion: "Cât timp să rămână pe ecran?",
+      sendButton: "Trimite pe ecran",
+      clearButton: "Șterge mesajul",
+      deviceStatus: "Starea dispozitivului",
+      noStatus: "Încă nu există status.",
+      settings: "Setări",
+      token: "Token",
+      reconnect: "Reconectare",
+      forget: "Uită tokenul",
+      tokenSaved: "Tokenul este salvat doar în acest browser.",
+      connConnected: "conectat",
+      connDisconnected: "deconectat",
+      connecting: "Se conectează…",
+      connectedMsg: "Conectat.",
+      reconnecting: "Se reconectează…",
+      errorPrefix: "Eroare: ",
+      errNoMqtt: "Eroare: mqtt.min.js nu s-a putut încărca.",
+      errBrokerToken: "Lipsește brokerul sau tokenul.",
+      errEnterName: "Introdu numele tău (în Setări).",
+      errSetupName: "Introdu numele tău.",
+      errTokenMissing: "Lipsește tokenul.",
+      errTypeMessage: "Scrie un mesaj.",
+      errNotConnected: "Nu ești conectat.",
+      sentMsg: "Trimis — este pe ecran.",
+      clearedMsg: "Ecran șters.",
+      tokenForgotten: "Token uitat. Introdu-l din nou.",
+      inviteApplied: "Token aplicat — introdu numele pentru a începe.",
+      hourShort: "h",
+      minShort: "min",
+      diagState: "stare:",
+      diagMqtt: "mqtt:",
+      diagBattery: "baterie:",
+      diagWifi: "wifi:",
+      diagMessage: "mesaj:",
+      diagSeen: "văzut:",
+      chargingSuffix: "(se încarcă)",
+      staleSuffix: "(ÎNVECHIT {s}s)",
+      seenAgo: "acum {s}s",
+      bannerOnScreen: "Pe ecran acum: un mesaj",
+      bannerMsg: "Pe ecran acum: „{text}”",
+      bannerFrom: " de la {name}",
+      bannerExpires: " (expiră în {m} min)",
+      bannerReplaces: ". Trimiterea îl înlocuiește.",
+      bannerReplaced: "⚠ Mesajul tău tocmai a fost înlocuit de altcineva."
+    }
+  };
+  var LOCALE = GP.detectLocale(["en", "ro"]);
+
+  /** Translate [key] for the active locale, substituting {name} placeholders. */
+  function t(key, params) {
+    var s = (I18N[LOCALE] && I18N[LOCALE][key]) || I18N.en[key] || key;
+    if (params) s = s.replace(/\{(\w+)\}/g, function (_, k) { return params[k] != null ? params[k] : ""; });
+    return s;
+  }
+
+  /** Fill the static markup (data-i18n / data-i18n-ph) from the dictionary. */
+  function applyStatic() {
+    document.documentElement.lang = LOCALE;
+    Array.prototype.forEach.call(document.querySelectorAll("[data-i18n]"), function (n) {
+      n.textContent = t(n.getAttribute("data-i18n"));
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("[data-i18n-ph]"), function (n) {
+      n.setAttribute("placeholder", t(n.getAttribute("data-i18n-ph")));
+    });
+  }
+
   /* ---------- views ---------- */
   function showView(which) {
     el("setupView").hidden = which !== "setup";
@@ -46,8 +187,8 @@
 
   /* ---------- duration (stepper B) ---------- */
   function fmt(m) {
-    if (m >= 60) { var h = Math.floor(m / 60), mm = m % 60; return mm ? h + " h " + mm + " min" : h + " h"; }
-    return m + " min";
+    if (m >= 60) { var h = Math.floor(m / 60), mm = m % 60; return mm ? h + " " + t("hourShort") + " " + mm + " " + t("minShort") : h + " " + t("hourShort"); }
+    return m + " " + t("minShort");
   }
   function setMinutes(m) {
     minutes = Math.max(15, Math.min(1440, m));
@@ -68,7 +209,7 @@
   /* ---------- status ---------- */
   function setConnected(ok) {
     var p = el("connPill");
-    p.textContent = ok ? "connected" : "disconnected";
+    p.textContent = ok ? t("connConnected") : t("connDisconnected");
     p.className = "pill " + (ok ? "on" : "off");
   }
   function renderDiag(d) {
@@ -77,12 +218,12 @@
     var online = d.state !== "offline" && age < staleAfterSeconds(d);
     var temp = (typeof d.battery_temp_c === "number") ? " " + d.battery_temp_c.toFixed(1) + "°C" : "";
     el("diag").textContent =
-      "state:    " + d.state + (online ? "" : "   (STALE " + age + "s)") + "\n" +
-      "mqtt:     " + d.mqtt + "\n" +
-      "battery:  " + d.battery + "%" + (d.charging ? " (charging)" : "") + temp + "\n" +
-      "wifi:     " + d.wifi + "\n" +
-      "message:  " + (d.sender || "-") + "\n" +
-      "seen:     " + age + "s ago";
+      t("diagState") + " " + d.state + (online ? "" : "  " + t("staleSuffix", { s: age })) + "\n" +
+      t("diagMqtt") + " " + d.mqtt + "\n" +
+      t("diagBattery") + " " + d.battery + "%" + (d.charging ? " " + t("chargingSuffix") : "") + temp + "\n" +
+      t("diagWifi") + " " + d.wifi + "\n" +
+      t("diagMessage") + " " + (d.sender || "-") + "\n" +
+      t("diagSeen") + " " + t("seenAgo", { s: age });
   }
 
   /* Adopt the admin-configured default duration until the user picks their own. */
@@ -95,19 +236,21 @@
   /* Non-blocking notice that a message is already on the display (option B).
      Driven by grandpa/status (sender + expiry) so it works with the sender
      token; the message text is shown too if the token may read grandpa/message. */
+  function bannerFrom(d) {
+    return d && d.sender ? t("bannerFrom", { name: "<b>" + escapeHtml(d.sender) + "</b>" }) : "";
+  }
+  function bannerExpires(d) {
+    if (!d || !d.expires_at) return "";
+    var mins = Math.max(1, Math.round((new Date(d.expires_at).getTime() - Date.now()) / 60000));
+    return t("bannerExpires", { m: mins });
+  }
   function updateBannerFromStatus(d) {
     var b = el("banner");
     if (!d || d.state !== "showing" || !d.current_message_id) { b.hidden = true; return; }
-    var who = d.sender ? " from <b>" + escapeHtml(d.sender) + "</b>" : "";
-    var exp = "";
-    if (d.expires_at) {
-      var mins = Math.max(1, Math.round((new Date(d.expires_at).getTime() - Date.now()) / 60000));
-      exp = " (expires in " + mins + " min)";
-    }
     var replaced = (myLastId && d.current_message_id !== myLastId && (Date.now() - myLastAt) < 6000)
-      ? "<br>⚠ Your message was just replaced by someone else." : "";
+      ? "<br>" + t("bannerReplaced") : "";
     b.hidden = false;
-    b.innerHTML = "On screen now: a message" + who + exp + ". Sending replaces it." + replaced;
+    b.innerHTML = t("bannerOnScreen") + bannerFrom(d) + bannerExpires(d) + t("bannerReplaces") + replaced;
   }
 
   function renderBannerFromMessage(raw) {
@@ -116,16 +259,11 @@
     if (!text || text === "{}") { updateBannerFromStatus(lastStatus); return; }
     var d; try { d = JSON.parse(text); } catch (e) { return; }
     if (!d || !d.text) { updateBannerFromStatus(lastStatus); return; }
-    var who = d.sender ? " from <b>" + escapeHtml(d.sender) + "</b>" : "";
-    var exp = "";
-    if (d.expires_at) {
-      var mins = Math.max(1, Math.round((new Date(d.expires_at).getTime() - Date.now()) / 60000));
-      exp = " (expires in " + mins + " min)";
-    }
     var replaced = (myLastId && d.id && d.id !== myLastId && (Date.now() - myLastAt) < 6000)
-      ? "<br>⚠ Your message was just replaced by someone else." : "";
+      ? "<br>" + t("bannerReplaced") : "";
     b.hidden = false;
-    b.innerHTML = "On screen now: “<b>" + escapeHtml(d.text) + "</b>”" + who + exp + ". Sending replaces it." + replaced;
+    b.innerHTML = t("bannerMsg", { text: "<b>" + escapeHtml(d.text) + "</b>" }) +
+      bannerFrom(d) + bannerExpires(d) + t("bannerReplaces") + replaced;
   }
 
   /* ---------- mqtt ---------- */
@@ -141,14 +279,14 @@
 
   function connect() {
     var c = creds();
-    if (!c.broker || !c.token) { el("sendHint").textContent = "Broker or token missing."; return; }
+    if (!c.broker || !c.token) { el("sendHint").textContent = t("errBrokerToken"); return; }
     localStorage.setItem(LS.broker, c.broker);
     localStorage.setItem(LS.token, c.token);
     localStorage.setItem(LS.sender, c.name);
 
     if (client) { try { client.end(true); } catch (e) {} }
     setConnected(false);
-    el("sendHint").textContent = "Connecting…";
+    el("sendHint").textContent = t("connecting");
 
     client = mqtt.connect(c.broker, {
       username: c.token,
@@ -160,12 +298,12 @@
     });
     client.on("connect", function () {
       setConnected(true);
-      el("sendHint").textContent = "Connected.";
+      el("sendHint").textContent = t("connectedMsg");
       client.subscribe([TOPIC.status, TOPIC.message], { qos: 1 });
     });
-    client.on("reconnect", function () { el("sendHint").textContent = "Reconnecting…"; });
+    client.on("reconnect", function () { el("sendHint").textContent = t("reconnecting"); });
     client.on("close", function () { setConnected(false); });
-    client.on("error", function (err) { setConnected(false); el("sendHint").textContent = "Error: " + err.message; });
+    client.on("error", function (err) { setConnected(false); el("sendHint").textContent = t("errorPrefix") + err.message; });
     client.on("message", function (topic, payload) {
       if (topic === TOPIC.status) {
         try { lastStatus = JSON.parse(payload.toString()); renderDiag(lastStatus); updateBannerFromStatus(lastStatus); applyRemoteDefault(lastStatus); }
@@ -179,9 +317,9 @@
   function publishMessage() {
     var name = (localStorage.getItem(LS.sender) || el("sender").value || "").trim();
     var text = el("text").value.trim();
-    if (!name) { el("sendHint").textContent = "Enter your name (in Settings)."; return; }
-    if (!text) { el("sendHint").textContent = "Type a message."; return; }
-    if (!client || !client.connected) { el("sendHint").textContent = "You are not connected."; return; }
+    if (!name) { el("sendHint").textContent = t("errEnterName"); return; }
+    if (!text) { el("sendHint").textContent = t("errTypeMessage"); return; }
+    if (!client || !client.connected) { el("sendHint").textContent = t("errNotConnected"); return; }
 
     var now = Date.now();
     var payload = {
@@ -195,13 +333,13 @@
     client.publish(TOPIC.message, JSON.stringify(payload), { qos: 1, retain: true });
     myLastId = payload.id; myLastAt = Date.now();
     el("text").value = "";
-    el("sendHint").textContent = "Sent — it is on the screen.";
+    el("sendHint").textContent = t("sentMsg");
   }
 
   function clearDisplay() {
-    if (!client || !client.connected) { el("sendHint").textContent = "You are not connected."; return; }
+    if (!client || !client.connected) { el("sendHint").textContent = t("errNotConnected"); return; }
     client.publish(TOPIC.message, "", { qos: 1, retain: true });
-    el("sendHint").textContent = "Screen cleared.";
+    el("sendHint").textContent = t("clearedMsg");
   }
 
   /* ---------- first run ---------- */
@@ -209,8 +347,8 @@
     var name = el("setupName").value.trim();
     var token = el("setupToken").value.trim();
     var broker = el("setupBroker").value.trim() || DEFAULT_BROKER;
-    if (!name) { el("setupHint").textContent = "Enter your name."; return; }
-    if (!token) { el("setupHint").textContent = "Token missing."; return; }
+    if (!name) { el("setupHint").textContent = t("errSetupName"); return; }
+    if (!token) { el("setupHint").textContent = t("errTokenMissing"); return; }
     localStorage.setItem(LS.sender, name);
     localStorage.setItem(LS.token, token);
     localStorage.setItem(LS.broker, broker);
@@ -228,7 +366,7 @@
     el("token").value = "";
     el("setupToken").value = "";
     showView("setup");
-    el("setupHint").textContent = "Token forgotten. Enter it again.";
+    el("setupHint").textContent = t("tokenForgotten");
   }
 
   /* ---------- service worker (offline app shell) ---------- */
@@ -240,8 +378,9 @@
 
   /* ---------- wire up ---------- */
   function init() {
+    applyStatic();
     registerSW();
-    if (typeof mqtt === "undefined") { el("setupHint").textContent = "Error: mqtt.min.js failed to load."; showView("setup"); return; }
+    if (typeof mqtt === "undefined") { el("setupHint").textContent = t("errNoMqtt"); showView("setup"); return; }
 
     buildPresets();
     setMinutes(DEFAULT_MIN);
@@ -284,7 +423,7 @@
     clearInviteParams();
     if (inv.name) { showView("main"); connect(); return true; }
     showView("setup");
-    el("setupHint").textContent = "Token applied — enter your name to start.";
+    el("setupHint").textContent = t("inviteApplied");
     return true;
   }
 

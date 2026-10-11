@@ -113,7 +113,8 @@ Remote config — `grandpa/config` (v1):
 { "schema": 1, "updated_at": "2026-10-10T14:54:45Z",
   "display": { "name_size_sp": 46, "countdown": false, "orientation": "auto",
                "message_size_min_sp": 10, "message_size_max_sp": 64,
-               "name_color": "#FFFAB005", "message_color": "#FFFFFFFF",
+               "name_color": "#FFFAB005", "per_sender_colors": true,
+               "message_color": "#FFFFFFFF",
                "warn_color": "#FFFFB300", "countdown_color": "#FF9E9E9E",
                "idle_clock_scale": 1.3, "idle_date_format": "auto", "warn_text": null },
   "cue": { "glow_ms": 9000, "chime": true, "vibrate": true,
@@ -141,6 +142,11 @@ the accepted config, re-applies it on every (re)connect and reboot, and **echoes
 the effective config** in `status.config` so the admin UI prefills. Adding an
 optional field under `schema: 1` is backward-compatible (old receivers ignore it
 and default it).
+
+`display.per_sender_colors` (default `true`) colours each sender's name by a
+stable hash of the name into a palette whose every entry clears WCAG AA contrast
+(>= 4.5:1) on the black background, so the writer is recognisable at a glance;
+`display.name_color` is the fallback when the toggle is off or the name is blank.
 
 The `device_owner` block drives the reversible hardening restrictions when the app
 is device owner (see below); each toggle adds **or clears** its restriction, in

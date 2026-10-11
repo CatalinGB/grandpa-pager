@@ -25,6 +25,11 @@ device.
 
 - **Full-screen, high-contrast messages** with the sender's name, auto-sized to
   fill the screen.
+- **Per-sender name colours**: every sender gets a stable colour from a palette
+  that is guaranteed to contrast on the black screen, so you can tell who wrote
+  at a glance (admin-configurable, falls back to one colour).
+- **Localised**: the Android app and the web sender follow the system/browser
+  language — English and Romanian are complete.
 - **Automatic expiry** (default 4 h, per-message override) enforced *on the
   device* — never trusting broker retention.
 - **Remote clear** and a non-blocking "a message is already showing" warning.

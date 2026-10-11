@@ -18,6 +18,10 @@
     <string name="role_receiver">Receptor (acesta este telefonul lui Bunicu)</string>
     <string name="role_admin">Expeditor — Admin</string>
     <string name="role_family">Expeditor — Familie</string>
+    <!-- Etichete scurte de rol pentru linia de status (status_saved). -->
+    <string name="role_label_receiver">Receptor</string>
+    <string name="role_label_admin">Expeditor — Admin</string>
+    <string name="role_label_family">Expeditor — Familie</string>
     <string name="broker_host">Gazdă broker (fără schemă)</string>
     <string name="port">Port</string>
     <string name="username">Nume de utilizator</string>
@@ -56,6 +60,7 @@
     <string name="lbl_expires">expiră:</string>
     <string name="lbl_seen">văzut:</string>
     <string name="charging_suffix">(se încarcă)</string>
+    <string name="temp_suffix">%1$.1f°C</string>
     <string name="stale_suffix">(ÎNVECHIT %1$ds)</string>
     <string name="seen_ago">acum %1$ds</string>
 

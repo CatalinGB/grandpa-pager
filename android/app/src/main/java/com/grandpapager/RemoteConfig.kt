@@ -22,6 +22,8 @@ data class RemoteConfig(
         val message_size_min_sp: Int = 10,
         val message_size_max_sp: Int = 64,
         val name_color: String = "#FFFAB005",
+        /** Colour each sender's name by a stable per-sender palette colour. */
+        val per_sender_colors: Boolean = true,
         val message_color: String = "#FFFFFFFF",
         val warn_color: String = "#FFFFB300",
         val countdown_color: String = "#FF9E9E9E",
@@ -103,6 +105,7 @@ object RemoteConfigCodec {
                     message_size_min_sp = sizeMin,
                     message_size_max_sp = sizeMax,
                     name_color = color(d, "name_color", DEFAULT_NAME_COLOR),
+                    per_sender_colors = bool(d, "per_sender_colors", true),
                     message_color = color(d, "message_color", DEFAULT_MESSAGE_COLOR),
                     warn_color = color(d, "warn_color", DEFAULT_WARN_COLOR),
                     countdown_color = color(d, "countdown_color", DEFAULT_COUNTDOWN_COLOR),
