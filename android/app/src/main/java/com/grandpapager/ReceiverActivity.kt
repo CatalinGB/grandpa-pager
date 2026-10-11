@@ -252,6 +252,14 @@ class ReceiverActivity : Activity() {
             nameView.visibility = View.VISIBLE
             val sender = cfg.currentSender ?: ""
             if (nameView.text.toString() != sender) nameView.text = sender
+            // Colour the name per sender (falls back to name_color). This must be
+            // applied here, every refresh — applyRemoteConfig() is gated on config
+            // changes and would leave the colour stuck on the first sender.
+            nameView.setTextColor(
+                Color.parseColor(
+                    SenderColors.nameColor(rc.display.per_sender_colors, sender, rc.display.name_color)
+                )
+            )
             messageView.visibility = View.VISIBLE
             // Only touch the text when it changed: setText() resets the scroll,
             // so a periodic refresh must not clobber a scrolled position.
@@ -391,14 +399,6 @@ class ReceiverActivity : Activity() {
     private fun applyRemoteConfig() {
         val rc = cfg.remoteConfig()
         nameView.setTextSize(TypedValue.COMPLEX_UNIT_SP, rc.display.name_size_sp.toFloat())
-        // A stable colour per sender makes it obvious who wrote at a glance; the
-        // configured name_color is the fallback (and the whole palette is chosen
-        // to contrast on black). See SenderColors.
-        nameView.setTextColor(
-            Color.parseColor(
-                SenderColors.nameColor(rc.display.per_sender_colors, cfg.currentSender, rc.display.name_color)
-            )
-        )
         messageView.setTextColor(Color.parseColor(rc.display.message_color))
         warnView.setTextColor(Color.parseColor(rc.display.warn_color))
         countdownView.setTextColor(Color.parseColor(rc.display.countdown_color))
