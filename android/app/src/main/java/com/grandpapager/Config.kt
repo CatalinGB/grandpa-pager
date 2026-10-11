@@ -45,6 +45,58 @@ class Config(context: Context) {
         get() = p.getBoolean("useTls", true)
         set(v) = p.edit().putBoolean("useTls", v).apply()
 
+    // --- MQTT tuning (device setup; changed via the guarded connection command) ---
+    var keepaliveS: Int
+        get() = p.getInt("keepalive", 30)
+        set(v) = p.edit().putInt("keepalive", v).apply()
+
+    var connectTimeoutS: Int
+        get() = p.getInt("connTimeout", 15)
+        set(v) = p.edit().putInt("connTimeout", v).apply()
+
+    var autoReconnect: Boolean
+        get() = p.getBoolean("autoReconnect", true)
+        set(v) = p.edit().putBoolean("autoReconnect", v).apply()
+
+    var mqttQos: Int
+        get() = p.getInt("mqttQos", 1)
+        set(v) = p.edit().putInt("mqttQos", v).apply()
+
+    var maxInflight: Int
+        get() = p.getInt("maxInflight", 20)
+        set(v) = p.edit().putInt("maxInflight", v).apply()
+
+    /** The full broker connection (host/credentials + tuning). */
+    fun connection(): ConnectionConfig = ConnectionConfig(
+        host = brokerHost, port = brokerPort, use_tls = useTls,
+        username = username, password = password,
+        keepalive_s = keepaliveS, connect_timeout_s = connectTimeoutS,
+        auto_reconnect = autoReconnect, qos = mqttQos, max_inflight = maxInflight
+    )
+
+    fun setConnection(c: ConnectionConfig) {
+        brokerHost = c.host
+        brokerPort = c.port
+        useTls = c.use_tls
+        username = c.username
+        password = c.password
+        keepaliveS = c.keepalive_s
+        connectTimeoutS = c.connect_timeout_s
+        autoReconnect = c.auto_reconnect
+        mqttQos = c.qos
+        maxInflight = c.max_inflight
+    }
+
+    /** Persisted guardrail state for a pending connection change (survives reboot). */
+    var guardStateJson: String?
+        get() = p.getString("guardState", null)
+        set(v) = p.edit().putString("guardState", v).apply()
+
+    /** Result of the last device-control command, echoed in status. */
+    var lastCommandJson: String?
+        get() = p.getString("lastCommand", null)
+        set(v) = p.edit().putString("lastCommand", v).apply()
+
     /** Whether we have already shown the battery-optimization request dialog. */
     var batteryExemptionAsked: Boolean
         get() = p.getBoolean("battAsked", false)
@@ -66,6 +118,11 @@ class Config(context: Context) {
     var currentExpiresAt: Long
         get() = p.getLong("curExpires", 0L)
         set(v) = p.edit().putLong("curExpires", v).apply()
+
+    /** Wall-clock time the current message was received/shown (epoch millis). */
+    var currentReceivedAt: Long
+        get() = p.getLong("curReceived", 0L)
+        set(v) = p.edit().putLong("curReceived", v).apply()
 
     /** Id of the last message we drew attention to, so we never re-alert it. */
     var lastCuedMessageId: String?
@@ -96,9 +153,6 @@ class Config(context: Context) {
 
     fun isConfigured(): Boolean = brokerHost.isNotBlank()
 
-    fun serverUri(): String =
-        (if (useTls) "ssl://" else "tcp://") + brokerHost + ":" + brokerPort
-
     fun effectiveClientId(): String {
         val r = when (role) {
             Role.RECEIVER -> "rx"
@@ -114,7 +168,7 @@ class Config(context: Context) {
 
     fun clearActiveMessage() {
         p.edit()
-            .remove("curId").remove("curText").remove("curSender").remove("curExpires")
+            .remove("curId").remove("curText").remove("curSender").remove("curExpires").remove("curReceived")
             .apply()
     }
 }

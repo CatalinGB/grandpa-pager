@@ -4,15 +4,26 @@
 (function () {
   "use strict";
   var BROKER = "wss://mqtt.flespi.io:443";
-  var TOPIC = { config: "grandpa/config", status: "grandpa/status" };
+  var TOPIC = { config: "grandpa/config", command: "grandpa/command", status: "grandpa/status" };
   var DEF = {
     schema: 1,
-    display: { name_size_sp: 46, countdown: false, orientation: "auto" },
+    display: {
+      name_size_sp: 46, countdown: false, orientation: "auto",
+      message_size_min_sp: 10, message_size_max_sp: 64,
+      name_color: "#FFFAB005", message_color: "#FFFFFFFF",
+      warn_color: "#FFFFB300", countdown_color: "#FF9E9E9E",
+      idle_clock_scale: 1.3, idle_date_format: "auto", warn_text: null
+    },
     cue: { glow_ms: 9000, chime: true, vibrate: true, torch: { enabled: true, on_ms: 1500, off_ms: 1500, pulses: 3 } },
     defaults: { duration_minutes: 240 },
     telemetry: { interval_minutes: 15 },
     power: { screen_off_when_idle: true },
-    kiosk: { locked: true }
+    kiosk: { locked: true },
+    device_owner: {
+      status_bar_disabled: true, lock_task: true,
+      restrict_accounts: true, restrict_bluetooth: true,
+      restrict_location: true, restrict_printing: true, restrict_sync: true
+    }
   };
   var el = function (id) { return document.getElementById(id); };
   var cfg = JSON.parse(JSON.stringify(DEF));
@@ -48,10 +59,29 @@
       '<b>' + (fmt ? fmtOf(fmt, v) : v) + '</b>' +
       '<button data-path="' + path + '" data-delta="' + step + '" data-min="' + min + '" data-max="' + max + '" data-step="' + step + '" data-fmt="' + (fmt || "") + '" onclick="A.step(this)">+</button></div></div>';
   }
+  function color(path, label) {
+    var v = get(path) || "#FFFFFFFF";
+    var hex = (v.length === 9) ? ("#" + v.slice(3)) : "#FFFFFF";
+    return '<div class="row"><div>' + label + '</div>' +
+      '<input type="color" data-path="' + path + '" value="' + hex + '" oninput="A.pickColor(this)">' +
+      '<span class="val">' + v + '</span></div>';
+  }
+  function textField(path, label, placeholder) {
+    var v = get(path); if (v === undefined || v === null) v = "";
+    return '<div class="row"><div>' + label + '</div>' +
+      '<input type="text" data-path="' + path + '" value="' + v + '" placeholder="' + (placeholder || "") + '" oninput="A.text(this)"></div>';
+  }
 
   function build() {
     el("sec-display").innerHTML = seg("display.orientation", "Orientation", ["auto", "portrait", "landscape"]) +
-      slider("display.name_size_sp", "Name size", 20, 120, 2) + sw("display.countdown", "Show countdown");
+      slider("display.name_size_sp", "Name size", 20, 120, 2) + sw("display.countdown", "Show received/expires time") +
+      slider("display.message_size_min_sp", "Message size min", 8, 200, 2) +
+      slider("display.message_size_max_sp", "Message size max", 8, 200, 2) +
+      color("display.name_color", "Name colour") + color("display.message_color", "Message colour") +
+      color("display.warn_color", "Warning colour") + color("display.countdown_color", "Countdown colour") +
+      slider("display.idle_clock_scale", "Idle clock scale", 1, 3, 0.1) +
+      seg("display.idle_date_format", "Idle date format", ["auto", "dmy", "mdy", "ymd"]) +
+      textField("display.warn_text", "Warning text", "default (localized)");
     el("sec-cue").innerHTML = slider("cue.glow_ms", "Glow", 0, 20000, 500, "ms") +
       sw("cue.chime", "Sound") + sw("cue.vibrate", "Vibration") + sw("cue.torch.enabled", "Torch") +
       slider("cue.torch.on_ms", "On", 200, 5000, 100, "ms") +
@@ -61,6 +91,14 @@
     el("sec-telemetry").innerHTML = stepper("telemetry.interval_minutes", "Status interval (min)", 1, 1440, 5);
     el("sec-power").innerHTML = sw("power.screen_off_when_idle", "Screen off when idle", "sleep the display; wake on a new message");
     el("sec-kiosk").innerHTML = sw("kiosk.locked", "Locked (kiosk)", "off = open the launcher");
+    el("sec-device_owner").innerHTML =
+      sw("device_owner.lock_task", "Lock task", "configure full kiosk lock task") +
+      sw("device_owner.status_bar_disabled", "Hide status bar") +
+      sw("device_owner.restrict_accounts", "Block account changes") +
+      sw("device_owner.restrict_bluetooth", "Disable Bluetooth") +
+      sw("device_owner.restrict_location", "Block location") +
+      sw("device_owner.restrict_printing", "Block printing") +
+      sw("device_owner.restrict_sync", "Disable auto-sync");
     preview();
   }
   function preview() { el("jsonPreview").textContent = JSON.stringify(cfg, null, 1); }
@@ -74,6 +112,18 @@
     var v = Math.max(min, Math.min(max, get(p) + (+btn.dataset.delta)));
     setPath(p, v);
     var b = btn.parentNode.querySelector("b"); if (b) b.textContent = btn.dataset.fmt ? fmtOf(btn.dataset.fmt, v) : v;
+    preview();
+  }
+  function pickColor(input) {
+    var p = input.dataset.path;
+    var v = "#FF" + input.value.slice(1).toUpperCase();
+    setPath(p, v);
+    var s = input.nextElementSibling; if (s) s.textContent = v;
+    preview();
+  }
+  function text(input) {
+    var p = input.dataset.path;
+    setPath(p, input.value.trim() ? input.value : null);
     preview();
   }
 
@@ -94,6 +144,7 @@
     parts.push("<span>" + (s.charging ? "charging" : "on battery") + "</span>");
     parts.push("<span>wifi " + s.wifi + "</span>");
     parts.push("<span>mqtt " + s.mqtt + "</span>");
+    if (typeof s.device_owner === "boolean") parts.push("<span>device owner " + s.device_owner + "</span>");
     if (s.sender) parts.push("<span>message: " + s.sender + "</span>");
     parts.push("<span>seen " + age + "s ago</span>");
     el("devStatus").innerHTML = parts.join('<span class="sep">·</span>');
@@ -117,6 +168,8 @@
       if (topic !== TOPIC.status) return;
       var s; try { s = JSON.parse(payload.toString()); } catch (e) { return; }
       renderDevice(s);
+      if (s.connection) renderConnection(s.connection);
+      if (s.command && s.command.last) el("actionHint").textContent = s.command.last + ": " + (s.command.result || "");
       if (!dirty && s.config) { cfg = JSON.parse(JSON.stringify(s.config)); cfg.schema = cfg.schema || 1; build(); el("applied").textContent = "current config loaded from the phone"; }
     });
   }
@@ -128,6 +181,49 @@
     el("applied").textContent = "Sent — the phone will apply it and confirm in status.";
   }
   function reset() { cfg = JSON.parse(JSON.stringify(DEF)); dirty = true; build(); }
+
+  /* ---- guarded connection change + device actions (grandpa/command) ---- */
+  function renderConnection(c) {
+    el("connState").textContent =
+      "state: " + c.state + " · " + c.host + ":" + c.port + (c.use_tls ? " tls" : "") +
+      " · password " + (c.password_set ? "set" : "not set") +
+      (c.last_error ? " · " + c.last_error : "");
+    if (!el("cHost").value) el("cHost").value = c.host;
+    if (!el("cPort").value) el("cPort").value = c.port;
+    el("cTls").checked = !!c.use_tls;
+    el("cUser").placeholder = c.username ? c.username : "(unchanged if blank)";
+  }
+  function applyConn() {
+    if (!client || !client.connected) { el("connState").textContent = "You are not connected."; return; }
+    var host = el("cHost").value.trim();
+    if (!host) { el("connState").textContent = "Enter a host."; return; }
+    var revert = parseInt(el("cRevert").value, 10) || 90;
+    if (!confirm("Change the receiver's broker?\n\nIt will test the new connection and revert automatically within " + revert + "s if it cannot connect. Continue?")) return;
+    var payload = {
+      action: "set_connection",
+      candidate: {
+        host: host,
+        port: parseInt(el("cPort").value, 10) || 8883,
+        use_tls: el("cTls").checked,
+        username: el("cUser").value.trim(),
+        password: el("cPass").value,
+        keepalive_s: parseInt(el("cKeep").value, 10) || 30,
+        connect_timeout_s: parseInt(el("cTimeout").value, 10) || 15,
+        auto_reconnect: el("cAuto").checked,
+        qos: parseInt(el("cQos").value, 10),
+        max_inflight: parseInt(el("cInflight").value, 10) || 20
+      },
+      revert_after_s: revert
+    };
+    client.publish(TOPIC.command, JSON.stringify(payload), { qos: 1, retain: false });
+    el("connState").textContent = "Sent — the phone will test it and commit or revert within " + revert + "s.";
+  }
+  function sendAction(action, label) {
+    if (!client || !client.connected) return;
+    if (!confirm(label + "?")) return;
+    client.publish(TOPIC.command, JSON.stringify({ action: action }), { qos: 1, retain: false });
+    el("actionHint").textContent = action + " requested.";
+  }
 
   function showForm() { el("unlock").hidden = true; el("admin").hidden = false; build(); }
 
@@ -150,7 +246,7 @@
     history.replaceState(null, "", location.pathname + (qs ? "?" + qs : "") + (hs ? "#" + hs : ""));
   }
 
-  window.A = { toggle: toggle, slide: slide, choose: choose, step: step };
+  window.A = { toggle: toggle, slide: slide, choose: choose, step: step, pickColor: pickColor, text: text };
 
   document.addEventListener("DOMContentLoaded", function () {
     var q = new URLSearchParams(location.search);
@@ -158,6 +254,9 @@
     el("unlockBtn").addEventListener("click", connect);
     el("apply").addEventListener("click", apply);
     el("reset").addEventListener("click", reset);
+    el("applyConn").addEventListener("click", applyConn);
+    el("restartApp").addEventListener("click", function () { sendAction("restart_app", "Restart the receiver app"); });
+    el("rebootDevice").addEventListener("click", function () { sendAction("reboot_device", "Reboot the phone (it will be offline for ~a minute)"); });
     var saved = sessionStorage.getItem("gp_admin");
     var invite = readInvite();
     if (invite) { sessionStorage.setItem("gp_admin", invite); clearInviteParams(); saved = invite; }

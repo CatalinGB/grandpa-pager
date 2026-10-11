@@ -59,19 +59,21 @@ retained message topic.
 
 ## D8 — Topics (see architecture.md for payloads)
 - `grandpa/message` — retained, QoS 1. Latest message JSON (`{}` / empty clears).
-- `grandpa/command` — QoS 1. `{"action":"clear"}`.
+- `grandpa/command` — QoS 1. `clear` · `set_connection` · `restart_app` · `reboot_device`.
 - `grandpa/config` — retained, QoS 1. Admin remote config (v1).
 - `grandpa/status` — retained, QoS 1. Receiver diagnostics + config ack.
 
 ## D9 — Admin mode: remote config over MQTT
 An **admin console** in the Pages app (gated by an admin token) tunes the device
 by publishing a **versioned config** to `grandpa/config`; the receiver
-**validates, clamps, persists, applies and acks** it in `status.config`. Scope is
-deliberately narrow: display, new-message cue, default duration, and the kiosk
-lock (`locked:false` → stop lock task + open the launcher; never touches device
-owner). Config cannot change broker/credentials or device-owner status, so it
-cannot cut the channel. Rationale: the owner wanted the pager configurable
-without a rebuild or USB. *Change if* per-field audit/history is needed.
+**validates, clamps, persists, applies and acks** it in `status.config`. Scope
+was originally display, new-message cue, default duration and the kiosk lock
+(`locked:false` → stop lock task + open the launcher; never touches device
+owner). It now also covers the extended layout knobs and the **device-owner
+restriction toggles** (see D14/D16). The retained config still cannot change
+broker/credentials or device-owner status, so it cannot cut the channel.
+Rationale: the owner wanted the pager configurable without a rebuild or USB.
+*Change if* per-field audit/history is needed.
 
 ## D10 — Admin token provisioning
 A dedicated **ACL** token `grandpa-admin` (publish+subscribe `grandpa/config`,
@@ -108,9 +110,11 @@ optional field under `schema: 1` (backward-compatible).
 When device owner the app applies a **reversible** set of user restrictions
 (no account changes, no Bluetooth, no location, no printing, no mobile-network
 config, no tethering, no roaming), disables master sync and turns off Bluetooth,
-to cut background activity and attack surface on a 24/7 device. Cleared by the
-`RELEASE_KIOSK` gesture. Deliberately **not** applied: factory-reset blocking or
-anything irreversible. (Battery/heat guidance lives in `device-hardening.md`.)
+to cut background activity and attack surface on a 24/7 device. The set is driven
+by the `device_owner` remote-config block (each toggle adds **or clears** its
+restriction). Cleared by the `RELEASE_KIOSK` gesture. Deliberately **not**
+applied: factory-reset blocking or anything irreversible.
+(Battery/heat guidance lives in `device-hardening.md`.)
 
 ## D15 — Delivery-reliability hardening
 Four small guards so a message is not silently lost or duplicated:
@@ -127,6 +131,27 @@ Four small guards so a message is not silently lost or duplicated:
 - **Silent wake channel:** the `pager_alert` channel is silent and non-vibrating so
   the notification that carries the full-screen intent does not double the app's
   own chime/vibration.
+
+## D16 — Remote broker change: a guarded command, never retained config
+The in-situ phone is hard to reach, so the broker (host/port/TLS/username/password)
+and the MQTT tuning (keepalive, timeout, auto-reconnect, QoS, max inflight) must be
+changeable from the admin console. But they carry a secret and can strand the
+device, so they are **not** part of the retained `grandpa/config` (which is echoed
+in status and cannot cut the channel, per D9). Instead a `set_connection` command
+carries a **candidate** plus a revert window; the receiver runs a pure
+`ConfigGuard` state machine — probe, switch, commit on a stable link, else
+**auto-revert** to the last working connection within the window — and persists the
+pending state so a reboot resumes (and, if unconfirmed, reverts). The password is
+device setup only and is never echoed (`status` reports `password_set`). Topics and
+the client-id scheme stay constants (changing them would strand the web clients).
+*Change if* concurrent-connection broker limits make the probe unreliable.
+
+## D17 — Device-control commands: restart and reboot
+`restart_app` soft-restarts the service connection and brings `ReceiverActivity`
+back; `reboot_device` uses the device-owner `DevicePolicyManager.reboot()`. Both are
+acknowledged in `status.command` (`last`, `received_at`, `result`). Reboot is only
+attempted when the app is device owner; otherwise it is reported, never silently
+ignored. The device owner is never removed remotely.
 
 
 

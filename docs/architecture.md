@@ -36,10 +36,12 @@ notified through the in-process `PagerBus` and by re-reading `SharedPreferences`
 | `PagerCore.kt` | Pure logic: topics, roles, payloads, ISO time, expiry, JSON, change bus. No Android UI — unit-tested on the JVM. |
 | `Config.kt` | SharedPreferences config + persisted receiver state (message and remote config). |
 | `RemoteConfig.kt` | Remote-config model (`RemoteConfig`) + defensive codec (`RemoteConfigCodec`): parse, clamp, reject bad schema. |
+| `ConnectionConfig.kt` | Broker connection model (host/credentials + MQTT tuning) and its clamping codec. Secret is device setup, never retained config. |
+| `ConfigGuard.kt` | Pure guardrail state machine for a remote connection change: probe → switch → commit, or auto-revert within the window; survives reboot. |
 | `TlsUtil.kt` | TLS socket factory = platform trust anchors (+ bundled test CA **in debug only**), wrapped for Paho's no-arg socket and HTTPS endpoint identification. |
 | `MqttController.kt` | Paho wrapper: TLS, persistent session, auto-reconnect, subscribe, publish. |
 | `PagerService.kt` | Foreground service: connect, receive, show/clear, apply remote config, expiry alarm, watchdog, diagnostics. |
-| `ReceiverActivity.kt` | Variant-C display: sender centred above the message (auto-sized), countdown below; idle = one-row date + clock (1.3×); one-shot glow+chime+vibration+torch cue; kiosk entry; admin exit gesture; applies remote config. |
+| `ReceiverActivity.kt` | Variant-C display: sender centred above the message (auto-sized), and below it a `Received … , expires …` time line (hidden unless `display.countdown`); idle = one-row date + clock (1.3×) or a sleeping display; one-shot glow+chime+vibration+torch cue; kiosk entry; admin exit gesture; applies remote config. |
 | `DateLabels.kt` | Locale-aware idle labels: `SATURDAY 10/10/2026` and the device time format. |
 | `SenderActivity.kt` | Android compose + monitor UI. |
 | `SetupActivity.kt` | Role + broker configuration (+ battery-optimization request). |
@@ -53,7 +55,7 @@ notified through the in-process `PagerBus` and by re-reading `SharedPreferences`
 | Topic | Retain | QoS | Direction | Purpose |
 |---|---|---|---|---|
 | `grandpa/message` | yes | 1 | senders → receiver | Latest message (empty payload clears). |
-| `grandpa/command` | no | 1 | senders → receiver | `{"action":"clear"}`. |
+| `grandpa/command` | no | 1 | senders/admin → receiver | `{"action":"clear"}` · `set_connection` · `restart_app` · `reboot_device`. |
 | `grandpa/config` | yes | 1 | admin → receiver | Versioned remote config (see below). |
 | `grandpa/status` | yes | 1 | receiver → senders/admin | Diagnostics + config ack. |
 
@@ -88,9 +90,17 @@ Diagnostics — `grandpa/status`:
   "current_message_id": "8f2c…", "expires_at": "2026-10-10T16:54:45Z",
   "last_seen": "2026-10-10T14:54:45Z", "app": "receiver",
   "config": { "schema": 1, "…": "the effective remote config (echo)" },
-  "config_applied_at": "2026-10-10T14:54:45Z", "config_error": null
+  "config_applied_at": "2026-10-10T14:54:45Z", "config_error": null,
+  "device_owner": true,
+  "connection": { "state": "active", "host": "mqtt.flespi.io", "port": 8883,
+                  "use_tls": true, "password_set": true, "last_error": null },
+  "command": { "last": "restart_app", "received_at": "…", "result": "ok" }
 }
 ```
+
+The `connection` object reports the **guardrail state** (`active | probing | switched
+| committed | reverted | failed`) and whether a password is set — **never the
+password itself**. `command` echoes the last device-control command and its result.
 
 `battery_temp_c` is the battery temperature in °C (`null` if unknown). For a
 device that is powered on permanently it is the best early-warning signal for a
@@ -101,23 +111,77 @@ Remote config — `grandpa/config` (v1):
 
 ```json
 { "schema": 1, "updated_at": "2026-10-10T14:54:45Z",
-  "display": { "name_size_sp": 46, "countdown": false, "orientation": "auto" },
+  "display": { "name_size_sp": 46, "countdown": false, "orientation": "auto",
+               "message_size_min_sp": 10, "message_size_max_sp": 64,
+               "name_color": "#FFFAB005", "message_color": "#FFFFFFFF",
+               "warn_color": "#FFFFB300", "countdown_color": "#FF9E9E9E",
+               "idle_clock_scale": 1.3, "idle_date_format": "auto", "warn_text": null },
   "cue": { "glow_ms": 9000, "chime": true, "vibrate": true,
            "torch": { "enabled": true, "on_ms": 1500, "off_ms": 1500, "pulses": 3 } },
   "defaults": { "duration_minutes": 240 },
   "telemetry": { "interval_minutes": 15 },
   "power": { "screen_off_when_idle": true },
-  "kiosk": { "locked": true } }
+  "kiosk": { "locked": true },
+  "device_owner": { "lock_task": true, "status_bar_disabled": true,
+                    "restrict_accounts": true, "restrict_bluetooth": true,
+                    "restrict_location": true, "restrict_printing": true,
+                    "restrict_sync": true } }
 ```
 
 The receiver **clamps** numerics to bounds and **ignores** unknown/wrong-type
 fields; a `schema` other than `1` rejects the whole config (error acked in
-`status.config_error`). Bounds: `name_size_sp` 20–120; `glow_ms` 0–20000;
-torch `on_ms`/`off_ms` 200–5000; `pulses` 1–10; `duration_minutes` 5–1440;
-`interval_minutes` 1–1440. It persists the accepted config, re-applies it on
-every (re)connect and reboot, and **echoes the effective config** in
-`status.config` so the admin UI prefills. Adding an optional field under
-`schema: 1` is backward-compatible (old receivers ignore it and default it).
+`status.config_error`). Bounds: `name_size_sp` 20–120; `message_size_min/max_sp`
+8–200 (min collapses to max if it exceeds it); `glow_ms` 0–20000; torch
+`on_ms`/`off_ms` 200–5000; `pulses` 1–10; `duration_minutes` 5–1440;
+`interval_minutes` 1–1440; `idle_clock_scale` 1.0–3.0. Colours must be
+`#AARRGGBB` (invalid falls back to the default); `idle_date_format` is one of
+`auto | dmy | mdy | ymd`; `warn_text: null` keeps the localized string. It persists
+the accepted config, re-applies it on every (re)connect and reboot, and **echoes
+the effective config** in `status.config` so the admin UI prefills. Adding an
+optional field under `schema: 1` is backward-compatible (old receivers ignore it
+and default it).
+
+The `device_owner` block drives the reversible hardening restrictions when the app
+is device owner (see below); each toggle adds **or clears** its restriction, so a
+relaxation takes effect too. The receiver reports `status.device_owner` so the
+console can show whether the toggles can act.
+
+## Remote connection change (guarded)
+
+Changing the broker (host/port/TLS/credentials) or the MQTT tuning (keepalive,
+timeout, auto-reconnect, QoS, max inflight) is **not** part of the retained config:
+it carries a secret and must be transactional. It travels as a command:
+
+```json
+{ "action": "set_connection",
+  "candidate": { "host": "mqtt.example.com", "port": 8883, "use_tls": true,
+                 "username": "…", "password": "…",
+                 "keepalive_s": 30, "connect_timeout_s": 15,
+                 "auto_reconnect": true, "qos": 1, "max_inflight": 20 },
+  "revert_after_s": 90, "confirm_after_s": 15 }
+```
+
+The receiver runs a pure `ConfigGuard` state machine:
+
+1. **Request** → persist the current connection as the backup, record the window.
+2. **Probe** the candidate (only when the endpoint host/port/TLS actually moves —
+   a credential-only change is validated by the switch itself), then **switch**.
+3. A stable connection for `confirm_after_s` → **commit** (clear the backup).
+4. No connection within `revert_after_s`, or a failed probe → **revert** to the
+   backup and reconnect.
+
+The pending state is persisted, so a reboot resumes the timer; an unconfirmed
+change reverts. A wrong broker therefore cannot strand the phone. The password is
+stored only as device setup and is never echoed — status reports `password_set`
+only.
+
+## Device-control commands
+
+`restart_app` soft-restarts the service connection and brings `ReceiverActivity`
+back; `reboot_device` reboots via the device-owner `DevicePolicyManager.reboot()`
+and reports `not device owner` when it cannot. Both are acknowledged in
+`status.command`.
+
 
 ## Expiry model (application-level)
 
@@ -125,8 +189,8 @@ The receiver never trusts broker TTL.
 
 1. On `showMessage`, `expires_at` is parsed and persisted (epoch millis).
 2. An `AlarmManager.setExactAndAllowWhileIdle` alarm is set for `expires_at`.
-3. A one-second UI ticker recomputes the countdown from wall-clock, and a
-   safety net clears the message if the alarm was missed.
+3. A one-second UI ticker refreshes the `Received … , expires …` line from the
+   wall clock, and a safety net clears the message if the alarm was missed.
 4. On expiry the receiver clears local state, publishes an empty **retained**
    message to `grandpa/message`, and re-publishes `idle` status.
 5. On reboot the service restores the persisted message; if already expired it
@@ -161,8 +225,10 @@ device via `defaults.duration_minutes` (admin).
   socket up, so a slow cadence does not delay reconnection.
 - **Device hardening.** As device owner the app applies a reversible set of
   `UserManager` restrictions (accounts, Bluetooth, location, printing,
-  mobile-network config, tethering, roaming) and disables master sync; see
-  [`device-hardening.md`](device-hardening.md). Cleared by the release gesture.
+  mobile-network config, tethering, roaming) and disables master sync, driven by
+  the `device_owner` remote-config block; see
+  [`device-hardening.md`](device-hardening.md). Each toggle adds or clears its
+  restriction. Cleared by the release gesture.
 
 ## Reliability
 
@@ -190,8 +256,10 @@ device via `defaults.duration_minutes` (admin).
   third-party scripts (MQTT.js is vendored). The **admin token** is kept in
   `sessionStorage`, not `localStorage`.
 - Lockdown: device-owner lock task removes the power menu, status bar and
-  recents; persistent home re-arms the app at boot. Remote config can only
-  toggle kiosk lock, never broker/credentials or device-owner status.
+  recents; persistent home re-arms the app at boot. The **retained config** cannot
+  change the broker/credentials or device-owner status. Broker/credential changes
+  are only possible as a **guarded `set_connection` command** (probe + bounded
+  auto-revert, password never echoed); the device owner is never removed remotely.
 - No production secrets are committed; see [`../SECURITY.md`](../SECURITY.md).
 
 ## Known limitations / caveats

@@ -3,6 +3,7 @@ package com.grandpapager
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -127,5 +128,220 @@ class PagerCoreTest {
     fun remoteConfig_rejectsUnsupportedSchema() {
         assertEquals(null, RemoteConfigCodec.parse("{\"schema\":2}"))
         assertEquals(null, RemoteConfigCodec.parse("{}"))
+    }
+
+    @Test
+    fun remoteConfig_extendedLayoutDefaults() {
+        val c = RemoteConfigCodec.parse("{\"schema\":1}")!!
+        assertEquals(10, c.display.message_size_min_sp)
+        assertEquals(64, c.display.message_size_max_sp)
+        assertEquals("#FFFAB005", c.display.name_color)
+        assertEquals("#FFFFFFFF", c.display.message_color)
+        assertEquals("#FFFFB300", c.display.warn_color)
+        assertEquals("#FF9E9E9E", c.display.countdown_color)
+        assertEquals(1.3f, c.display.idle_clock_scale, 0.001f)
+        assertEquals("auto", c.display.idle_date_format)
+        assertEquals(null, c.display.warn_text)
+    }
+
+    @Test
+    fun remoteConfig_clampsMessageSizesAndKeepsOrder() {
+        val min = RemoteConfigCodec.parse("{\"schema\":1,\"display\":{\"message_size_min_sp\":1}}")!!.display.message_size_min_sp
+        assertEquals(8, min)
+        val max = RemoteConfigCodec.parse("{\"schema\":1,\"display\":{\"message_size_max_sp\":500}}")!!.display.message_size_max_sp
+        assertEquals(200, max)
+        // min above max collapses to max.
+        val c = RemoteConfigCodec.parse("{\"schema\":1,\"display\":{\"message_size_min_sp\":70,\"message_size_max_sp\":20}}")!!
+        assertEquals(20, c.display.message_size_min_sp)
+        assertEquals(20, c.display.message_size_max_sp)
+    }
+
+    @Test
+    fun remoteConfig_invalidColourFallsBack() {
+        val c = RemoteConfigCodec.parse(
+            "{\"schema\":1,\"display\":{\"name_color\":\"red\",\"message_color\":\"#12\"}}"
+        )!!
+        assertEquals("#FFFAB005", c.display.name_color)
+        assertEquals("#FFFFFFFF", c.display.message_color)
+    }
+
+    @Test
+    fun remoteConfig_dateFormatAndClockScale() {
+        val c = RemoteConfigCodec.parse(
+            "{\"schema\":1,\"display\":{\"idle_date_format\":\"mdy\",\"idle_clock_scale\":9}}"
+        )!!
+        assertEquals("mdy", c.display.idle_date_format)
+        assertEquals(3.0f, c.display.idle_clock_scale, 0.001f)
+        val bad = RemoteConfigCodec.parse("{\"schema\":1,\"display\":{\"idle_date_format\":\"nope\"}}")!!
+        assertEquals("auto", bad.display.idle_date_format)
+    }
+
+    @Test
+    fun remoteConfig_warnTextOverrideAndRoundTrip() {
+        val c = RemoteConfigCodec.parse("{\"schema\":1,\"display\":{\"warn_text\":\"No signal\"}}")!!
+        assertEquals("No signal", c.display.warn_text)
+        assertEquals(c, RemoteConfigCodec.parse(RemoteConfigCodec.toJson(c)))
+    }
+
+    @Test
+    fun restrictionPlan_followsToggles() {
+        val doo = RemoteConfigCodec.parse("{\"schema\":1}")!!.device_owner
+        val d = RestrictionPlan.desired(doo)
+        assertTrue(d.containsAll(RestrictionPlan.ALL))
+    }
+
+    @Test
+    fun restrictionPlan_relaxingRemovesButKeepsHardening() {
+        val doo = RemoteConfigCodec.parse(
+            "{\"schema\":1,\"device_owner\":{\"restrict_accounts\":false,\"restrict_bluetooth\":false," +
+                "\"restrict_location\":false,\"restrict_printing\":false}}"
+        )!!.device_owner
+        val d = RestrictionPlan.desired(doo)
+        assertFalse(d.contains(RestrictionPlan.ACCOUNTS))
+        assertFalse(d.contains(RestrictionPlan.BLUETOOTH))
+        assertFalse(d.contains(RestrictionPlan.LOCATION))
+        assertFalse(d.contains(RestrictionPlan.PRINTING))
+        assertTrue(d.contains(RestrictionPlan.MOBILE_NETWORKS))
+        assertTrue(d.contains(RestrictionPlan.TETHERING))
+        assertTrue(d.contains(RestrictionPlan.ROAMING))
+    }
+
+    @Test
+    fun deviceOwnerConfig_defaultsAndRoundTrip() {
+        val c = RemoteConfigCodec.parse("{\"schema\":1}")!!.device_owner
+        assertTrue(c.lock_task)
+        assertTrue(c.status_bar_disabled)
+        assertTrue(c.restrict_sync)
+        val round = RemoteConfigCodec.parse(
+            RemoteConfigCodec.toJson(
+                RemoteConfigCodec.parse("{\"schema\":1,\"device_owner\":{\"restrict_sync\":false}}")!!
+            )
+        )!!.device_owner
+        assertFalse(round.restrict_sync)
+    }
+
+    @Test
+    fun diagnostics_carriesDeviceOwnerFlag() {
+        val d = DiagnosticsPayload(
+            state = "idle", sender = null, battery = 1, charging = false,
+            wifi = true, mqtt = true, current_message_id = null,
+            expires_at = null, last_seen = "2026-01-01T00:00:00Z",
+            app = "receiver", device_owner = true
+        )
+        assertTrue(PagerJson.diagnostics(d).contains("\"device_owner\":true"))
+    }
+
+    @Test
+    fun connectionCodec_rejectsBlankHostAndClamps() {
+        assertNull(ConnectionCodec.parse(null))
+        assertNull(ConnectionCodec.parse("{\"host\":\"  \"}"))
+        val c = ConnectionCodec.parse(
+            "{\"host\":\"h\",\"port\":0,\"keepalive_s\":1,\"connect_timeout_s\":1," +
+                "\"qos\":9,\"max_inflight\":99999}"
+        )!!
+        assertEquals(1, c.port)
+        assertEquals(5, c.keepalive_s)
+        assertEquals(5, c.connect_timeout_s)
+        assertEquals(1, c.qos)
+        assertEquals(1000, c.max_inflight)
+    }
+
+    @Test
+    fun connectionCodec_roundTripKeepsSecret() {
+        val r = ConnectionConfig(host = "h", password = "secret", keepalive_s = 45)
+        assertEquals(r, ConnectionCodec.parse(ConnectionCodec.toJson(r)))
+    }
+
+    @Test
+    fun configGuard_commitsAfterConfirmWindow() {
+        val g = ConfigGuard()
+        val backup = ConnectionConfig(host = "old")
+        val cand = ConnectionConfig(host = "new")
+        assertTrue(g.on(GuardEvent.Request(cand, backup, 0L, 60_000L, 5_000L)) is GuardEffect.StartProbe)
+        assertTrue(g.state.isPending)
+        assertTrue(g.on(GuardEvent.ProbeOk(1_000L)) is GuardEffect.SwitchTo)
+        assertEquals(GuardEffect.None, g.on(GuardEvent.Connected(2_000L)))
+        assertEquals(GuardEffect.None, g.on(GuardEvent.Tick(6_000L))) // 4 s up < 5 s
+        assertTrue(g.on(GuardEvent.Tick(7_100L)) is GuardEffect.Commit) // 5.1 s up
+        assertEquals(GuardStatus.COMMITTED, g.state.status)
+    }
+
+    @Test
+    fun configGuard_probeFailRevertsToBackup() {
+        val g = ConfigGuard()
+        val backup = ConnectionConfig(host = "old")
+        g.on(GuardEvent.Request(ConnectionConfig(host = "new"), backup, 0L, 60_000L, 5_000L))
+        val e = g.on(GuardEvent.ProbeFail(500L))
+        assertTrue(e is GuardEffect.Revert)
+        assertEquals(backup, (e as GuardEffect.Revert).backup)
+        assertEquals(GuardStatus.REVERTED, g.state.status)
+    }
+
+    @Test
+    fun configGuard_timeoutRevertsWithoutConnection() {
+        val g = ConfigGuard()
+        val backup = ConnectionConfig(host = "old")
+        g.on(GuardEvent.Request(ConnectionConfig(host = "new"), backup, 0L, 30_000L, 5_000L))
+        g.on(GuardEvent.ProbeOk(0L))
+        val e = g.on(GuardEvent.Tick(31_000L))
+        assertTrue(e is GuardEffect.Revert)
+        assertEquals(GuardStatus.REVERTED, g.state.status)
+    }
+
+    @Test
+    fun configGuard_resumeUnconfirmedPendingReverts() {
+        val cand = ConnectionConfig(host = "new")
+        val backup = ConnectionConfig(host = "old")
+        val persisted = GuardState(
+            status = GuardStatus.SWITCHED, candidate = cand, backup = backup,
+            sinceMs = 0L, revertAfterMs = 30_000L, confirmAfterMs = 5_000L
+        )
+        val g = ConfigGuard()
+        g.resumePersisted(persisted, 5_000L)
+        assertTrue(g.state.isPending)
+        assertTrue(g.on(GuardEvent.Tick(31_000L)) is GuardEffect.Revert)
+    }
+
+    @Test
+    fun configGuard_clampsWindows() {
+        assertEquals(90, ConfigGuard.clampRevertSeconds(null))
+        assertEquals(30, ConfigGuard.clampRevertSeconds(1))
+        assertEquals(900, ConfigGuard.clampRevertSeconds(99999))
+        assertEquals(15, ConfigGuard.clampConfirmSeconds(null))
+        assertEquals(5, ConfigGuard.clampConfirmSeconds(0))
+        assertEquals(120, ConfigGuard.clampConfirmSeconds(9999))
+    }
+
+    @Test
+    fun command_parsesDeviceControlActions() {
+        assertEquals("restart_app", PagerJson.toCommand("{\"action\":\"restart_app\"}")!!.action)
+        assertEquals("reboot_device", PagerJson.toCommand("{\"action\":\"reboot_device\"}")!!.action)
+        // Unknown actions still parse; the dispatcher is what ignores them.
+        assertEquals("nope", PagerJson.toCommand("{\"action\":\"nope\"}")!!.action)
+    }
+
+    @Test
+    fun command_parsesConnectionCandidate() {
+        val c = PagerJson.toCommand(
+            "{\"action\":\"set_connection\",\"candidate\":{\"host\":\"h\",\"port\":8883},\"revert_after_s\":60}"
+        )!!
+        assertEquals("set_connection", c.action)
+        assertEquals("h", c.candidate!!.host)
+        assertEquals(8883, c.candidate!!.port)
+        assertEquals(60, c.revert_after_s)
+    }
+
+    @Test
+    fun diagnostics_carriesConnectionAndCommand() {
+        val d = DiagnosticsPayload(
+            state = "idle", sender = null, battery = 1, charging = false,
+            wifi = true, mqtt = true, current_message_id = null,
+            expires_at = null, last_seen = "2026-01-01T00:00:00Z", app = "receiver",
+            connection = ConnectionStatus("pending", "h", 8883, true, true, null),
+            command = CommandStatus("restart_app", "2026-01-01T00:00:00Z", "ok")
+        )
+        val back = PagerJson.toDiagnostics(PagerJson.diagnostics(d))!!
+        assertEquals(d.connection, back.connection)
+        assertEquals(d.command, back.command)
     }
 }

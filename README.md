@@ -32,9 +32,14 @@ device.
   vibration and a torch pulse.
 - **Live diagnostics**: online/offline, battery + charging, Wi-Fi, MQTT, current
   message and how long ago it was last seen.
-- **Admin console** (browser): text size, orientation, countdown, the arrival
+- **Admin console** (browser): text size, orientation, the received/expires time
+  line, message auto-size bounds, colours, idle clock/date format, the arrival
   cue, the default duration, the status cadence (default 15 min), the idle
-  screen-off toggle, and the kiosk lock.
+  screen-off toggle, the kiosk lock, and the device-owner hardening toggles.
+- **Guarded remote reconfiguration**: change the broker and MQTT tuning from the
+  console — the phone probes the candidate and **auto-reverts** within the window
+  if it cannot connect, so a bad push can't strand it; and issue **restart /
+  reboot** commands, all acknowledged in status.
 - **Kiosk lockdown** via device-owner Lock Task Mode, re-armed on every boot,
   with a hidden admin escape gesture.
 - **Power-aware**: the display sleeps when idle and wakes instantly on a new
@@ -78,7 +83,7 @@ Four topics carry everything:
 | Topic | Direction | Purpose |
 |---|---|---|
 | `grandpa/message` | senders → phone | the latest message (retained; empty clears) |
-| `grandpa/command` | senders → phone | `{"action":"clear"}` |
+| `grandpa/command` | senders/admin → phone | `clear` · `set_connection` · `restart_app` · `reboot_device` |
 | `grandpa/config` | admin → phone | versioned remote config (retained) |
 | `grandpa/status` | phone → everyone | diagnostics + config acknowledgement |
 
@@ -117,8 +122,15 @@ saves it locally, strips it from the address bar and connects automatically. A
 ### 2 · Configure the pager (admin)
 
 Open **Admin** (the link at the bottom of the sender) and enter the admin token.
-Tune the display, the new-message cue, the default duration and the kiosk lock,
-then **Apply to phone** — the phone validates, applies and confirms it back.
+Tune the display, layout (sizes, colours, idle clock/date format), the
+new-message cue, the default duration, the device-owner restrictions and the kiosk
+lock, then **Apply to phone** — the phone validates, applies and confirms it back.
+
+The same console also has a **guarded connection** section (change the broker and
+MQTT tuning) and **device actions** (restart the app, reboot the phone). A broker
+change is transactional: the phone probes the candidate and **auto-reverts** to the
+last working connection within the revert window if it cannot connect, so a bad
+push cannot strand the device. The password is never shown back.
 
 ### 3 · On Grandpa's phone
 

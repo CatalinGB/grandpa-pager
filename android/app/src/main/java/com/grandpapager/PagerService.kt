@@ -6,7 +6,9 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.app.admin.DevicePolicyManager
 import android.content.BroadcastReceiver
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -20,6 +22,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
 import android.util.Log
+import com.google.gson.Gson
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -57,6 +60,9 @@ class PagerService : Service(), MqttController.Listener {
         /** Show a message that arrived (briefly) after its TTL, up to this late. */
         private const val LATE_GRACE_MS = 10 * 60_000L
         private const val LATE_MIN_SHOW_MS = 60_000L
+
+        /** How often the connection guardrail re-evaluates a pending change. */
+        private const val GUARD_TICK_MS = 5_000L
         fun start(ctx: Context) = launch(ctx, Intent(ctx, PagerService::class.java))
 
         fun send(ctx: Context, text: String, duration: Int) = launch(
@@ -78,6 +84,9 @@ class PagerService : Service(), MqttController.Listener {
 
     private lateinit var cfg: Config
     @Volatile private var mqtt: MqttController? = null
+    private val guard = ConfigGuard()
+    private var guardTimer: Runnable? = null
+    private val gson = Gson()
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
     private val handler = Handler(Looper.getMainLooper())
     private var watchdog: Runnable? = null
@@ -100,6 +109,7 @@ class PagerService : Service(), MqttController.Listener {
             stopSelf()
             return START_NOT_STICKY
         }
+        if (cfg.role == Role.RECEIVER) restoreGuard()
         startForeground(NOTIF_ID, buildNotification())
         acquireLocks()
 
@@ -150,7 +160,7 @@ class PagerService : Service(), MqttController.Listener {
             Log.w(TAG, "connection was dead; reconnecting")
         }
         val m = MqttController(this, this)
-        m.connect(cfg)
+        m.connect(cfg, cfg.connection())
         mqtt = m
         Log.i(TAG, "connected")
     }
@@ -194,6 +204,7 @@ class PagerService : Service(), MqttController.Listener {
     override fun onDestroy() {
         stopWatchdog()
         stopStatusTimer()
+        stopGuardTimer()
         releaseLocks()
         Link.connected = false
         runCatching { mqtt?.disconnect() }
@@ -206,7 +217,15 @@ class PagerService : Service(), MqttController.Listener {
     override fun onConnected() {
         Log.i(TAG, "onConnected (reconnect complete)")
         Link.connected = true
-        executor.execute { onReady() }
+        executor.execute {
+            // A live link while a connection change is switched in starts (or
+            // restarts) the confirm clock.
+            if (guard.state.status == GuardStatus.SWITCHED) {
+                guard.on(GuardEvent.Connected(System.currentTimeMillis()))
+                persistGuard()
+            }
+            onReady()
+        }
     }
 
     override fun onConnectionLost() {
@@ -227,7 +246,7 @@ class PagerService : Service(), MqttController.Listener {
                 else PagerJson.toMessage(text)?.let { showMessage(it) }
             }
             Topics.COMMAND -> if (cfg.role == Role.RECEIVER) {
-                if (PagerJson.toCommand(text)?.action == "clear") clearMessage("command")
+                handleCommand(text)
             }
             Topics.CONFIG -> if (cfg.role == Role.RECEIVER) {
                 applyRemoteConfig(text)
@@ -257,6 +276,184 @@ class PagerService : Service(), MqttController.Listener {
         if (started.get()) startStatusTimer() // cadence may have changed
         publishStatus()
         PagerBus.notifyChanged()
+    }
+
+    // ------------------------------------------------------------ commands
+
+    private fun handleCommand(text: String) {
+        val cmd = PagerJson.toCommand(text) ?: return
+        val now = System.currentTimeMillis()
+        when (cmd.action) {
+            "clear" -> clearMessage("command")
+            "set_connection" -> beginConnectionChange(cmd, now)
+            "restart_app" -> {
+                ackCommand("restart_app", "ok")
+                restartApp()
+            }
+            "reboot_device" -> {
+                if (!DeviceOwnerManager.isDeviceOwner(this)) {
+                    ackCommand("reboot_device", "not device owner")
+                    publishStatus()
+                } else {
+                    ackCommand("reboot_device", "ok")
+                    publishStatus()
+                    // Give the retained ack a moment to flush before the radio drops.
+                    runCatching { Thread.sleep(1200) }
+                    rebootDevice()
+                }
+            }
+            else -> Log.w(TAG, "unknown command: ${cmd.action}")
+        }
+    }
+
+    private fun ackCommand(action: String, result: String) {
+        cfg.lastCommandJson = gson.toJson(CommandStatus(action, TimeUtil.nowIso(), result))
+    }
+
+    private fun restartApp() {
+        Log.i(TAG, "restart_app requested")
+        guard.reset()
+        persistGuard()
+        publishStatus()
+        runCatching { mqtt?.disconnect() }
+        mqtt = null
+        runCatching { ensureConnected() }.onFailure { Log.w(TAG, "restart reconnect failed", it) }
+        restartReceiverActivity()
+        onReady()
+    }
+
+    private fun restartReceiverActivity() {
+        runCatching {
+            startActivity(
+                Intent(this, ReceiverActivity::class.java).addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                )
+            )
+        }.onFailure { Log.w(TAG, "restartReceiverActivity failed", it) }
+    }
+
+    /** Device-owner reboot; returns false when we lack the rights. */
+    private fun rebootDevice(): Boolean {
+        if (!DeviceOwnerManager.isDeviceOwner(this)) return false
+        val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+        val admin = ComponentName(this, PagerDeviceAdminReceiver::class.java)
+        return runCatching { dpm.reboot(admin) }
+            .onFailure { Log.w(TAG, "reboot failed", it) }
+            .isSuccess
+    }
+
+    // ------------------------------------------------- connection guardrail
+
+    /**
+     * Begin a transactional broker/credential change: probe the candidate, switch
+     * to it, and let [ConfigGuard] commit or auto-revert within the window. The
+     * pending state is persisted so a reboot resumes (and, if unconfirmed, reverts).
+     */
+    private fun beginConnectionChange(cmd: CommandPayload, now: Long) {
+        if (guard.state.isPending) {
+            ackCommand("set_connection", "busy: a change is already pending")
+            publishStatus()
+            return
+        }
+        val candidate = cmd.candidate
+        if (candidate == null) {
+            ackCommand("set_connection", "invalid: missing candidate")
+            publishStatus()
+            return
+        }
+        val backup = cfg.connection()
+        // Blank username/password mean "keep the current one" (the secret can't be
+        // read back to the console, so an empty field must not wipe it).
+        val merged = candidate.copy(
+            username = candidate.username.ifBlank { backup.username },
+            password = candidate.password.ifBlank { backup.password }
+        )
+        val revertMs = ConfigGuard.clampRevertSeconds(cmd.revert_after_s) * 1000L
+        val confirmMs = ConfigGuard.clampConfirmSeconds(cmd.confirm_after_s) * 1000L
+        ackCommand("set_connection", "pending")
+        val effect = guard.on(GuardEvent.Request(merged, backup, now, revertMs, confirmMs))
+        persistGuard()
+        if (effect is GuardEffect.StartProbe) {
+            val sameEndpoint = merged.host == backup.host &&
+                merged.port == backup.port && merged.use_tls == backup.use_tls
+            // Only a real broker move can be probed on a second connection; a
+            // credential/tuning-only change is validated by the switch itself.
+            val ok = if (sameEndpoint) true else MqttController.probe(this, merged)
+            val next = guard.on(
+                if (ok) GuardEvent.ProbeOk(System.currentTimeMillis())
+                else GuardEvent.ProbeFail(System.currentTimeMillis())
+            )
+            persistGuard()
+            handleGuardEffect(next)
+        }
+        startGuardTimer()
+        publishStatus()
+        PagerBus.notifyChanged()
+    }
+
+    private fun handleGuardEffect(effect: GuardEffect) {
+        when (effect) {
+            is GuardEffect.SwitchTo -> {
+                cfg.setConnection(effect.candidate)
+                ackCommand("set_connection", "switched; awaiting confirmation")
+                reconnect()
+            }
+            is GuardEffect.Revert -> {
+                effect.backup?.let { cfg.setConnection(it) }
+                ackCommand("set_connection", "reverted: ${guard.state.lastError ?: "no link"}")
+                reconnect()
+            }
+            GuardEffect.Commit -> {
+                ackCommand("set_connection", "committed")
+                Log.i(TAG, "connection change committed")
+            }
+            else -> {}
+        }
+        persistGuard()
+    }
+
+    private fun reconnect() {
+        runCatching { mqtt?.disconnect() }
+        mqtt = null
+        runCatching { ensureConnected() }.onFailure { Log.w(TAG, "reconnect failed", it) }
+        onReady()
+    }
+
+    private fun startGuardTimer() {
+        stopGuardTimer()
+        val r = object : Runnable {
+            override fun run() {
+                val self = this
+                executor.execute {
+                    if (!guard.state.isPending) return@execute
+                    val effect = guard.on(GuardEvent.Tick(System.currentTimeMillis()))
+                    handleGuardEffect(effect)
+                    publishStatus()
+                    if (guard.state.isPending) handler.postDelayed(self, GUARD_TICK_MS)
+                }
+            }
+        }
+        guardTimer = r
+        handler.postDelayed(r, GUARD_TICK_MS)
+    }
+
+    private fun stopGuardTimer() {
+        guardTimer?.let { handler.removeCallbacks(it) }
+        guardTimer = null
+    }
+
+    private fun persistGuard() {
+        cfg.guardStateJson = if (guard.state.isPending) gson.toJson(guard.state) else null
+    }
+
+    private fun restoreGuard() {
+        val json = cfg.guardStateJson ?: return
+        val persisted = runCatching { gson.fromJson(json, GuardState::class.java) }.getOrNull() ?: return
+        guard.resumePersisted(persisted, System.currentTimeMillis())
+        if (guard.state.isPending) {
+            Log.i(TAG, "resuming pending connection change (${guard.state.status})")
+            startGuardTimer()
+        }
     }
 
     /**
@@ -297,6 +494,7 @@ class PagerService : Service(), MqttController.Listener {
         cfg.currentMessageText = msg.text
         cfg.currentSender = msg.sender
         cfg.currentExpiresAt = expiresAt
+        cfg.currentReceivedAt = now
         scheduleExpiry(msg.id, expiresAt)
         publishStatus()
         PagerBus.notifyChanged()
@@ -356,6 +554,18 @@ class PagerService : Service(), MqttController.Listener {
             config = cfg.remoteConfig(),
             config_applied_at = cfg.remoteConfigAppliedAt,
             config_error = cfg.remoteConfigError,
+            device_owner = DeviceOwnerManager.isDeviceOwner(this),
+            connection = ConnectionStatus(
+                state = guard.state.status.name.lowercase(),
+                host = cfg.brokerHost,
+                port = cfg.brokerPort,
+                use_tls = cfg.useTls,
+                password_set = cfg.password.isNotBlank(),
+                last_error = guard.state.lastError
+            ),
+            command = cfg.lastCommandJson?.let {
+                runCatching { gson.fromJson(it, CommandStatus::class.java) }.getOrNull()
+            },
             battery_temp_c = batteryTempC()
         )
         m.publish(Topics.STATUS, PagerJson.diagnostics(d), retained = true)

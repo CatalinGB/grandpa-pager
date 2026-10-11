@@ -26,9 +26,11 @@ class MqttController(
 
     @Volatile
     private var client: MqttClient? = null
+    @Volatile
+    private var qos: Int = 1
 
-    fun connect(cfg: Config) {
-        val serverUri = cfg.serverUri()
+    fun connect(cfg: Config, conn: ConnectionConfig) {
+        val serverUri = conn.serverUri
         val clientId = cfg.effectiveClientId()
         Log.i(TAG, "connecting to $serverUri as $clientId (cleanSession=false)")
 
@@ -37,13 +39,13 @@ class MqttController(
 
         val opts = MqttConnectOptions().apply {
             isCleanSession = false
-            isAutomaticReconnect = true
-            keepAliveInterval = 30
-            connectionTimeout = 15
-            maxInflight = 20
-            if (cfg.username.isNotBlank()) userName = cfg.username
-            if (cfg.password.isNotBlank()) password = cfg.password.toCharArray()
-            if (cfg.useTls) socketFactory = TlsUtil.socketFactory(context)
+            isAutomaticReconnect = conn.auto_reconnect
+            keepAliveInterval = conn.keepalive_s
+            connectionTimeout = conn.connect_timeout_s
+            maxInflight = conn.max_inflight
+            if (conn.username.isNotBlank()) userName = conn.username
+            if (conn.password.isNotBlank()) password = conn.password.toCharArray()
+            if (conn.use_tls) socketFactory = TlsUtil.socketFactory(context)
 
             // NOTE: Flespi rejects a CONNECT that carries a Last Will when the
             // token is a scoped (ACL) token ("Not authorized"), so we do NOT set
@@ -51,6 +53,7 @@ class MqttController(
             // senders flag a status older than ~90 s). Re-enable here if a
             // will-capable token is created.
         }
+        qos = conn.qos
 
         c.setCallback(object : MqttCallbackExtended {
             override fun connectComplete(reconnect: Boolean, serverURI: String?) {
@@ -91,14 +94,14 @@ class MqttController(
     fun publish(topic: String, payload: String, retained: Boolean) {
         val c = client ?: return
         if (!c.isConnected) return
-        c.publish(topic, payload.toByteArray(Charsets.UTF_8), 1, retained)
+        c.publish(topic, payload.toByteArray(Charsets.UTF_8), qos, retained)
     }
 
     /** Publish an empty retained payload, clearing the retained message. */
     fun clearRetained(topic: String) {
         val c = client ?: return
         if (!c.isConnected) return
-        c.publish(topic, ByteArray(0), 1, true)
+        c.publish(topic, ByteArray(0), qos, true)
     }
 
     fun isConnected(): Boolean = client?.isConnected == true
@@ -111,5 +114,34 @@ class MqttController(
 
     companion object {
         private const val TAG = "MqttController"
+
+        /**
+         * Best-effort reachability probe of a candidate broker using a throwaway
+         * client id, so a change can be tested before committing. Never throws.
+         */
+        fun probe(context: Context, candidate: ConnectionConfig): Boolean {
+            val id = "grandpa-probe-" + System.currentTimeMillis()
+            var c: MqttClient? = null
+            return try {
+                c = MqttClient(candidate.serverUri, id, null)
+                val opts = MqttConnectOptions().apply {
+                    isCleanSession = true
+                    isAutomaticReconnect = false
+                    keepAliveInterval = candidate.keepalive_s
+                    connectionTimeout = candidate.connect_timeout_s
+                    if (candidate.username.isNotBlank()) userName = candidate.username
+                    if (candidate.password.isNotBlank()) password = candidate.password.toCharArray()
+                    if (candidate.use_tls) socketFactory = TlsUtil.socketFactory(context)
+                }
+                c.connect(opts)
+                true
+            } catch (e: Exception) {
+                Log.w(TAG, "probe ${candidate.serverUri} failed: ${e.message}")
+                false
+            } finally {
+                runCatching { c?.disconnect() }
+                runCatching { c?.close() }
+            }
+        }
     }
 }

@@ -338,3 +338,29 @@ by deliberate security design, and because no plumbing exists — is change the
 **broker/credentials**, **restart or reboot** the device, or **deploy an
 arbitrary layout/template**. Those three are the gaps standing between the current
 "tune the display" admin and the owner's "configure everything from admin" goal.
+
+---
+
+## Post-implementation update (2026-10-11)
+
+The gaps above were closed (spec `.scratch/admin-full-config/spec.md`, tickets
+`.scratch/admin-full-config/issues/`). Corrections to this note:
+
+- **Gaps 1–5 are now addressed.** Broker/credentials + MQTT tuning move as a
+  **guarded `set_connection` command** (probe + bounded auto-revert, persisted
+  across reboot; password never echoed) — not retained config, so D9's
+  "config can't cut the channel" invariant still holds for `grandpa/config`.
+  `restart_app` and `reboot_device` commands were added; the extended layout
+  knobs and the device-owner restriction block joined the retained config.
+- **§4 "text layout":** the owner chose *tune the existing knobs only* — no
+  template/markup engine. Message auto-size bounds, colours, idle clock scale,
+  date format and warning text are now remote; a template system remains out of
+  scope.
+- **§1b device setup** now includes the MQTT tuning fields (keepalive, timeout,
+  auto-reconnect, QoS, max inflight), changeable only via the guarded command.
+- **§1e** hardcoded layout constants are now remote-configurable (see above).
+- **Decision D16** (`.scratch/admin-full-config`, `docs/decisions.md`) supersedes
+  `admin-mode/map.md`'s "broker URL over MQTT is out of scope".
+- **New prerequisite:** the admin token's ACL now also needs **publish
+  `grandpa/command`** (`docs/flespi-setup.md`).
+

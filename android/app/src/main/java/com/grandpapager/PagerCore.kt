@@ -35,7 +35,28 @@ data class MessagePayload(
     val duration_minutes: Int
 )
 
-data class CommandPayload(val action: String)
+data class CommandPayload(
+    val action: String,
+    /** `set_connection`: the candidate broker + tuning to switch to. */
+    val candidate: ConnectionConfig? = null,
+    /** `set_connection`: seconds to wait before reverting (clamped by ConfigGuard). */
+    val revert_after_s: Int? = null,
+    /** `set_connection`: seconds a connection must stay up before committing. */
+    val confirm_after_s: Int? = null
+)
+
+/** Acknowledged result of the last device-control command. */
+data class CommandStatus(val last: String?, val received_at: String?, val result: String?)
+
+/** The broker connection as reported in status — never the password. */
+data class ConnectionStatus(
+    val state: String,
+    val host: String,
+    val port: Int,
+    val use_tls: Boolean,
+    val password_set: Boolean,
+    val last_error: String? = null
+)
 
 data class DiagnosticsPayload(
     val state: String,
@@ -51,6 +72,12 @@ data class DiagnosticsPayload(
     val config: RemoteConfig? = null,
     val config_applied_at: String? = null,
     val config_error: String? = null,
+    /** Whether this app currently holds device-owner rights (restrictions/kiosk). */
+    val device_owner: Boolean? = null,
+    /** Broker connection + guardrail state (never the password). */
+    val connection: ConnectionStatus? = null,
+    /** Result of the last device-control command. */
+    val command: CommandStatus? = null,
     /** Battery temperature in °C (tenths from BatteryManager), or null if unknown.
      *  Always-on devices run hot while charging — the single best early-warning
      *  signal for a degrading cell. A charge-controller can also gate on it. */
@@ -104,9 +131,38 @@ object Expiry {
     }
 }
 
+/**
+ * Pure mapping from the admin's device-owner config to the set of hardening
+ * restriction keys the receiver should enforce. The Android translation to
+ * `UserManager` constants lives in `DeviceOwnerManager`; this stays testable.
+ */
+object RestrictionPlan {
+    const val ACCOUNTS = "accounts"
+    const val BLUETOOTH = "bluetooth"
+    const val LOCATION = "location"
+    const val PRINTING = "printing"
+    const val MOBILE_NETWORKS = "mobile_networks"
+    const val TETHERING = "tethering"
+    const val ROAMING = "roaming"
+
+    /** Every key the app knows how to enforce (used to clear relaxed ones). */
+    val ALL: Set<String> = setOf(ACCOUNTS, BLUETOOTH, LOCATION, PRINTING, MOBILE_NETWORKS, TETHERING, ROAMING)
+
+    /**
+     * The restrictions to enforce for [c]. Mobile-network config, tethering and
+     * roaming stay always-on hardening; the rest follow their toggles.
+     */
+    fun desired(c: RemoteConfig.DeviceOwner): Set<String> = buildSet {
+        if (c.restrict_accounts) add(ACCOUNTS)
+        if (c.restrict_bluetooth) add(BLUETOOTH)
+        if (c.restrict_location) add(LOCATION)
+        if (c.restrict_printing) add(PRINTING)
+        add(MOBILE_NETWORKS); add(TETHERING); add(ROAMING)
+    }
+}
+
 /** JSON (de)serialisation for all wire payloads. */
-object PagerJson {
-    private val gson = Gson()
+object PagerJson {    private val gson = Gson()
 
     fun newMessage(sender: String, text: String, durationMinutes: Int, nowMillis: Long = System.currentTimeMillis()): MessagePayload =
         MessagePayload(

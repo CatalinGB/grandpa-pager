@@ -17,10 +17,17 @@ object DateLabels {
     private fun locale(context: Context): Locale =
         context.resources.configuration.locales[0]
 
-    fun dateLine(context: Context, millis: Long): String {
+    /** Numeric date patterns for the admin-configurable idle date format. */
+    fun pattern(format: String): String = when (format) {
+        "mdy" -> "MM/dd/yyyy"
+        "ymd" -> "yyyy-MM-dd"
+        else -> "dd/MM/yyyy" // "auto" keeps the date-first order
+    }
+
+    fun dateLine(context: Context, millis: Long, format: String = "auto"): String {
         val loc = locale(context)
         val weekday = SimpleDateFormat("EEEE", loc).format(Date(millis)).uppercase(loc)
-        val numeric = SimpleDateFormat("dd/MM/yyyy", loc).format(Date(millis))
+        val numeric = SimpleDateFormat(pattern(format), loc).format(Date(millis))
         return "$weekday $numeric"
     }
 

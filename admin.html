@@ -72,13 +72,41 @@
       <div id="sec-power"></div>
       <div class="sec">Kiosk</div>
       <div id="sec-kiosk"></div>
+      <div class="sec">Device owner</div>
+      <div id="sec-device_owner"></div>
       <div style="height:12px"></div>
       <div class="rowbtns"><button class="ghost" id="reset">Reset</button><button class="apply" id="apply">Apply to phone</button></div>
       <div class="hint" id="applied"></div>
       <pre id="jsonPreview"></pre>
     </div>
+    <div class="card">
+      <div class="sec" style="margin-top:0">Connection (guarded)</div>
+      <div class="sub">A broker/credential change is transactional: the phone tests it, then commits or auto-reverts within the window.</div>
+      <div class="row"><div>Host</div><input id="cHost" type="text" placeholder="mqtt.example.com"></div>
+      <div class="row"><div>Port</div><input id="cPort" type="text" value="8883"></div>
+      <div class="row"><div>Use TLS</div><input id="cTls" type="checkbox" checked></div>
+      <div class="row"><div>Username</div><input id="cUser" type="text" placeholder="(unchanged if blank)"></div>
+      <div class="row"><div>Password</div><input id="cPass" type="password" placeholder="(unchanged if blank)"></div>
+      <div class="row"><div>Keepalive (s)</div><input id="cKeep" type="text" value="30"></div>
+      <div class="row"><div>Timeout (s)</div><input id="cTimeout" type="text" value="15"></div>
+      <div class="row"><div>Auto-reconnect</div><input id="cAuto" type="checkbox" checked></div>
+      <div class="row"><div>QoS</div><input id="cQos" type="text" value="1"></div>
+      <div class="row"><div>Max inflight</div><input id="cInflight" type="text" value="20"></div>
+      <div class="row"><div>Revert after (s)</div><input id="cRevert" type="text" value="90"></div>
+      <div style="height:8px"></div>
+      <button class="apply" style="width:100%" id="applyConn">Change connection…</button>
+      <div class="hint" id="connState">—</div>
+    </div>
+    <div class="card">
+      <div class="sec" style="margin-top:0">Device actions</div>
+      <div class="rowbtns">
+        <button class="ghost" id="restartApp">Restart app</button>
+        <button class="ghost" id="rebootDevice">Reboot device</button>
+      </div>
+      <div class="hint" id="actionHint"></div>
+    </div>
   </section>
 </div>
-<script src="admin.js?v=4"></script>
+<script src="admin.js?v=5"></script>
 </body>
 </html>

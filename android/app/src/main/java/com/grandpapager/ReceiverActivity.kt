@@ -10,6 +10,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.graphics.Color
 import android.graphics.Paint
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
@@ -74,6 +75,7 @@ class ReceiverActivity : Activity() {
     private var torchRequested = false
     private val torchHandler = Handler(Looper.getMainLooper())
     private var appliedOrientation: Int? = null
+    private var appliedDeviceOwner: RemoteConfig.DeviceOwner? = null
 
     /**
      * Admin escape hatch: five taps in the bottom-left corner switch to the
@@ -168,6 +170,9 @@ class ReceiverActivity : Activity() {
             "battery exemption NOT granted — Doze may delay messages on battery; " +
                 "grant via: adb shell dumpsys deviceidle whitelist +$packageName"
         )
+        // In a device-owner kiosk, don't pop a system dialog; the operator grants
+        // it per the runbook. As a normal app, ask once via the setup dialog.
+        if (DeviceOwnerManager.isDeviceOwner(this)) return
         val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         if (am.lockTaskModeState != ActivityManager.LOCK_TASK_MODE_NONE) return
         if (cfg.batteryExemptionAsked) return
@@ -221,8 +226,13 @@ class ReceiverActivity : Activity() {
             messageView.gravity = Gravity.CENTER
             messageView.text = cfg.currentMessageText ?: ""
             warnView.visibility = View.GONE
-            // The "clears in …" countdown is a dev aid; the admin can also enable it.
-            countdownView.text = getString(R.string.clears_in, remainingLabel())
+            // "Received at … , expires at …" — hidden only if the admin turns it off.
+            val receivedAt = if (cfg.currentReceivedAt > 0) cfg.currentReceivedAt else System.currentTimeMillis()
+            countdownView.text = getString(
+                R.string.msg_received_expires,
+                DateLabels.timeLine(this, receivedAt),
+                DateLabels.timeLine(this, cfg.currentExpiresAt)
+            )
             countdownView.visibility = if (BuildConfig.DEBUG || rc.display.countdown) View.VISIBLE else View.GONE
         } else {
             if (cfg.currentMessageId != null && !clearRequested) {
@@ -250,12 +260,12 @@ class ReceiverActivity : Activity() {
                 keepScreenOn(true)
                 dateView.visibility = View.VISIBLE
                 clockView.visibility = View.VISIBLE
-                sizeIdleViews(System.currentTimeMillis())
+                sizeIdleViews(System.currentTimeMillis(), rc.display.idle_clock_scale, rc.display.idle_date_format)
                 if (Link.connected) {
                     warnView.visibility = View.GONE
                 } else {
                     warnView.visibility = View.VISIBLE
-                    warnView.text = getString(R.string.conn_problem)
+                    warnView.text = rc.display.warn_text ?: getString(R.string.conn_problem)
                 }
             }
         }
@@ -277,16 +287,17 @@ class ReceiverActivity : Activity() {
      * Size the idle date to fit on ONE row, then set the clock 30 % larger.
      * Runs after layout so the available width is known.
      */
-    private fun sizeIdleViews(now: Long) {
+    private fun sizeIdleViews(now: Long, clockScale: Float, dateFormat: String) {
         area.post {
             val availW = (area.width - area.paddingLeft - area.paddingRight).toFloat()
             val availH = (area.height - area.paddingTop - area.paddingBottom).toFloat()
             if (availW <= 0f) return@post
-            val date = DateLabels.dateLine(this, now)
+            val date = DateLabels.dateLine(this, now, dateFormat)
             val time = DateLabels.timeLine(this, now)
             val paint = Paint(dateView.paint)
-            // Date and clock must share: date(1.0) + clock(1.3) with line spacing.
-            val maxByHeight = availH / 3.0f
+            // Date and clock must share: date(1.0) + clock(scale) with line spacing.
+            val scale = clockScale.coerceIn(1.0f, 3.0f)
+            val maxByHeight = availH / (2.0f + scale)
             var lo = 12f
             var hi = maxByHeight
             repeat(24) {
@@ -298,7 +309,7 @@ class ReceiverActivity : Activity() {
             dateView.text = date
             dateView.setTextSize(TypedValue.COMPLEX_UNIT_PX, datePx)
             clockView.text = time
-            clockView.setTextSize(TypedValue.COMPLEX_UNIT_PX, datePx * 1.3f)
+            clockView.setTextSize(TypedValue.COMPLEX_UNIT_PX, datePx * scale)
         }
     }
 
@@ -306,6 +317,15 @@ class ReceiverActivity : Activity() {
     private fun applyRemoteConfig() {
         val rc = cfg.remoteConfig()
         nameView.setTextSize(TypedValue.COMPLEX_UNIT_SP, rc.display.name_size_sp.toFloat())
+        nameView.setTextColor(Color.parseColor(rc.display.name_color))
+        messageView.setTextColor(Color.parseColor(rc.display.message_color))
+        warnView.setTextColor(Color.parseColor(rc.display.warn_color))
+        countdownView.setTextColor(Color.parseColor(rc.display.countdown_color))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            messageView.setAutoSizeTextTypeUniformWithConfiguration(
+                rc.display.message_size_min_sp, rc.display.message_size_max_sp, 1, TypedValue.COMPLEX_UNIT_SP
+            )
+        }
         val orient = when (rc.display.orientation) {
             "portrait" -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             "landscape" -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
@@ -316,11 +336,15 @@ class ReceiverActivity : Activity() {
             runCatching { requestedOrientation = orient }
         }
         if (DeviceOwnerManager.isDeviceOwner(this)) {
+            if (appliedDeviceOwner != rc.device_owner) {
+                appliedDeviceOwner = rc.device_owner
+                DeviceOwnerManager.applyPolicy(this, rc.device_owner)
+            }
             val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
             val inLock = am.lockTaskModeState != ActivityManager.LOCK_TASK_MODE_NONE
             when {
-                rc.kiosk.locked && !inLock -> runCatching { startLockTask() }
-                !rc.kiosk.locked && inLock -> switchToLauncher()
+                rc.device_owner.lock_task && rc.kiosk.locked && !inLock -> runCatching { startLockTask() }
+                (!rc.kiosk.locked || !rc.device_owner.lock_task) && inLock -> switchToLauncher()
             }
         }
     }
@@ -391,17 +415,6 @@ class ReceiverActivity : Activity() {
         }
         torchRequested = true
         torchHandler.post(run)
-    }
-
-    private fun remainingLabel(): String {
-        val rem = Expiry.remaining(cfg.currentExpiresAt, System.currentTimeMillis())
-        val hours = rem / 3_600_000L
-        val minutes = (rem % 3_600_000L) / 60_000L
-        return when {
-            hours > 0 -> getString(R.string.duration_hm, hours, minutes)
-            minutes > 0 -> getString(R.string.duration_m, minutes)
-            else -> getString(R.string.duration_lt_min)
-        }
     }
 
     /** Un-whitelist, restore the status bar, drop persistent home, clear DO. */

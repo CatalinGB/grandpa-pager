@@ -92,6 +92,7 @@ from any other website**. Use `[]` to block browsers entirely.
     "type": 2,
     "acl": [
       { "uri": "mqtt", "topic": "grandpa/config", "actions": ["publish", "subscribe"] },
+      { "uri": "mqtt", "topic": "grandpa/command", "actions": ["publish"] },
       { "uri": "mqtt", "topic": "grandpa/status", "actions": ["subscribe"] }
     ]
   },
@@ -102,6 +103,11 @@ from any other website**. Use `[]` to block browsers entirely.
 ```
 
 ACL is **default-deny**: only the listed topic+action pairs are permitted.
+
+> **Admin commands:** the `publish grandpa/command` grant is what lets the console
+> issue `set_connection` (guarded broker change), `restart_app` and `reboot_device`.
+> Without it those buttons publish into the void. The grant is publish-only — the
+> console never subscribes to the command topic.
 
 > **Two hard-won gotchas (verified):**
 > - A **publish-only** token can send but its subscribers receive **nothing**.

@@ -30,7 +30,24 @@ object DeviceOwnerManager {
     fun isDeviceOwner(context: Context): Boolean =
         runCatching { dpm(context).isDeviceOwnerApp(context.packageName) }.getOrDefault(false)
 
-    /** Configure lock task + persistent home. Safe to call repeatedly. */
+    /** Map a pure restriction key to the Android constants that enforce it. */
+    private val RESTRICTION_CONSTS: Map<String, List<String>> = mapOf(
+        RestrictionPlan.ACCOUNTS to listOf(UserManager.DISALLOW_MODIFY_ACCOUNTS),
+        RestrictionPlan.BLUETOOTH to listOf(UserManager.DISALLOW_BLUETOOTH),
+        RestrictionPlan.LOCATION to listOf(
+            UserManager.DISALLOW_SHARE_LOCATION,
+            UserManager.DISALLOW_CONFIG_LOCATION
+        ),
+        RestrictionPlan.PRINTING to listOf(UserManager.DISALLOW_PRINTING),
+        RestrictionPlan.MOBILE_NETWORKS to listOf(UserManager.DISALLOW_CONFIG_MOBILE_NETWORKS),
+        RestrictionPlan.TETHERING to listOf(UserManager.DISALLOW_CONFIG_TETHERING),
+        RestrictionPlan.ROAMING to listOf(UserManager.DISALLOW_DATA_ROAMING)
+    )
+
+    /**
+     * One-time setup: make the receiver the persistent HOME, then apply the
+     * config-driven policy. Safe to call repeatedly; no-op without device-owner.
+     */
     fun applyKiosk(context: Context) {
         if (!isDeviceOwner(context)) {
             Log.i(TAG, "not device owner; skipping kiosk configuration")
@@ -39,11 +56,6 @@ object DeviceOwnerManager {
         val d = dpm(context)
         val a = admin(context)
         runCatching {
-            d.setLockTaskPackages(a, arrayOf(context.packageName))
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                // Remove power menu / status bar / notifications / recents from lock task.
-                d.setLockTaskFeatures(a, 0)
-            }
             val homeFilter = IntentFilter(Intent.ACTION_MAIN).apply {
                 addCategory(Intent.CATEGORY_HOME)
                 addCategory(Intent.CATEGORY_DEFAULT)
@@ -51,12 +63,35 @@ object DeviceOwnerManager {
             d.addPersistentPreferredActivity(
                 a, homeFilter, ComponentName(context, ReceiverActivity::class.java)
             )
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                d.setStatusBarDisabled(a, true)
-            }
-            Log.i(TAG, "kiosk configured (lock task + persistent home)")
+            Log.i(TAG, "kiosk configured (persistent home)")
         }.onFailure { Log.e(TAG, "kiosk configuration failed", it) }
-        applyRestrictions(context)
+        applyPolicy(context, Config(context).remoteConfig().device_owner)
+    }
+
+    /**
+     * Apply the admin's device-owner policy: lock-task packages/features, the
+     * status bar, and the user restrictions. Configuration-driven so a remote
+     * change tightens or relaxes the device without physical access.
+     */
+    fun applyPolicy(context: Context, doo: RemoteConfig.DeviceOwner) {
+        if (!isDeviceOwner(context)) return
+        val d = dpm(context)
+        val a = admin(context)
+        runCatching {
+            if (doo.lock_task) {
+                d.setLockTaskPackages(a, arrayOf(context.packageName))
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    // Remove power menu / status bar / notifications / recents.
+                    d.setLockTaskFeatures(a, DevicePolicyManager.LOCK_TASK_FEATURE_NONE)
+                }
+            } else {
+                d.setLockTaskPackages(a, emptyArray())
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                d.setStatusBarDisabled(a, doo.status_bar_disabled)
+            }
+        }.onFailure { Log.e(TAG, "device policy apply failed", it) }
+        applyRestrictions(context, doo)
     }
 
     /** Enter lock task (true kiosk when device owner, screen pinning otherwise). */
@@ -67,34 +102,30 @@ object DeviceOwnerManager {
         }.onFailure { Log.w(TAG, "startLockTask failed", it) }
     }
 
-    /** The restrictions we add, so apply/clear stay in sync. */
-    private val RESTRICTIONS = listOf(
-        UserManager.DISALLOW_MODIFY_ACCOUNTS,        // no adding/removing accounts
-        UserManager.DISALLOW_BLUETOOTH,              // no Bluetooth (fewer radios/attack surface)
-        UserManager.DISALLOW_SHARE_LOCATION,         // no location sharing
-        UserManager.DISALLOW_CONFIG_LOCATION,        // cannot toggle location providers
-        UserManager.DISALLOW_PRINTING,               // no printing services
-        UserManager.DISALLOW_CONFIG_MOBILE_NETWORKS, // no mobile-network config
-        UserManager.DISALLOW_CONFIG_TETHERING,       // no tethering
-        UserManager.DISALLOW_DATA_ROAMING            // no roaming
-    )
-
     /**
-     * Strip non-essential functionality on an always-on pager: no account changes,
-     * Bluetooth, location, printing or mobile-network config, and auto-sync off.
+     * Enforce exactly the configured restriction set: add the desired ones and
+     * clear the rest, so relaxing a toggle remotely actually takes effect.
      * Purely reversible — see [clearRestrictions]. Safe to call repeatedly.
      */
-    fun applyRestrictions(context: Context) {
+    fun applyRestrictions(context: Context, doo: RemoteConfig.DeviceOwner) {
         if (!isDeviceOwner(context)) return
+        val desired = RestrictionPlan.desired(doo)
         val d = dpm(context)
         val a = admin(context)
-        for (r in RESTRICTIONS) runCatching { d.addUserRestriction(a, r) }
-        runCatching { ContentResolver.setMasterSyncAutomatically(false) }
-        runCatching {
-            val bm = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-            @Suppress("DEPRECATION", "MissingPermission") bm.adapter?.disable()
+        for ((key, consts) in RESTRICTION_CONSTS) {
+            val enforce = key in desired
+            for (c in consts) runCatching {
+                if (enforce) d.addUserRestriction(a, c) else d.clearUserRestriction(a, c)
+            }
         }
-        Log.i(TAG, "device restrictions applied (${RESTRICTIONS.size})")
+        runCatching { ContentResolver.setMasterSyncAutomatically(!doo.restrict_sync) }
+        runCatching {
+            if (doo.restrict_bluetooth) {
+                val bm = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+                @Suppress("DEPRECATION", "MissingPermission") bm.adapter?.disable()
+            }
+        }
+        Log.i(TAG, "device restrictions applied: $desired")
     }
 
     /** Undo [applyRestrictions] (used by the RELEASE_KIOSK escape hatch). */
@@ -102,7 +133,9 @@ object DeviceOwnerManager {
         if (!isDeviceOwner(context)) return
         val d = dpm(context)
         val a = admin(context)
-        for (r in RESTRICTIONS) runCatching { d.clearUserRestriction(a, r) }
+        for (consts in RESTRICTION_CONSTS.values) {
+            for (c in consts) runCatching { d.clearUserRestriction(a, c) }
+        }
         runCatching { ContentResolver.setMasterSyncAutomatically(true) }
         Log.i(TAG, "device restrictions cleared")
     }

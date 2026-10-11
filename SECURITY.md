@@ -58,10 +58,17 @@ sender **and admin console**, and the tokens.
     token — ships a strict CSP (`script-src 'self'`, `connect-src 'self' wss:`,
     `base-uri 'none'`, `form-action 'none'`, `object-src 'none'`).
 12. **The admin token is more powerful than the sender token.** It can reconfigure
-    the device (display, cues, default duration) and toggle the kiosk lock. It is
-    narrowly scoped (pub/sub `grandpa/config`, sub `grandpa/status`), origin-locked,
-    held in `sessionStorage`, and can only toggle the lock — never broker
-    credentials, device-owner status, or any factory-reset surface.
+    the device (display, layout, cues, telemetry, device-owner restrictions, kiosk
+    lock), issue device-control commands (`restart_app`, `reboot_device`) and
+    request a **guarded broker/credential change** (`set_connection`). It is
+    narrowly scoped (pub/sub `grandpa/config`, pub `grandpa/command`, sub
+    `grandpa/status`), origin-locked and held in `sessionStorage`. It cannot remove
+    the device owner or perform a factory reset, and the retained `grandpa/config`
+    cannot change broker/credentials — that path is only the guarded command, which
+    probes the candidate and **auto-reverts** within the window, and which never
+    echoes the password (`status` reports `password_set` only). Residual risk: a
+    leaked admin token can strand the device for the revert window and can restart
+    or reboot it, so rotate on loss.
 13. **The admin page has no CSP yet.** `admin.js` uses inline `onclick`
     attributes, which a strict `script-src 'self'` would block; hardening it
     (event delegation + CSP) is recommended but pending.

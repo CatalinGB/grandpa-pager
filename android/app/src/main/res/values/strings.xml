@@ -4,6 +4,7 @@
     <!-- Receiver display -->
     <string name="from_prefix">From: %1$s</string>
     <string name="clears_in">clears in %1$s</string>
+    <string name="msg_received_expires">Message received at %1$s, expires at %2$s.</string>
     <string name="duration_hm">%1$dh %2$dm</string>
     <string name="duration_m">%1$dm</string>
     <string name="duration_lt_min">&lt;1m</string>

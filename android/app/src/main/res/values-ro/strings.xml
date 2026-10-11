@@ -2,6 +2,7 @@
     <!-- Receiver display -->
     <string name="from_prefix">De la: %1$s</string>
     <string name="clears_in">se șterge în %1$s</string>
+    <string name="msg_received_expires">Mesaj primit la %1$s, expira la %2$s.</string>
     <string name="duration_hm">%1$dh %2$dm</string>
     <string name="duration_m">%1$dm</string>
     <string name="duration_lt_min">&lt;1m</string>
