@@ -85,7 +85,8 @@ class SenderActivity : Activity() {
         }
         val lastSeen = TimeUtil.fromIso(d.last_seen) ?: 0L
         val ageSec = ((System.currentTimeMillis() - lastSeen) / 1000L).coerceAtLeast(0L)
-        val online = d.state != "offline" && ageSec < 90
+        val online = d.state != "offline" &&
+            ageSec < Stale.afterSeconds(d.config?.telemetry?.interval_minutes)
         val stale = if (online) "" else "  " + getString(R.string.stale_suffix, ageSec)
         val charging = if (d.charging) " " + getString(R.string.charging_suffix) else ""
         val temp = d.battery_temp_c?.let { "  " + getString(R.string.temp_suffix, it) } ?: ""

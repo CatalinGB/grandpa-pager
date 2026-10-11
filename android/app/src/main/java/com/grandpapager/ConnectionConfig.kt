@@ -21,7 +21,6 @@ data class ConnectionConfig(
     val max_inflight: Int = 20
 ) {
     val serverUri: String get() = (if (use_tls) "ssl://" else "tcp://") + host + ":" + port
-    fun passwordSet(): Boolean = password.isNotBlank()
 }
 
 object ConnectionCodec {

@@ -21,6 +21,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
+import android.os.SystemClock
 import android.util.Log
 import com.google.gson.Gson
 import java.util.concurrent.ExecutorService
@@ -315,11 +316,29 @@ class PagerService : Service(), MqttController.Listener {
         guard.reset()
         persistGuard()
         publishStatus()
-        runCatching { mqtt?.disconnect() }
-        mqtt = null
-        runCatching { ensureConnected() }.onFailure { Log.w(TAG, "restart reconnect failed", it) }
         restartReceiverActivity()
-        onReady()
+        runCatching { scheduleServiceRestart() }
+            .onFailure { Log.w(TAG, "restart_app scheduling failed", it) }
+        stopSelf()
+    }
+
+    /**
+     * Re-arm the foreground service for real. A service is NOT revived by
+     * START_STICKY after an explicit `stopSelf()`, so `restart_app` schedules a
+     * fresh start a moment ahead, then stops this instance. On O+ a
+     * `getForegroundService` PendingIntent is exempt from the background-start
+     * restriction, so the new instance may call `startForeground()` immediately.
+     */
+    private fun scheduleServiceRestart() {
+        val am = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val intent = Intent(this, PagerService::class.java)
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        val pi = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            PendingIntent.getForegroundService(this, 4001, intent, flags)
+        } else {
+            PendingIntent.getService(this, 4001, intent, flags)
+        }
+        am.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, SystemClock.elapsedRealtime() + 400L, pi)
     }
 
     private fun restartReceiverActivity() {

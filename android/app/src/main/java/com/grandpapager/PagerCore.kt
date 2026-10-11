@@ -149,15 +149,31 @@ object RestrictionPlan {
     val ALL: Set<String> = setOf(ACCOUNTS, BLUETOOTH, LOCATION, PRINTING, MOBILE_NETWORKS, TETHERING, ROAMING)
 
     /**
-     * The restrictions to enforce for [c]. Mobile-network config, tethering and
-     * roaming stay always-on hardening; the rest follow their toggles.
+     * The restrictions to enforce for [c]. Every restriction follows its own
+     * toggle so relaxing one remotely takes effect — matching architecture.md
+     * and D14 ("each toggle adds **or clears** its restriction"). The network
+     * ones (mobile config, tethering, roaming) default to on but are configurable.
      */
     fun desired(c: RemoteConfig.DeviceOwner): Set<String> = buildSet {
         if (c.restrict_accounts) add(ACCOUNTS)
         if (c.restrict_bluetooth) add(BLUETOOTH)
         if (c.restrict_location) add(LOCATION)
         if (c.restrict_printing) add(PRINTING)
-        add(MOBILE_NETWORKS); add(TETHERING); add(ROAMING)
+        if (c.restrict_mobile_networks) add(MOBILE_NETWORKS)
+        if (c.restrict_tethering) add(TETHERING)
+        if (c.restrict_roaming) add(ROAMING)
+    }
+}
+
+/**
+ * Status-staleness threshold, shared by the Android sender and mirrored by the
+ * web clients: a receiver is considered offline when its status is older than
+ * `2 × telemetry interval + 60 s`, and never below 90 s (decisions.md D13).
+ */
+object Stale {
+    fun afterSeconds(intervalMinutes: Int?): Int {
+        val m = intervalMinutes ?: 15
+        return maxOf(90, m * 60 * 2 + 60)
     }
 }
 

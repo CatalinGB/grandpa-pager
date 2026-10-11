@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug-only override: in addition to the platform trust anchors, debug builds
+     trust the bundled local test CA (res/raw/ca.crt) so the app can talk to the
+     local Aedes TLS broker. That CA's private key lives on the developer machine,
+     so it must NEVER be trusted by a release build. Between this file and the
+     release config in src/main, the test CA is trusted in debug only. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="@raw/ca" />
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

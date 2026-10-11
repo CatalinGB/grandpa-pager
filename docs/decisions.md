@@ -112,7 +112,9 @@ When device owner the app applies a **reversible** set of user restrictions
 config, no tethering, no roaming), disables master sync and turns off Bluetooth,
 to cut background activity and attack surface on a 24/7 device. The set is driven
 by the `device_owner` remote-config block (each toggle adds **or clears** its
-restriction). Cleared by the `RELEASE_KIOSK` gesture. Deliberately **not**
+restriction; relaxing Bluetooth re-enables the radio). The network restrictions
+(mobile config, tethering, roaming) default on but are configurable like the
+rest. Cleared by the `RELEASE_KIOSK` gesture. Deliberately **not**
 applied: factory-reset blocking or anything irreversible.
 (Battery/heat guidance lives in `device-hardening.md`.)
 
@@ -147,8 +149,9 @@ the client-id scheme stay constants (changing them would strand the web clients)
 *Change if* concurrent-connection broker limits make the probe unreliable.
 
 ## D17 — Device-control commands: restart and reboot
-`restart_app` soft-restarts the service connection and brings `ReceiverActivity`
-back; `reboot_device` uses the device-owner `DevicePolicyManager.reboot()`. Both are
+`restart_app` restarts the foreground `PagerService` for real (schedule a fresh
+start, then `stopSelf()`) and brings `ReceiverActivity` back; `reboot_device`
+uses the device-owner `DevicePolicyManager.reboot()`. Both are
 acknowledged in `status.command` (`last`, `received_at`, `result`). Reboot is only
 attempted when the app is device owner; otherwise it is reported, never silently
 ignored. The device owner is never removed remotely.

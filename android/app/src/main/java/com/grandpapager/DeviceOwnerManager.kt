@@ -119,12 +119,7 @@ object DeviceOwnerManager {
             }
         }
         runCatching { ContentResolver.setMasterSyncAutomatically(!doo.restrict_sync) }
-        runCatching {
-            if (doo.restrict_bluetooth) {
-                val bm = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-                @Suppress("DEPRECATION", "MissingPermission") bm.adapter?.disable()
-            }
-        }
+        setBluetoothRadio(context, enabled = !doo.restrict_bluetooth)
         Log.i(TAG, "device restrictions applied: $desired")
     }
 
@@ -137,6 +132,23 @@ object DeviceOwnerManager {
             for (c in consts) runCatching { d.clearUserRestriction(a, c) }
         }
         runCatching { ContentResolver.setMasterSyncAutomatically(true) }
+        setBluetoothRadio(context, enabled = true)
         Log.i(TAG, "device restrictions cleared")
+    }
+
+    /**
+     * Bring the Bluetooth radio in line with the `restrict_bluetooth` toggle, in
+     * both directions — enforcing it disables the radio, relaxing it re-enables
+     * it, so a remote toggle-off actually takes effect (architecture.md, D14).
+     * `enable()`/`disable()` are deprecated on API 33+ but are the supported,
+     * permission-gated path on this device's Android 9; best-effort either way.
+     */
+    private fun setBluetoothRadio(context: Context, enabled: Boolean) {
+        runCatching {
+            val bm = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+            @Suppress("DEPRECATION", "MissingPermission")
+            val adapter = bm.adapter ?: return@runCatching
+            if (enabled) adapter.enable() else adapter.disable()
+        }.onFailure { Log.w(TAG, "bluetooth ${if (enabled) "enable" else "disable"} failed", it) }
     }
 }

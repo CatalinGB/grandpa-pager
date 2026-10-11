@@ -11,7 +11,9 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' wss:; manifest-src 'self'; worker-src 'self'">
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="apple-touch-icon" href="./icon-192.png">
-<!-- MQTT.js vendored locally (no CDN dependency). v5.16.0 -->
+<!-- Shared helpers (loaded before the page script). MQTT.js vendored locally
+     (no CDN dependency). v5.16.0 -->
+<script src="./common.js?v=1"></script>
 <script src="./mqtt.min.js"></script>
 <style>
   :root{
@@ -128,6 +130,6 @@
   </section>
 </div>
 
-<script src="sender.js?v=4"></script>
+<script src="sender.js?v=5"></script>
 </body>
 </html>

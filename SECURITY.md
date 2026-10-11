@@ -69,9 +69,10 @@ sender **and admin console**, and the tokens.
     echoes the password (`status` reports `password_set` only). Residual risk: a
     leaked admin token can strand the device for the revert window and can restart
     or reboot it, so rotate on loss.
-13. **The admin page has no CSP yet.** `admin.js` uses inline `onclick`
-    attributes, which a strict `script-src 'self'` would block; hardening it
-    (event delegation + CSP) is recommended but pending.
+13. **The admin page now ships a CSP (fixed).** `admin.js` no longer uses inline
+    `onclick`/`oninput` attributes; it dispatches controls through one delegated
+    listener, so `admin.html` carries the same strict
+    `script-src 'self'` policy (no `'unsafe-inline'`) as the sender.
 14. **The receiver runs an end-of-life OS.** Android 9 (Mi A1) is out of security
     support, and the phone is a permanently-connected node. This is contained
     (dedicated SSID/VLAN, no Google account, USB debugging off, egress limited)
@@ -92,7 +93,8 @@ sender **and admin console**, and the tokens.
 1. Create **scoped ACL tokens** and set **`origins`** exactly as in
    `docs/flespi-setup.md`; stop using the `.env` token in clients.
 2. Keep the **receiver token off the browser** (`origins: []`).
-3. Add a **CSP to `admin.html`** once its inline handlers are refactored.
+3. Keep the **admin CSP** (`script-src 'self'`) — do not reintroduce inline
+   handlers in `admin.html`/`admin.js`.
 4. Optional: **per-person sender tokens** for independent revocation; consider a
    **separate admin token per admin**.
 5. **Rotate** the sender/admin token if a device is lost (recreate the token).

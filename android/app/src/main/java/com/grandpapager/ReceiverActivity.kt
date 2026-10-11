@@ -264,14 +264,14 @@ class ReceiverActivity : Activity() {
             // change when only its text does, so onLayoutChange alone misses it.
             messageView.post { refreshMessageScroll() }
             warnView.visibility = View.GONE
-            // "Received at … , expires at …" — hidden only if the admin turns it off.
+            // "Received at … , expires at …" — shown only when the admin turns it on.
             val receivedAt = if (cfg.currentReceivedAt > 0) cfg.currentReceivedAt else System.currentTimeMillis()
             countdownView.text = getString(
                 R.string.msg_received_expires,
                 DateLabels.timeLine(this, receivedAt),
                 DateLabels.timeLine(this, cfg.currentExpiresAt)
             )
-            countdownView.visibility = if (BuildConfig.DEBUG || rc.display.countdown) View.VISIBLE else View.GONE
+            countdownView.visibility = if (rc.display.countdown) View.VISIBLE else View.GONE
         } else {
             if (cfg.currentMessageId != null && !clearRequested) {
                 clearRequested = true

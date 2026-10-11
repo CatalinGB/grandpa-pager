@@ -125,7 +125,8 @@ Remote config — `grandpa/config` (v1):
   "device_owner": { "lock_task": true, "status_bar_disabled": true,
                     "restrict_accounts": true, "restrict_bluetooth": true,
                     "restrict_location": true, "restrict_printing": true,
-                    "restrict_sync": true } }
+                    "restrict_sync": true, "restrict_mobile_networks": true,
+                    "restrict_tethering": true, "restrict_roaming": true } }
 ```
 
 The receiver **clamps** numerics to bounds and **ignores** unknown/wrong-type
@@ -142,9 +143,10 @@ optional field under `schema: 1` is backward-compatible (old receivers ignore it
 and default it).
 
 The `device_owner` block drives the reversible hardening restrictions when the app
-is device owner (see below); each toggle adds **or clears** its restriction, so a
-relaxation takes effect too. The receiver reports `status.device_owner` so the
-console can show whether the toggles can act.
+is device owner (see below); each toggle adds **or clears** its restriction, in
+both directions (so relaxing takes effect too, and `restrict_bluetooth` turns the
+radio back on). The receiver reports `status.device_owner` so the console can show
+whether the toggles can act.
 
 ## Remote connection change (guarded)
 
@@ -177,10 +179,10 @@ only.
 
 ## Device-control commands
 
-`restart_app` soft-restarts the service connection and brings `ReceiverActivity`
-back; `reboot_device` reboots via the device-owner `DevicePolicyManager.reboot()`
-and reports `not device owner` when it cannot. Both are acknowledged in
-`status.command`.
+`restart_app` restarts the foreground `PagerService` (scheduled re-start, then
+`stopSelf()`) and brings `ReceiverActivity` back; `reboot_device` reboots via the
+device-owner `DevicePolicyManager.reboot()` and reports `not device owner` when it
+cannot. Both are acknowledged in `status.command`.
 
 
 ## Expiry model (application-level)
@@ -252,9 +254,10 @@ device via `defaults.duration_minutes` (admin).
 - **Scoped ACL tokens** per role (receiver, web sender, admin) — never the
   Master token on any client. The browser tokens are origin-locked to the Pages
   site; the receiver token is usable only from a native client.
-- The **web sender** ships a strict **Content-Security-Policy** and loads no
-  third-party scripts (MQTT.js is vendored). The **admin token** is kept in
-  `sessionStorage`, not `localStorage`.
+- The **web sender** and the **admin console** both ship a strict
+  **Content-Security-Policy** (no inline event handlers) and load no third-party
+  scripts (MQTT.js is vendored). The **admin token** is kept in `sessionStorage`,
+  not `localStorage`.
 - Lockdown: device-owner lock task removes the power menu, status bar and
   recents; persistent home re-arms the app at boot. The **retained config** cannot
   change the broker/credentials or device-owner status. Broker/credential changes

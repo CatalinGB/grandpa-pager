@@ -52,7 +52,10 @@ data class RemoteConfig(
         val restrict_bluetooth: Boolean = true,
         val restrict_location: Boolean = true,
         val restrict_printing: Boolean = true,
-        val restrict_sync: Boolean = true
+        val restrict_sync: Boolean = true,
+        val restrict_mobile_networks: Boolean = true,
+        val restrict_tethering: Boolean = true,
+        val restrict_roaming: Boolean = true
     )
 }
 
@@ -68,8 +71,6 @@ object RemoteConfigCodec {
     const val DEFAULT_COUNTDOWN_COLOR = "#FF9E9E9E"
 
     fun toJson(c: RemoteConfig): String = gson.toJson(c)
-
-    fun defaultsJson(): String = gson.toJson(RemoteConfig())
 
     /** Parse + clamp. Returns null when the schema is missing/unsupported. */
     fun parse(json: String?): RemoteConfig? {
@@ -131,7 +132,10 @@ object RemoteConfigCodec {
                     restrict_bluetooth = bool(doo, "restrict_bluetooth", true),
                     restrict_location = bool(doo, "restrict_location", true),
                     restrict_printing = bool(doo, "restrict_printing", true),
-                    restrict_sync = bool(doo, "restrict_sync", true)
+                    restrict_sync = bool(doo, "restrict_sync", true),
+                    restrict_mobile_networks = bool(doo, "restrict_mobile_networks", true),
+                    restrict_tethering = bool(doo, "restrict_tethering", true),
+                    restrict_roaming = bool(doo, "restrict_roaming", true)
                 )
             )
         } catch (e: Exception) {

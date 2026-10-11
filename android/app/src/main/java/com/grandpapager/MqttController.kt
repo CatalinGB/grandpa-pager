@@ -49,9 +49,10 @@ class MqttController(
 
             // NOTE: Flespi rejects a CONNECT that carries a Last Will when the
             // token is a scoped (ACL) token ("Not authorized"), so we do NOT set
-            // one. Offline detection falls back to diagnostics staleness (the
-            // senders flag a status older than ~90 s). Re-enable here if a
-            // will-capable token is created.
+            // one. Offline detection falls back to diagnostics staleness — the
+            // senders flag a status older than the derived threshold
+            // (2×telemetry interval + 60 s, min 90 s; decisions.md D13).
+            // Re-enable here if a will-capable token is created.
         }
         qos = conn.qos
 

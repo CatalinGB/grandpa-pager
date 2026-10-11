@@ -1,13 +1,20 @@
 const { chromium } = require("playwright");
+const path = require("path");
+const { pathToFileURL } = require("url");
+
+// Portable: derive the page URL from this file's location, and let the browser
+// binary be overridden (CHROME) for machines where Chromium is elsewhere.
+const PAGE = pathToFileURL(path.join(__dirname, "..", "..", "admin.html")).href + "?demo=1";
+const CHROME = process.env.CHROME || "/usr/bin/chromium";
 
 (async () => {
-  const browser = await chromium.launch({ executablePath: "/usr/bin/chromium", args: ["--no-sandbox"] });
+  const browser = await chromium.launch({ executablePath: CHROME, args: ["--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 430, height: 900 } });
   const errors = [];
   page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
   page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
 
-  await page.goto("file:///home/kalio/Projects/grandpa-pager/admin.html?demo=1");
+  await page.goto(PAGE);
   await page.waitForSelector("#jsonPreview");
 
   const slider = page.locator('input[data-path="display.name_size_sp"]');

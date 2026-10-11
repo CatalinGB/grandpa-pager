@@ -44,7 +44,8 @@ device.
   with a hidden admin escape gesture.
 - **Power-aware**: the display sleeps when idle and wakes instantly on a new
   message (full-screen intent); the socket stays up on a wake/Wi-Fi lock. As
-  device owner it also strips accounts, Bluetooth, location, printing and sync.
+  device owner it also strips accounts, Bluetooth, location, printing, sync and
+  mobile-network/tethering/roaming config.
 - **Self-healing**: survives reboots, Wi-Fi loss and long broker outages
   (a 30 s reconnect watchdog).
 - **Zero backend** and **MIT** licensed.
@@ -208,8 +209,9 @@ Full build/test/deploy/undo steps and a troubleshooting table are in
 - **Least-privilege tokens**: receiver, sender and admin each get their own
   per-topic ACL token, origin-locked for the browser ones. The Master token never
   leaves your PC.
-- **Hardened web page**: strict Content-Security-Policy, no third-party scripts
-  (MQTT.js is vendored), admin token kept in `sessionStorage`.
+- **Hardened web pages**: strict Content-Security-Policy on the sender *and* the
+  admin console, no third-party scripts (MQTT.js is vendored), admin token kept
+  in `sessionStorage`.
 - **Invitation links** carry a sender token in the URL. The fragment form is
   preferred (not sent to the server, not in `Referer`); the page strips the
   params from history on load, and the service worker no longer caches URLs that

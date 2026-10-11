@@ -22,12 +22,16 @@
     device_owner: {
       status_bar_disabled: true, lock_task: true,
       restrict_accounts: true, restrict_bluetooth: true,
-      restrict_location: true, restrict_printing: true, restrict_sync: true
+      restrict_location: true, restrict_printing: true, restrict_sync: true,
+      restrict_mobile_networks: true, restrict_tethering: true, restrict_roaming: true
     }
   };
   var el = function (id) { return document.getElementById(id); };
   var cfg = JSON.parse(JSON.stringify(DEF));
   var dirty = false, client = null;
+
+  /* Shared helper (common.js). */
+  var staleAfterSeconds = GP.staleAfterSeconds;
 
   var get = function (path) { return path.split(".").reduce(function (o, k) { return o[k]; }, cfg); };
   function setPath(path, v) { var p = path.split("."); var o = cfg; for (var i = 0; i < p.length - 1; i++) o = o[p[i]]; o[p[p.length - 1]] = v; dirty = true; }
@@ -35,41 +39,44 @@
   function fmtMs(ms) { return (ms / 1000) + " s"; }
   function fmtOf(fmt, v) { return fmt === "ms" ? fmtMs(v) : fmt === "h" ? fmtH(v) : "" + v; }
 
-  /* ---- control markup (no re-render on change; handlers update in place) ---- */
+  /* ---- control markup (no re-render on change; handlers update in place) ----
+     Controls carry `data-act`; a single delegated listener (see wireControls)
+     dispatches them. No inline event handlers, so a strict CSP
+     (`script-src 'self'`, no 'unsafe-inline') is possible. */
   function sw(path, label, desc) {
     var v = get(path);
     return '<div class="row"><div><div>' + label + '</div>' + (desc ? '<div class="sub">' + desc + '</div>' : '') + '</div>' +
-      '<button class="sw ' + (v ? "on" : "") + '" data-path="' + path + '" onclick="A.toggle(this)"></button></div>';
+      '<button class="sw ' + (v ? "on" : "") + '" data-act="toggle" data-path="' + path + '"></button></div>';
   }
   function slider(path, label, min, max, step, fmt) {
     var v = get(path);
     return '<div class="row"><div>' + label + '</div>' +
-      '<input type="range" data-path="' + path + '" data-fmt="' + (fmt || "") + '" min="' + min + '" max="' + max + '" step="' + step + '" value="' + v + '" oninput="A.slide(this)">' +
+      '<input type="range" data-act="slide" data-path="' + path + '" data-fmt="' + (fmt || "") + '" min="' + min + '" max="' + max + '" step="' + step + '" value="' + v + '">' +
       '<span class="val">' + (fmt ? fmtOf(fmt, v) : v) + '</span></div>';
   }
   function seg(path, label, opts) {
     var v = get(path);
     return '<div class="row"><div>' + label + '</div><div class="seg">' +
-      opts.map(function (o) { return '<button data-path="' + path + '" data-val="' + o + '" class="' + (o === v ? "on" : "") + '" onclick="A.choose(this)">' + o + '</button>'; }).join("") + '</div></div>';
+      opts.map(function (o) { return '<button data-act="choose" data-path="' + path + '" data-val="' + o + '" class="' + (o === v ? "on" : "") + '">' + o + '</button>'; }).join("") + '</div></div>';
   }
   function stepper(path, label, min, max, step, fmt) {
     var v = get(path);
     return '<div class="row"><div>' + label + '</div><div class="stepper">' +
-      '<button data-path="' + path + '" data-delta="-' + step + '" data-min="' + min + '" data-max="' + max + '" data-step="' + step + '" data-fmt="' + (fmt || "") + '" onclick="A.step(this)">−</button>' +
+      '<button data-act="step" data-path="' + path + '" data-delta="-' + step + '" data-min="' + min + '" data-max="' + max + '" data-step="' + step + '" data-fmt="' + (fmt || "") + '">−</button>' +
       '<b>' + (fmt ? fmtOf(fmt, v) : v) + '</b>' +
-      '<button data-path="' + path + '" data-delta="' + step + '" data-min="' + min + '" data-max="' + max + '" data-step="' + step + '" data-fmt="' + (fmt || "") + '" onclick="A.step(this)">+</button></div></div>';
+      '<button data-act="step" data-path="' + path + '" data-delta="' + step + '" data-min="' + min + '" data-max="' + max + '" data-step="' + step + '" data-fmt="' + (fmt || "") + '">+</button></div></div>';
   }
   function color(path, label) {
     var v = get(path) || "#FFFFFFFF";
     var hex = (v.length === 9) ? ("#" + v.slice(3)) : "#FFFFFF";
     return '<div class="row"><div>' + label + '</div>' +
-      '<input type="color" data-path="' + path + '" value="' + hex + '" oninput="A.pickColor(this)">' +
+      '<input type="color" data-act="color" data-path="' + path + '" value="' + hex + '">' +
       '<span class="val">' + v + '</span></div>';
   }
   function textField(path, label, placeholder) {
     var v = get(path); if (v === undefined || v === null) v = "";
     return '<div class="row"><div>' + label + '</div>' +
-      '<input type="text" data-path="' + path + '" value="' + v + '" placeholder="' + (placeholder || "") + '" oninput="A.text(this)"></div>';
+      '<input type="text" data-act="text" data-path="' + path + '" value="' + v + '" placeholder="' + (placeholder || "") + '"></div>';
   }
 
   function build() {
@@ -98,7 +105,10 @@
       sw("device_owner.restrict_bluetooth", "Disable Bluetooth") +
       sw("device_owner.restrict_location", "Block location") +
       sw("device_owner.restrict_printing", "Block printing") +
-      sw("device_owner.restrict_sync", "Disable auto-sync");
+      sw("device_owner.restrict_sync", "Disable auto-sync") +
+      sw("device_owner.restrict_mobile_networks", "Block mobile-network config") +
+      sw("device_owner.restrict_tethering", "Block tethering") +
+      sw("device_owner.restrict_roaming", "Block data roaming");
     preview();
   }
   function preview() { el("jsonPreview").textContent = JSON.stringify(cfg, null, 1); }
@@ -127,12 +137,8 @@
     preview();
   }
 
-  /* A device is "stale" relative to its configured status cadence (default
-     15 min): 2 intervals + 1 min, never below 90 s. */
-  function staleAfterSeconds(s) {
-    var m = (s && s.config && s.config.telemetry && s.config.telemetry.interval_minutes) || 15;
-    return Math.max(90, m * 60 * 2 + 60);
-  }
+  /* A device is "stale" relative to its configured status cadence (shared
+     helper GP.staleAfterSeconds; decisions.md D13). */
   function renderDevice(s) {
     if (!s) { el("devStatus").textContent = "—"; return; }
     var seen = s.last_seen ? new Date(s.last_seen).getTime() : 0;
@@ -191,7 +197,8 @@
     if (!el("cHost").value) el("cHost").value = c.host;
     if (!el("cPort").value) el("cPort").value = c.port;
     el("cTls").checked = !!c.use_tls;
-    el("cUser").placeholder = c.username ? c.username : "(unchanged if blank)";
+    // The username is intentionally never echoed back (for Flespi it *is* the
+    // token), so a blank field always means "keep the current value".
   }
   function applyConn() {
     if (!client || !client.connected) { el("connState").textContent = "You are not connected."; return; }
@@ -228,28 +235,37 @@
   function showForm() { el("unlock").hidden = true; el("admin").hidden = false; build(); }
 
   /* Invitation link: admin.html#token=<admin-token> (fragment preferred — never
-     sent to the server nor leaked in Referer; ?token= also works). The token is
-     read, kept in sessionStorage, then stripped from the address bar. */
-  var INVITE_KEYS = ["token", "t"];
+     sent to the server nor leaked in Referer; ?token= also works). Parsing and
+     stripping are shared with the sender (common.js). */
   function readInvite() {
-    var q = new URLSearchParams(location.search);
-    var h = new URLSearchParams((location.hash || "").replace(/^#/, ""));
-    var v = q.get("token") || q.get("t") || h.get("token") || h.get("t");
-    return v ? String(v).trim() : "";
+    var inv = GP.readInvite({ token: ["token", "t"] }, "token");
+    return inv ? inv.token : "";
   }
-  function clearInviteParams() {
-    if (!history.replaceState) return;
-    var q = new URLSearchParams(location.search);
-    var h = new URLSearchParams((location.hash || "").replace(/^#/, ""));
-    INVITE_KEYS.forEach(function (k) { q.delete(k); h.delete(k); });
-    var qs = q.toString(), hs = h.toString();
-    history.replaceState(null, "", location.pathname + (qs ? "?" + qs : "") + (hs ? "#" + hs : ""));
-  }
+  function clearInviteParams() { GP.clearUrlParams(["token", "t"]); }
 
-  window.A = { toggle: toggle, slide: slide, choose: choose, step: step, pickColor: pickColor, text: text };
+  /* One delegated listener for every generated control (no inline handlers, so
+     a strict CSP is possible). Buttons dispatch on click, inputs on input. */
+  function wireControls() {
+    el("admin").addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-act]");
+      if (!b) return;
+      var act = b.getAttribute("data-act");
+      if (act === "toggle") toggle(b);
+      else if (act === "choose") choose(b);
+      else if (act === "step") step(b);
+    });
+    el("admin").addEventListener("input", function (e) {
+      var i = e.target;
+      var act = i.getAttribute("data-act");
+      if (act === "slide") slide(i);
+      else if (act === "color") pickColor(i);
+      else if (act === "text") text(i);
+    });
+  }
 
   document.addEventListener("DOMContentLoaded", function () {
     var q = new URLSearchParams(location.search);
+    wireControls();
     if (q.get("demo") === "1") { showForm(); el("applied").textContent = "demo mode (no broker)"; }
     el("unlockBtn").addEventListener("click", connect);
     el("apply").addEventListener("click", apply);

@@ -1,8 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Release trust anchors: the platform CAs only. The bundled local test CA
+     (res/raw/ca.crt) is trusted in DEBUG builds only, via the override in
+     src/debug/res/xml/network_security_config.xml — its private key lives on the
+     developer machine, so trusting it in a release build would let anyone holding
+     that key impersonate the production broker. See SECURITY.md finding 9. -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
-            <certificates src="@raw/ca" />
             <certificates src="system" />
         </trust-anchors>
     </base-config>

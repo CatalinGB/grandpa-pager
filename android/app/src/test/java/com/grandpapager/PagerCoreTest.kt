@@ -201,9 +201,33 @@ class PagerCoreTest {
         assertFalse(d.contains(RestrictionPlan.BLUETOOTH))
         assertFalse(d.contains(RestrictionPlan.LOCATION))
         assertFalse(d.contains(RestrictionPlan.PRINTING))
+        // Untouched toggles keep their default-on hardening.
         assertTrue(d.contains(RestrictionPlan.MOBILE_NETWORKS))
         assertTrue(d.contains(RestrictionPlan.TETHERING))
         assertTrue(d.contains(RestrictionPlan.ROAMING))
+    }
+
+    @Test
+    fun restrictionPlan_networkTogglesCanBeRelaxed() {
+        val doo = RemoteConfigCodec.parse(
+            "{\"schema\":1,\"device_owner\":{\"restrict_mobile_networks\":false," +
+                "\"restrict_tethering\":false,\"restrict_roaming\":false}}"
+        )!!.device_owner
+        val d = RestrictionPlan.desired(doo)
+        assertFalse(d.contains(RestrictionPlan.MOBILE_NETWORKS))
+        assertFalse(d.contains(RestrictionPlan.TETHERING))
+        assertFalse(d.contains(RestrictionPlan.ROAMING))
+        assertTrue(d.contains(RestrictionPlan.ACCOUNTS))
+    }
+
+    @Test
+    fun staleThreshold_isDerivedFromTelemetryCadence() {
+        // 2 × interval + 60 s, never below 90 s (decisions.md D13).
+        assertEquals(1860, Stale.afterSeconds(null)) // default cadence 15 min
+        assertEquals(90, Stale.afterSeconds(0))
+        assertEquals(180, Stale.afterSeconds(1))
+        assertEquals(1860, Stale.afterSeconds(15))
+        assertEquals(7260, Stale.afterSeconds(60))
     }
 
     @Test

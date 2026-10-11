@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Only the policies the app actually uses. We deliberately do NOT request
+     wipe-data or reset-password: the receiver never wipes or resets, and asking
+     for a capability we never exercise only widens the device-owner blast radius
+     on a permanently-connected, end-of-life device. -->
 <device-admin xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-policies>
         <force-lock />
         <disable-keyguard-features />
-        <wipe-data />
-        <reset-password />
     </uses-policies>
 </device-admin>

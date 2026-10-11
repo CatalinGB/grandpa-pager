@@ -18,7 +18,10 @@
   var myLastId = null, myLastAt = 0, lastStatus = null;
   var userChangedDuration = false;
 
-  function escapeHtml(s) { return String(s).replace(/[&<>"]/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]; }); }
+  /* Shared helpers (common.js). */
+  var escapeHtml = GP.escapeHtml;
+  var uuid = GP.uuid;
+  var staleAfterSeconds = GP.staleAfterSeconds;
 
   /* ---------- views ---------- */
   function showView(which) {
@@ -35,33 +38,11 @@
   /* ---------- invitation links ----------
      A family member opens a link with the token (and optionally their name)
      baked in:  index.html#token=…&sender=Maria
-     The fragment is used in preference to the query string because it is never
-     sent to the server nor passed in Referer. Whatever the source, the params
-     are stripped from the address bar as soon as they are read (they would
-     otherwise linger in history and in any shared/screenshot URL). */
-  var INVITE_KEYS = ["token", "t", "sender", "name", "n", "broker", "b"];
-  function readInvite() {
-    var q = new URLSearchParams(location.search);
-    var h = new URLSearchParams((location.hash || "").replace(/^#/, ""));
-    function pick() {
-      for (var i = 0; i < arguments.length; i++) {
-        var v = q.get(arguments[i]); if (v == null) v = h.get(arguments[i]);
-        if (v) return String(v).trim();
-      }
-      return "";
-    }
-    var token = pick("token", "t");
-    if (!token) return null;
-    return { token: token, name: pick("sender", "name", "n"), broker: pick("broker", "b") };
-  }
-  function clearInviteParams() {
-    if (!history.replaceState) return;
-    var q = new URLSearchParams(location.search);
-    var h = new URLSearchParams((location.hash || "").replace(/^#/, ""));
-    INVITE_KEYS.forEach(function (k) { q.delete(k); h.delete(k); });
-    var qs = q.toString(), hs = h.toString();
-    history.replaceState(null, "", location.pathname + (qs ? "?" + qs : "") + (hs ? "#" + hs : ""));
-  }
+     Parsing/stripping lives in common.js (GP.readInvite / GP.clearUrlParams). */
+  var INVITE_ALIASES = { token: ["token", "t"], name: ["sender", "name", "n"], broker: ["broker", "b"] };
+  var INVITE_ALL_KEYS = ["token", "t", "sender", "name", "n", "broker", "b"];
+  function readInvite() { return GP.readInvite(INVITE_ALIASES, "token"); }
+  function clearInviteParams() { GP.clearUrlParams(INVITE_ALL_KEYS); }
 
   /* ---------- duration (stepper B) ---------- */
   function fmt(m) {
@@ -89,10 +70,6 @@
     var p = el("connPill");
     p.textContent = ok ? "connected" : "disconnected";
     p.className = "pill " + (ok ? "on" : "off");
-  }
-  function staleAfterSeconds(d) {
-    var m = (d && d.config && d.config.telemetry && d.config.telemetry.interval_minutes) || 15;
-    return Math.max(90, m * 60 * 2 + 60);
   }
   function renderDiag(d) {
     var seen = d.last_seen ? new Date(d.last_seen).getTime() : 0;
@@ -152,13 +129,6 @@
   }
 
   /* ---------- mqtt ---------- */
-  function uuid() {
-    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
-    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
-      var r = (Math.random() * 16) | 0, v = c === "x" ? r : (r & 0x3) | 0x8;
-      return v.toString(16);
-    });
-  }
   /* A fresh, unique clientId per connection. The sender runs clean sessions, so
      a persisted id buys nothing and, worse, makes two instances that share
      localStorage (two tabs, or the installed PWA + a tab) collide: the broker
