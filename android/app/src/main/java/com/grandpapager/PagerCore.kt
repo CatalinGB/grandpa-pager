@@ -61,6 +61,8 @@ data class ConnectionStatus(
 data class DiagnosticsPayload(
     val state: String,
     val sender: String?,
+    /** The text of the message currently on screen (null when idle). */
+    val text: String? = null,
     val battery: Int,
     val charging: Boolean,
     val wifi: Boolean,

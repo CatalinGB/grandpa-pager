@@ -151,8 +151,9 @@ idle date-and-clock lit instead.
 ### 4 · Monitor &amp; control
 
 The **Device status** panel shows `state` (`idle` / `showing` / `offline`), the
-MQTT link, battery + charging, Wi-Fi, the current sender and last-seen age.
-**Clear the message** wipes the screen remotely.
+MQTT link, battery + charging, Wi-Fi, the message currently on screen (its text
+and who sent it) and the last-seen age. **Clear the message** wipes the screen
+remotely.
 
 ## Repository layout
 

@@ -89,6 +89,19 @@ class PagerCoreTest {
     }
 
     @Test
+    fun diagnostics_carriesCurrentMessageTextAndSender() {
+        val d = DiagnosticsPayload(
+            state = "showing", sender = "Maria", text = "Lunch is ready", battery = 60,
+            charging = true, wifi = true, mqtt = true, current_message_id = "m1",
+            expires_at = "2026-01-01T00:10:00Z", last_seen = "2026-01-01T00:00:00Z", app = "receiver"
+        )
+        val json = PagerJson.diagnostics(d)
+        assertTrue(json.contains("\"text\":\"Lunch is ready\""))
+        assertEquals("Lunch is ready", PagerJson.toDiagnostics(json)!!.text)
+        assertEquals("Maria", PagerJson.toDiagnostics(json)!!.sender)
+    }
+
+    @Test
     fun topics_areStable() {
         assertEquals("grandpa/message", Topics.MESSAGE)
         assertEquals("grandpa/command", Topics.COMMAND)

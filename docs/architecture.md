@@ -95,7 +95,8 @@ Diagnostics — `grandpa/status`:
 ```json
 {
   "state": "showing | idle | offline",
-  "sender": "Maria", "battery": 68, "charging": true, "battery_temp_c": 34.5,
+  "sender": "Maria", "text": "Lunch is ready",
+  "battery": 68, "charging": true, "battery_temp_c": 34.5,
   "wifi": true, "mqtt": true,
   "current_message_id": "8f2c…", "expires_at": "2026-10-10T16:54:45Z",
   "last_seen": "2026-10-10T14:54:45Z", "app": "receiver",
@@ -107,6 +108,10 @@ Diagnostics — `grandpa/status`:
   "command": { "last": "restart_app", "received_at": "…", "result": "ok" }
 }
 ```
+
+`sender` and `text` are the current message (both `null` when idle), so the web
+sender and admin console — which subscribe to `status` — can show what is on the
+screen and who sent it, without needing read access to `grandpa/message`.
 
 The `connection` object reports the **guardrail state** (`active | probing | switched
 | committed | reverted | failed`) and whether a password is set — **never the

@@ -19,6 +19,7 @@
   var lastAttempt = 0;          // epoch ms of the last connect() call
   var minutes = DEFAULT_MIN;
   var myLastId = null, myLastAt = 0, lastStatus = null;
+  var lastMessageText = null;
   var userChangedDuration = false;
 
   /* Shared helpers (common.js). */
@@ -220,12 +221,13 @@
     var age = Math.max(0, Math.round((Date.now() - seen) / 1000));
     var online = d.state !== "offline" && age < staleAfterSeconds(d);
     var temp = (typeof d.battery_temp_c === "number") ? " " + d.battery_temp_c.toFixed(1) + "°C" : "";
+    var msg = d.text || lastMessageText || "";
     el("diag").textContent =
       t("diagState") + " " + d.state + (online ? "" : "  " + t("staleSuffix", { s: age })) + "\n" +
       t("diagMqtt") + " " + d.mqtt + "\n" +
       t("diagBattery") + " " + d.battery + "%" + (d.charging ? " " + t("chargingSuffix") : "") + temp + "\n" +
       t("diagWifi") + " " + d.wifi + "\n" +
-      t("diagMessage") + " " + (d.sender || "-") + "\n" +
+      t("diagMessage") + " " + (d.sender || "-") + (msg ? " — " + msg : "") + "\n" +
       t("diagSeen") + " " + t("seenAgo", { s: age });
   }
 
@@ -253,7 +255,10 @@
     var replaced = (myLastId && d.current_message_id !== myLastId && (Date.now() - myLastAt) < 6000)
       ? "<br>" + t("bannerReplaced") : "";
     b.hidden = false;
-    b.innerHTML = t("bannerOnScreen") + bannerFrom(d) + bannerExpires(d) + t("bannerReplaces") + replaced;
+    var head = d.text
+      ? t("bannerMsg", { text: "<b>" + escapeHtml(d.text) + "</b>" })
+      : t("bannerOnScreen");
+    b.innerHTML = head + bannerFrom(d) + bannerExpires(d) + t("bannerReplaces") + replaced;
   }
 
   function renderBannerFromMessage(raw) {
@@ -324,7 +329,10 @@
         try { lastStatus = JSON.parse(payload.toString()); renderDiag(lastStatus); updateBannerFromStatus(lastStatus); applyRemoteDefault(lastStatus); }
         catch (e) { el("diag").textContent = payload.toString(); }
       } else if (topic === TOPIC.message) {
-        renderBannerFromMessage(payload.toString());
+        var raw = payload.toString();
+        try { var m = raw ? JSON.parse(raw) : null; lastMessageText = (m && m.text) ? m.text : null; }
+        catch (e) { lastMessageText = null; }
+        renderBannerFromMessage(raw);
       }
     });
   }

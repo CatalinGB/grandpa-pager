@@ -5,7 +5,7 @@
 (function () {
   "use strict";
   var BROKER = "wss://mqtt.flespi.io:443";
-  var TOPIC = { config: "grandpa/config", command: "grandpa/command", status: "grandpa/status" };
+  var TOPIC = { config: "grandpa/config", command: "grandpa/command", status: "grandpa/status", message: "grandpa/message" };
   var DEF = {
     schema: 1,
     display: {
@@ -30,6 +30,7 @@
   var el = function (id) { return document.getElementById(id); };
   var cfg = JSON.parse(JSON.stringify(DEF));
   var dirty = false, client = null, lastAttempt = 0;
+  var lastMsgSender = null, lastMsgText = null, lastStatusObj = null;
 
   /* The admin token is persisted in localStorage (the phone is often out of
      physical reach, so re-entering it on every tab is painful). A token left in
@@ -178,7 +179,11 @@
     parts.push("<span>wifi " + s.wifi + "</span>");
     parts.push("<span>mqtt " + s.mqtt + "</span>");
     if (typeof s.device_owner === "boolean") parts.push("<span>device owner " + s.device_owner + "</span>");
-    if (s.sender) parts.push("<span>message: " + s.sender + "</span>");
+    var mSender = s.sender || lastMsgSender;
+    var mText = s.text || lastMsgText;
+    if (mSender || mText) {
+      parts.push("<span>message: " + (mText ? "“" + GP.escapeHtml(mText) + "” " : "") + (mSender ? "— " + GP.escapeHtml(mSender) : "") + "</span>");
+    }
     parts.push("<span>seen " + age + "s ago</span>");
     el("devStatus").innerHTML = parts.join('<span class="sep">·</span>');
   }
@@ -194,13 +199,24 @@
     client.on("connect", function () {
       el("unlock").hidden = true; el("admin").hidden = false;
       el("connPill").textContent = "connected"; el("connPill").className = "pill on";
-      client.subscribe([TOPIC.status, TOPIC.config], { qos: 1 });
+      client.subscribe([TOPIC.status, TOPIC.config, TOPIC.message], { qos: 1 });
     });
     client.on("error", function (e) { el("unlockHint").textContent = "Error: " + e.message; });
     client.on("close", function () { el("connPill").textContent = "disconnected"; el("connPill").className = "pill off"; });
     client.on("message", function (topic, payload) {
+      if (topic === TOPIC.message) {
+        var raw = payload.toString();
+        try {
+          var m = raw ? JSON.parse(raw) : null;
+          lastMsgSender = (m && m.sender) ? m.sender : null;
+          lastMsgText = (m && m.text) ? m.text : null;
+        } catch (e) { lastMsgSender = null; lastMsgText = null; }
+        if (lastStatusObj) renderDevice(lastStatusObj);
+        return;
+      }
       if (topic !== TOPIC.status) return;
       var s; try { s = JSON.parse(payload.toString()); } catch (e) { return; }
+      lastStatusObj = s;
       renderDevice(s);
       if (s.connection) renderConnection(s.connection);
       if (s.command && s.command.last) el("actionHint").textContent = s.command.last + ": " + (s.command.result || "");

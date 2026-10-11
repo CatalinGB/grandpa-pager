@@ -562,6 +562,7 @@ class PagerService : Service(), MqttController.Listener {
         val d = DiagnosticsPayload(
             state = if (cfg.hasActiveMessage()) "showing" else "idle",
             sender = cfg.currentSender,
+            text = if (cfg.hasActiveMessage()) cfg.currentMessageText else null,
             battery = batteryLevel(),
             charging = isCharging(),
             wifi = isWifi(),

@@ -23,6 +23,9 @@ sender **and admin console**, and the tokens.
    a **scoped ACL** token (publish `grandpa/message`, subscribe
    `grandpa/status`), and **`origins` locked to the Pages origin** so a leaked
    token can't be used from another site. Residual risk is a user's own browser.
+   The retained `grandpa/status` carries the current message `sender` and `text`
+   (so the family can see what is on the screen), so a leaked sender token also
+   reveals the message currently showing.
 2. **Never ship the master token.** The `.env` token is used only offline to mint
    the scoped tokens; keep it off every client.
 3. **TLS-only.** Use `mqtts://mqtt.flespi.io:8883` (Android) and
