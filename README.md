@@ -108,6 +108,11 @@ your browser), then type the message, choose how long it should stay on screen,
 and tap **Send to screen**. A banner warns if a message is already showing, and
 the status panel mirrors the phone.
 
+The connection pill is **end-to-end**: it reads *connected* only when **both** the
+broker link is up **and** the phone's status is fresh; *phone offline* (amber) when
+the broker is reachable but the phone is not (stale status), and *disconnected*
+(red) when the broker itself cannot be reached.
+
 Admins can skip the typing by handing out a one-tap **invitation link** with the
 token (and the person's name) baked in:
 

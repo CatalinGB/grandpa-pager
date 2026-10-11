@@ -286,6 +286,11 @@ device via `defaults.duration_minutes` (admin).
   battery-optimization exemption requested at setup.
 - Echo-loop guard: an empty retained clear is republished only when a message was
   actually held, and never in response to receiving an empty clear.
+- **Client reachability.** The web sender and admin console show *connected* only
+  when **both** the MQTT link is up **and** the receiver's status is fresh. A
+  broker-up-but-phone-stale link reads *phone offline* (amber); no broker link
+  reads *disconnected* (red). So "connected" always means a message can actually
+  reach the phone.
 
 ## Security
 

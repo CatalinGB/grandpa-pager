@@ -14,6 +14,7 @@
 
   var el = function (id) { return document.getElementById(id); };
   var client = null;
+  var mqttUp = false;           // broker link up
   var manualClose = false;      // set by "Forget token" so we stop auto-connecting
   var disconnectedSince = 0;    // epoch ms when the link dropped (0 = healthy)
   var lastAttempt = 0;          // epoch ms of the last connect() call
@@ -55,6 +56,7 @@
       tokenSaved: "The token is saved only in this browser.",
       connConnected: "connected",
       connDisconnected: "disconnected",
+      connPhoneOffline: "phone offline",
       connecting: "Connecting…",
       connectedMsg: "Connected.",
       reconnecting: "Reconnecting…",
@@ -114,6 +116,7 @@
       tokenSaved: "Tokenul este salvat doar în acest browser.",
       connConnected: "conectat",
       connDisconnected: "deconectat",
+      connPhoneOffline: "telefon offline",
       connecting: "Se conectează…",
       connectedMsg: "Conectat.",
       reconnecting: "Se reconectează…",
@@ -211,10 +214,24 @@
   }
 
   /* ---------- status ---------- */
-  function setConnected(ok) {
+  /* The pill means "end-to-end reachable": green only when BOTH the broker link
+     is up AND the phone's status is fresh (not stale/offline). Amber = broker up
+     but the phone is not reachable; red = not connected to the broker at all. */
+  function phoneOnline() {
+    if (!lastStatus) return false;
+    var seen = lastStatus.last_seen ? new Date(lastStatus.last_seen).getTime() : 0;
+    var age = Math.max(0, (Date.now() - seen) / 1000);
+    return lastStatus.state !== "offline" && age < staleAfterSeconds(lastStatus);
+  }
+  function updateConnPill() {
     var p = el("connPill");
-    p.textContent = ok ? t("connConnected") : t("connDisconnected");
-    p.className = "pill " + (ok ? "on" : "off");
+    if (mqttUp && phoneOnline()) { p.textContent = t("connConnected"); p.className = "pill on"; }
+    else if (mqttUp) { p.textContent = t("connPhoneOffline"); p.className = "pill warn"; }
+    else { p.textContent = t("connDisconnected"); p.className = "pill off"; }
+  }
+  function setConnected(ok) {
+    mqttUp = ok;
+    updateConnPill();
   }
   function renderDiag(d) {
     var seen = d.last_seen ? new Date(d.last_seen).getTime() : 0;
@@ -326,8 +343,10 @@
     client.on("error", function (err) { setConnected(false); el("sendHint").textContent = t("errorPrefix") + err.message; });
     client.on("message", function (topic, payload) {
       if (topic === TOPIC.status) {
-        try { lastStatus = JSON.parse(payload.toString()); renderDiag(lastStatus); updateBannerFromStatus(lastStatus); applyRemoteDefault(lastStatus); }
-        catch (e) { el("diag").textContent = payload.toString(); }
+        try {
+          lastStatus = JSON.parse(payload.toString());
+          renderDiag(lastStatus); updateBannerFromStatus(lastStatus); applyRemoteDefault(lastStatus); updateConnPill();
+        } catch (e) { el("diag").textContent = payload.toString(); }
       } else if (topic === TOPIC.message) {
         var raw = payload.toString();
         try { var m = raw ? JSON.parse(raw) : null; lastMessageText = (m && m.text) ? m.text : null; }
@@ -452,6 +471,9 @@
       if (!document.hidden) ensureConnected();
     });
     setInterval(ensureConnected, 15000);
+    // Re-evaluate reachability so the pill flips to "phone offline" when the
+    // phone's status goes stale even though the broker link is still up.
+    setInterval(updateConnPill, 10000);
 
     if (applyInvite()) return;
     if (localStorage.getItem(LS.sender) && localStorage.getItem(LS.token)) {

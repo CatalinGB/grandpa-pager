@@ -30,7 +30,7 @@
   var el = function (id) { return document.getElementById(id); };
   var cfg = JSON.parse(JSON.stringify(DEF));
   var dirty = false, client = null, lastAttempt = 0;
-  var lastMsgSender = null, lastMsgText = null, lastStatusObj = null;
+  var lastMsgSender = null, lastMsgText = null, lastStatusObj = null, mqttUp = false;
 
   /* The admin token is persisted in localStorage (the phone is often out of
      physical reach, so re-entering it on every tab is painful). A token left in
@@ -167,6 +167,23 @@
 
   /* A device is "stale" relative to its configured status cadence (shared
      helper GP.staleAfterSeconds; decisions.md D13). */
+  function phoneOnline() {
+    var s = lastStatusObj;
+    if (!s) return false;
+    var seen = s.last_seen ? new Date(s.last_seen).getTime() : 0;
+    var age = Math.max(0, (Date.now() - seen) / 1000);
+    return s.state !== "offline" && age < staleAfterSeconds(s);
+  }
+  /* The pill means end-to-end: green only when the broker link is up AND the
+     phone is reachable; amber = broker up but phone offline; red = no broker. */
+  function updateConnPill() {
+    var p = el("connPill");
+    if (mqttUp && phoneOnline()) { p.textContent = "connected"; p.className = "pill on"; }
+    else if (mqttUp) { p.textContent = "phone offline"; p.className = "pill warn"; }
+    else { p.textContent = "disconnected"; p.className = "pill off"; }
+  }
+  function setMqtt(ok) { mqttUp = ok; updateConnPill(); }
+
   function renderDevice(s) {
     if (!s) { el("devStatus").textContent = "—"; return; }
     var seen = s.last_seen ? new Date(s.last_seen).getTime() : 0;
@@ -198,11 +215,11 @@
     client = mqtt.connect(BROKER, { username: token, clientId: "grandpa-admin-" + Math.random().toString(16).slice(2), clean: true, keepalive: 30, reconnectPeriod: 5000, connectTimeout: 12000, protocolVersion: 4 });
     client.on("connect", function () {
       el("unlock").hidden = true; el("admin").hidden = false;
-      el("connPill").textContent = "connected"; el("connPill").className = "pill on";
+      setMqtt(true);
       client.subscribe([TOPIC.status, TOPIC.config, TOPIC.message], { qos: 1 });
     });
     client.on("error", function (e) { el("unlockHint").textContent = "Error: " + e.message; });
-    client.on("close", function () { el("connPill").textContent = "disconnected"; el("connPill").className = "pill off"; });
+    client.on("close", function () { setMqtt(false); });
     client.on("message", function (topic, payload) {
       if (topic === TOPIC.message) {
         var raw = payload.toString();
@@ -218,6 +235,7 @@
       var s; try { s = JSON.parse(payload.toString()); } catch (e) { return; }
       lastStatusObj = s;
       renderDevice(s);
+      updateConnPill();
       if (s.connection) renderConnection(s.connection);
       if (s.command && s.command.last) el("actionHint").textContent = s.command.last + ": " + (s.command.result || "");
       if (!dirty && s.config) { cfg = deepMerge(JSON.parse(JSON.stringify(DEF)), s.config); cfg.schema = cfg.schema || 1; build(); el("applied").textContent = "current config loaded from the phone"; }
@@ -333,6 +351,7 @@
     window.addEventListener("pageshow", ensureConnected);
     document.addEventListener("visibilitychange", function () { if (!document.hidden) ensureConnected(); });
     setInterval(ensureConnected, 15000);
+    setInterval(updateConnPill, 10000);
     var saved = loadAdminToken();
     var invite = readInvite();
     if (invite) { storeAdminToken(invite); clearInviteParams(); saved = invite; }
