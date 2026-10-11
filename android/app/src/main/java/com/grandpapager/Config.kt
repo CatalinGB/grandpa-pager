@@ -3,6 +3,8 @@ package com.grandpapager
 import android.annotation.SuppressLint
 import android.content.Context
 import android.provider.Settings
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 
 /**
  * Persistent configuration + receiver state, backed by SharedPreferences.
@@ -145,6 +147,25 @@ class Config(context: Context) {
     /** The currently applied remote config (defaults if none). */
     fun remoteConfig(): RemoteConfig =
         RemoteConfigCodec.parse(remoteConfigJson) ?: RemoteConfig()
+
+    // --- per-sender name colours (assigned once, persisted, kept unique) ---
+    private val gson = Gson()
+
+    /** The persisted sender→colour assignments (name key → #AARRGGBB). */
+    @Suppress("UNCHECKED_CAST")
+    fun senderColors(): Map<String, String> {
+        val json = p.getString("senderColors", null) ?: return emptyMap()
+        return runCatching {
+            val t = object : TypeToken<Map<String, String>>() {}.type
+            gson.fromJson<Map<String, String>>(json, t)
+        }.getOrDefault(emptyMap())
+    }
+
+    fun setSenderColor(key: String, color: String) {
+        val next = senderColors().toMutableMap()
+        next[key] = color
+        p.edit().putString("senderColors", gson.toJson(next)).apply()
+    }
 
     // --- sender-side cached receiver view ---
     var lastStatusJson: String?

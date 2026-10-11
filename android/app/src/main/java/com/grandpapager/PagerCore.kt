@@ -204,16 +204,40 @@ object SenderColors {
         "#FFF48FB1"  // pink
     )
 
-    /** The colour for [sender], or null when the name is blank. */
+    /** The colour for [sender]'s preferred (hashed) slot, or null when blank. */
     fun colorFor(sender: String?): String? {
-        val name = sender?.trim()?.lowercase(Locale.ROOT).orEmpty()
-        if (name.isEmpty()) return null
-        return PALETTE[(fnv1a(name) % PALETTE.size).toInt()]
+        val k = key(sender)
+        if (k.isEmpty()) return null
+        return colorAt(hashIndex(k))
+    }
+
+    /** Normalised map key for a sender name (trim + lowercase). */
+    fun key(sender: String?): String = sender?.trim()?.lowercase(Locale.ROOT).orEmpty()
+
+    /** The palette colour at [index], wrapped into range. */
+    fun colorAt(index: Int): String = PALETTE[((index % PALETTE.size) + PALETTE.size) % PALETTE.size]
+
+    private fun hashIndex(k: String): Int = (fnv1a(k) % PALETTE.size).toInt()
+
+    /**
+     * A colour for [sender] that no sender in [taken] already owns, preferring
+     * the hashed slot and probing forward on a collision, so **distinct senders
+     * get distinct colours** (up to [PALETTE] size) instead of two names landing
+     * on the same hue by chance. Falls back to the hashed slot when the palette
+     * is full. [sender] must be non-blank.
+     */
+    fun assign(sender: String, taken: Set<String>): String {
+        val start = hashIndex(key(sender))
+        for (i in PALETTE.indices) {
+            val c = colorAt(start + i)
+            if (c !in taken) return c
+        }
+        return colorAt(start)
     }
 
     /**
-     * The colour to draw a sender's name: the per-sender colour when enabled and
-     * the name is non-blank, otherwise the configured fallback (`name_color`).
+     * The colour to draw a sender's name from the deterministic hash alone (no
+     * registry) — the single-colour fallback path. Prefer the persisted [assign].
      */
     fun nameColor(perSenderColors: Boolean, sender: String?, fallback: String): String =
         (if (perSenderColors) colorFor(sender) else null) ?: fallback

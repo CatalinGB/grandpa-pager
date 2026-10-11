@@ -252,14 +252,10 @@ class ReceiverActivity : Activity() {
             nameView.visibility = View.VISIBLE
             val sender = cfg.currentSender ?: ""
             if (nameView.text.toString() != sender) nameView.text = sender
-            // Colour the name per sender (falls back to name_color). This must be
-            // applied here, every refresh — applyRemoteConfig() is gated on config
-            // changes and would leave the colour stuck on the first sender.
-            nameView.setTextColor(
-                Color.parseColor(
-                    SenderColors.nameColor(rc.display.per_sender_colors, sender, rc.display.name_color)
-                )
-            )
+            // A stable, unique colour per sender (persisted); set here every
+            // refresh — applyRemoteConfig() is gated on config changes and would
+            // otherwise leave the colour stuck on the first sender.
+            nameView.setTextColor(Color.parseColor(resolveNameColor(sender, rc)))
             messageView.visibility = View.VISIBLE
             // Only touch the text when it changed: setText() resets the scroll,
             // so a periodic refresh must not clobber a scrolled position.
@@ -393,6 +389,25 @@ class ReceiverActivity : Activity() {
             messageView.gravity = Gravity.CENTER
             scrollColumn.visibility = View.GONE
         }
+    }
+
+    /**
+     * A stable, unique colour for [sender]: the persisted assignment if any, else
+     * one no other known sender owns (preferring the sender's hashed slot and
+     * probing past taken colours). The assignment is persisted, so a sender always
+     * keeps the same colour and two senders never share one (up to the 15-colour
+     * palette). Falls back to the configured `name_color` when per-sender colours
+     * are off or the name is blank.
+     */
+    private fun resolveNameColor(sender: String, rc: RemoteConfig): String {
+        if (!rc.display.per_sender_colors) return rc.display.name_color
+        val key = SenderColors.key(sender)
+        if (key.isEmpty()) return rc.display.name_color
+        val assigned = cfg.senderColors()
+        assigned[key]?.let { return it }
+        val color = SenderColors.assign(key, assigned.values.toSet())
+        cfg.setSenderColor(key, color)
+        return color
     }
 
     /** Apply the admin remote config (display, orientation, kiosk). */

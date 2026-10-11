@@ -271,6 +271,35 @@ class PagerCoreTest {
         assertEquals(fallback, SenderColors.nameColor(true, "   ", fallback))
     }
 
+    @Test
+    fun senderColors_assignAvoidsCollisions() {
+        // Adelina and Catalin hash to the same slot; the second must probe to a
+        // different, free colour rather than reusing it.
+        val first = SenderColors.colorFor("Adelina")!!
+        assertEquals(first, SenderColors.colorFor("Catalin"))
+        val second = SenderColors.assign("Catalin", setOf(first))
+        assertTrue("collision: $second == $first", second != first)
+        assertTrue(SenderColors.PALETTE.contains(second))
+    }
+
+    @Test
+    fun senderColors_assignPrefersHashWhenFreeAndDegradesWhenFull() {
+        assertEquals(SenderColors.colorFor("Vasile"), SenderColors.assign("Vasile", emptySet()))
+        // Full palette -> cannot avoid; returns the hashed colour.
+        assertEquals(SenderColors.colorFor("Vasile"), SenderColors.assign("Vasile", SenderColors.PALETTE.toSet()))
+    }
+
+    @Test
+    fun senderColors_assignGivesEverySenderADistinctColour() {
+        val names = listOf(
+            "Adelina", "Catalin", "Vasile", "Maria", "Ion", "Elena", "Ana", "Bogdan",
+            "Cristina", "Mihai", "Ioana", "Daniel", "Georgiana", "Alexandru", "Gheorghe"
+        )
+        val taken = mutableSetOf<String>()
+        val assigned = names.map { val c = SenderColors.assign(it, taken); taken.add(c); c }
+        assertEquals(names.size, assigned.toSet().size) // 15 names, 15 colours -> all distinct
+    }
+
     /** WCAG relative-luminance contrast of a #AARRGGBB colour against black. */
     private fun contrastOnBlack(hex: String): Double {
         fun lin(c: Int): Double {

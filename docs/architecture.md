@@ -153,9 +153,12 @@ the effective config** in `status.config` so the admin UI prefills. Adding an
 optional field under `schema: 1` is backward-compatible (old receivers ignore it
 and default it).
 
-`display.per_sender_colors` (default `true`) colours each sender's name by a
-stable hash of the name into a palette whose every entry clears WCAG AA contrast
-(>= 4.5:1) on the black background, so the writer is recognisable at a glance;
+`display.per_sender_colors` (default `true`) gives each sender a stable colour
+from a 15-colour palette whose every entry clears WCAG **AAA** contrast
+(>= 7:1) on the black background. A sender is assigned a colour the first time
+they appear — preferring their hashed slot, probing forward past colours other
+senders already own — and the assignment is **persisted**, so distinct senders
+get distinct colours (up to 15) and a sender always keeps the same one.
 `display.name_color` is the fallback when the toggle is off or the name is blank.
 
 The `device_owner` block drives the reversible hardening restrictions when the app
