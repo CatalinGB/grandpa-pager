@@ -25,6 +25,7 @@ import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.provider.Settings
+import android.text.method.ScrollingMovementMethod
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
@@ -64,6 +65,15 @@ class ReceiverActivity : Activity() {
     private lateinit var countdownView: TextView
     private lateinit var glowOverlay: View
     private lateinit var area: View
+    private lateinit var topRow: View
+    private lateinit var scrollColumn: View
+    private lateinit var scrollUp: View
+    private lateinit var scrollDown: View
+
+    /** True while the message is too tall for the screen and scrolls instead. */
+    private var messageScrollEnabled = false
+    private var configApplied = false
+    private var lastConfigJson: String? = null
 
     private var clearRequested = false
     private var lastCuedId: String? = null
@@ -124,6 +134,17 @@ class ReceiverActivity : Activity() {
         countdownView = findViewById(R.id.countdownView)
         glowOverlay = findViewById(R.id.glowOverlay)
         area = findViewById(R.id.area)
+        topRow = findViewById(R.id.topRow)
+        scrollColumn = findViewById(R.id.scrollColumn)
+        scrollUp = findViewById(R.id.scrollUp)
+        scrollDown = findViewById(R.id.scrollDown)
+        // Arrow taps page the message; a layout change re-checks whether the
+        // text still overflows (the readable floor changed with the text).
+        scrollUp.setOnClickListener { messageView.scrollBy(0, -scrollStep()) }
+        scrollDown.setOnClickListener { messageView.scrollBy(0, scrollStep()) }
+        messageView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            refreshMessageScroll()
+        }
         // Let a new message be shown and turn the display on over a sleeping /
         // locked screen. The manifest carries the API-27+ attributes; these are
         // the legacy window-flag equivalents for older devices.
@@ -206,7 +227,14 @@ class ReceiverActivity : Activity() {
     }
 
     private fun refresh() {
-        applyRemoteConfig()
+        // Re-applying the config rebuilds the text layout (and setting the same
+        // text resets scroll), which fights scrolling. Only apply on a change.
+        val configJson = cfg.remoteConfigJson
+        if (!configApplied || configJson != lastConfigJson) {
+            configApplied = true
+            lastConfigJson = configJson
+            applyRemoteConfig()
+        }
         val rc = cfg.remoteConfig()
         if (cfg.hasActiveMessage()) {
             screenSlept = false
@@ -220,11 +248,21 @@ class ReceiverActivity : Activity() {
             clearRequested = false
             dateView.visibility = View.GONE
             clockView.visibility = View.GONE
+            topRow.visibility = View.VISIBLE
             nameView.visibility = View.VISIBLE
-            nameView.text = cfg.currentSender ?: ""
+            val sender = cfg.currentSender ?: ""
+            if (nameView.text.toString() != sender) nameView.text = sender
             messageView.visibility = View.VISIBLE
-            messageView.gravity = Gravity.CENTER
-            messageView.text = cfg.currentMessageText ?: ""
+            // Only touch the text when it changed: setText() resets the scroll,
+            // so a periodic refresh must not clobber a scrolled position.
+            val text = cfg.currentMessageText ?: ""
+            if (messageView.text.toString() != text) {
+                messageView.text = text
+                messageView.scrollTo(0, 0)
+            }
+            // Re-evaluate after the pending layout: the view's bounds may not
+            // change when only its text does, so onLayoutChange alone misses it.
+            messageView.post { refreshMessageScroll() }
             warnView.visibility = View.GONE
             // "Received at … , expires at …" — hidden only if the admin turns it off.
             val receivedAt = if (cfg.currentReceivedAt > 0) cfg.currentReceivedAt else System.currentTimeMillis()
@@ -239,8 +277,12 @@ class ReceiverActivity : Activity() {
                 clearRequested = true
                 PagerService.clear(this)
             }
+            topRow.visibility = View.GONE
             nameView.visibility = View.GONE
             messageView.visibility = View.GONE
+            messageView.setMovementMethod(null)
+            messageScrollEnabled = false
+            scrollColumn.visibility = View.GONE
             countdownView.text = ""
             countdownView.visibility = View.GONE
             // Only sleep the display when we can actually do it (device owner);
@@ -313,6 +355,38 @@ class ReceiverActivity : Activity() {
         }
     }
 
+    /** How far one arrow tap pages: roughly half a screen. */
+    private fun scrollStep(): Int = (messageView.height / 2).coerceAtLeast(1)
+
+    /**
+     * A message that fits is drawn centred and non-interactive. When even the
+     * smallest readable size (half the name size) cannot fit, flip to a
+     * top-aligned, vertically scrollable TextView and reveal the arrow gutter.
+     * Idempotent: only acts on a state change, so it is safe from layout.
+     */
+    private fun refreshMessageScroll() {
+        if (messageView.visibility != View.VISIBLE) return
+        val layout = messageView.layout ?: return
+        val contentH = messageView.height - messageView.paddingTop - messageView.paddingBottom
+        if (contentH <= 0) return
+        val overflows = layout.height > contentH + 1
+        if (overflows == messageScrollEnabled) return
+        messageScrollEnabled = overflows
+        if (overflows) {
+            messageView.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            messageView.setMovementMethod(ScrollingMovementMethod.getInstance())
+            messageView.isVerticalScrollBarEnabled = true
+            messageView.scrollTo(0, 0)
+            scrollColumn.visibility = View.VISIBLE
+        } else {
+            messageView.scrollTo(0, 0)
+            messageView.setMovementMethod(null)
+            messageView.isVerticalScrollBarEnabled = false
+            messageView.gravity = Gravity.CENTER
+            scrollColumn.visibility = View.GONE
+        }
+    }
+
     /** Apply the admin remote config (display, orientation, kiosk). */
     private fun applyRemoteConfig() {
         val rc = cfg.remoteConfig()
@@ -322,8 +396,13 @@ class ReceiverActivity : Activity() {
         warnView.setTextColor(Color.parseColor(rc.display.warn_color))
         countdownView.setTextColor(Color.parseColor(rc.display.countdown_color))
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            // Never shrink a message below a readable floor: half the name size.
+            // Below that we scroll instead (see refreshMessageScroll).
+            val readableMin = (rc.display.name_size_sp * 0.5f).toInt()
+            val minSp = maxOf(rc.display.message_size_min_sp, readableMin).coerceAtLeast(8)
+            val maxSp = maxOf(rc.display.message_size_max_sp, minSp)
             messageView.setAutoSizeTextTypeUniformWithConfiguration(
-                rc.display.message_size_min_sp, rc.display.message_size_max_sp, 1, TypedValue.COMPLEX_UNIT_SP
+                minSp, maxSp, 1, TypedValue.COMPLEX_UNIT_SP
             )
         }
         val orient = when (rc.display.orientation) {

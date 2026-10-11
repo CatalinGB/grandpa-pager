@@ -7,6 +7,8 @@
     <string name="duration_m">%1$dm</string>
     <string name="duration_lt_min">&lt;1m</string>
     <string name="conn_problem">Probleme cu conexiunea</string>
+    <string name="scroll_up">Derulează în sus</string>
+    <string name="scroll_down">Derulează în jos</string>
     <!-- Tokens: {EEEE}=weekday {do}=ordinal day {d}=day {MMMM}=month {yyyy}=year -->
     <string name="idle_date_fmt">{EEEE}, {d} {MMMM} {yyyy}</string>
 

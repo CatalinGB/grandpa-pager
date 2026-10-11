@@ -9,89 +9,152 @@
         android:layout_height="match_parent"
         android:orientation="vertical">
 
+        <!-- Top line: sender on the left, received/expires on the right. Moving
+             the countdown up here frees vertical space for the message. -->
         <LinearLayout
-            android:id="@+id/area"
+            android:id="@+id/topRow"
             android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1"
-            android:orientation="vertical"
-            android:gravity="center"
-            android:padding="22dp">
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="22dp"
+            android:paddingEnd="22dp"
+            android:paddingTop="14dp">
 
             <TextView
                 android:id="@+id/nameView"
-                android:layout_width="match_parent"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:gravity="center"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:gravity="start"
                 android:includeFontPadding="false"
+                android:singleLine="true"
                 android:textColor="#FFFAB005"
                 android:textSize="46sp"
                 android:textStyle="bold"
                 android:visibility="gone" />
 
             <TextView
-                android:id="@+id/messageView"
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1"
-                android:layout_marginTop="6dp"
-                android:gravity="center"
-                android:includeFontPadding="false"
-                android:textColor="#FFFFFFFF"
-                android:textStyle="bold"
-                android:textSize="64sp"
-                android:autoSizeTextType="uniform"
-                android:autoSizeMinTextSize="10sp"
-                android:autoSizeMaxTextSize="64sp"
-                android:autoSizeStepGranularity="1sp" />
-
-            <TextView
-                android:id="@+id/dateView"
-                android:layout_width="match_parent"
+                android:id="@+id/countdownView"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:gravity="center"
+                android:layout_marginStart="16dp"
+                android:gravity="end"
                 android:includeFontPadding="false"
                 android:singleLine="true"
-                android:textColor="#FFFFFFFF"
-                android:textStyle="bold"
-                android:textSize="48sp"
-                android:visibility="gone" />
-
-            <TextView
-                android:id="@+id/clockView"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:gravity="center"
-                android:includeFontPadding="false"
-                android:singleLine="true"
-                android:textColor="#FFFFFFFF"
-                android:textStyle="bold"
-                android:textSize="64sp"
-                android:visibility="gone" />
-
-            <TextView
-                android:id="@+id/warnView"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="14dp"
-                android:gravity="center"
-                android:includeFontPadding="false"
-                android:textColor="#FFFFB300"
-                android:textSize="24sp"
-                android:textStyle="bold"
+                android:textColor="#FF9E9E9E"
+                android:textSize="15sp"
                 android:visibility="gone" />
         </LinearLayout>
 
-        <TextView
-            android:id="@+id/countdownView"
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:paddingBottom="22dp"
-            android:gravity="center"
-            android:includeFontPadding="false"
-            android:textColor="#FF9E9E9E"
-            android:textSize="22sp" />
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="horizontal">
+
+            <!-- Left gutter: only shown when a message is too long to fit at a
+                 readable size; the two arrows page the message up/down. When it
+                 is empty (gone) the message spans the whole width. -->
+            <LinearLayout
+                android:id="@+id/scrollColumn"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:orientation="vertical"
+                android:gravity="center_vertical"
+                android:paddingStart="10dp"
+                android:paddingEnd="2dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/scrollUp"
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:background="@drawable/scroll_button_bg"
+                    android:contentDescription="@string/scroll_up"
+                    android:gravity="center"
+                    android:text="▲"
+                    android:textColor="#FFFFFFFF"
+                    android:textSize="28sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/scrollDown"
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:layout_marginTop="14dp"
+                    android:background="@drawable/scroll_button_bg"
+                    android:contentDescription="@string/scroll_down"
+                    android:gravity="center"
+                    android:text="▼"
+                    android:textColor="#FFFFFFFF"
+                    android:textSize="28sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/area"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:padding="22dp">
+
+                <TextView
+                    android:id="@+id/messageView"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:includeFontPadding="false"
+                    android:textColor="#FFFFFFFF"
+                    android:textStyle="bold"
+                    android:textSize="64sp"
+                    android:autoSizeTextType="uniform"
+                    android:autoSizeMinTextSize="23sp"
+                    android:autoSizeMaxTextSize="64sp"
+                    android:autoSizeStepGranularity="1sp" />
+
+                <TextView
+                    android:id="@+id/dateView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:includeFontPadding="false"
+                    android:singleLine="true"
+                    android:textColor="#FFFFFFFF"
+                    android:textStyle="bold"
+                    android:textSize="48sp"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/clockView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center"
+                    android:includeFontPadding="false"
+                    android:singleLine="true"
+                    android:textColor="#FFFFFFFF"
+                    android:textStyle="bold"
+                    android:textSize="64sp"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/warnView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:gravity="center"
+                    android:includeFontPadding="false"
+                    android:textColor="#FFFFB300"
+                    android:textSize="24sp"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
+            </LinearLayout>
+        </LinearLayout>
     </LinearLayout>
 
     <View
