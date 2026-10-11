@@ -145,6 +145,15 @@ class PagerCoreTest {
     }
 
     @Test
+    fun remoteConfig_cueDefaultsVibrateOffButHonoursExplicitTrue() {
+        val c = RemoteConfigCodec.parse("{\"schema\":1}")!!
+        assertFalse("vibration must default off", c.cue.vibrate)
+        assertTrue(c.cue.chime)
+        assertTrue(c.cue.torch.enabled)
+        assertTrue(RemoteConfigCodec.parse("{\"schema\":1,\"cue\":{\"vibrate\":true}}")!!.cue.vibrate)
+    }
+
+    @Test
     fun remoteConfig_clampsMessageSizesAndKeepsOrder() {
         val min = RemoteConfigCodec.parse("{\"schema\":1,\"display\":{\"message_size_min_sp\":1}}")!!.display.message_size_min_sp
         assertEquals(8, min)

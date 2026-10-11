@@ -31,7 +31,7 @@ data class RemoteConfig(
         val idle_date_format: String = "auto",
         val warn_text: String? = null
     )
-    data class Cue(val glow_ms: Int = 9000, val chime: Boolean = true, val vibrate: Boolean = true, val torch: Torch = Torch())
+    data class Cue(val glow_ms: Int = 9000, val chime: Boolean = true, val vibrate: Boolean = false, val torch: Torch = Torch())
     data class Torch(val enabled: Boolean = true, val on_ms: Int = 1500, val off_ms: Int = 1500, val pulses: Int = 3)
     data class Defaults(val duration_minutes: Int = 240)
     data class Kiosk(val locked: Boolean = true)
@@ -116,7 +116,7 @@ object RemoteConfigCodec {
                 cue = RemoteConfig.Cue(
                     glow_ms = int(c, "glow_ms", 9000, 0, 20000),
                     chime = bool(c, "chime", true),
-                    vibrate = bool(c, "vibrate", true),
+                    vibrate = bool(c, "vibrate", false),
                     torch = RemoteConfig.Torch(
                         enabled = bool(t, "enabled", true),
                         on_ms = int(t, "on_ms", 1500, 200, 5000),

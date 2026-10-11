@@ -33,8 +33,8 @@ device.
 - **Automatic expiry** (default 4 h, per-message override) enforced *on the
   device* — never trusting broker retention.
 - **Remote clear** and a non-blocking "a message is already showing" warning.
-- **Attention cue** on a new message: a slow amber glow, a chime, a double
-  vibration and a torch pulse.
+- **Attention cue** on a new message: a slow amber glow, a chime and a torch
+  pulse (plus an optional double vibration, off by default).
 - **Live diagnostics**: online/offline, battery + charging, Wi-Fi, MQTT, current
   message and how long ago it was last seen.
 - **Admin console** (browser): text size, orientation, the received/expires time

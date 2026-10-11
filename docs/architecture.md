@@ -127,7 +127,7 @@ Remote config — `grandpa/config` (v1):
                "message_color": "#FFFFFFFF",
                "warn_color": "#FFFFB300", "countdown_color": "#FF9E9E9E",
                "idle_clock_scale": 1.3, "idle_date_format": "auto", "warn_text": null },
-  "cue": { "glow_ms": 9000, "chime": true, "vibrate": true,
+  "cue": { "glow_ms": 9000, "chime": true, "vibrate": false,
            "torch": { "enabled": true, "on_ms": 1500, "off_ms": 1500, "pulses": 3 } },
   "defaults": { "duration_minutes": 240 },
   "telemetry": { "interval_minutes": 15 },
