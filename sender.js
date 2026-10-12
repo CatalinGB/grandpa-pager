@@ -7,7 +7,7 @@
   "use strict";
 
   var LS = { token: "gp_token", sender: "gp_sender", broker: "gp_broker" };
-  var TOPIC = { message: "grandpa/message", command: "grandpa/command", status: "grandpa/status", last: "grandpa/last" };
+  var TOPIC = { message: "grandpa/message", command: "grandpa/command", status: "grandpa/status", last: "grandpa/last", config: "grandpa/config" };
   var DEFAULT_BROKER = "wss://mqtt.flespi.io:443";
   var DEFAULT_MIN = 240;
   var PRESETS = [60, 240, 480, 1440];
@@ -21,8 +21,13 @@
   var minutes = DEFAULT_MIN;
   var myLastId = null, myLastAt = 0, lastStatus = null;
   var lastMessageText = null;
-  var lastCleanSender = null, lastCleanText = null; // from grandpa/last (never cleared)
   var userChangedDuration = false;
+  /* Message history, mirrored to the retained grandpa/last topic as a versioned
+     array. `historyLoaded` gates maintenance until the retained array has been
+     adopted, so a fresh page never clobbers the broker's history with its own
+     partial view (the retained grandpa/message can arrive first). */
+  var history = [], historySig = "", historyLoaded = false, pendingMessage = null, historyTimer = null;
+  var historyCount = 10, DEFAULT_HISTORY = 10, remoteHistoryCount = null;
 
   /* Shared helpers (common.js). */
   var escapeHtml = GP.escapeHtml;
@@ -82,6 +87,14 @@
       diagMessage: "message:",
       diagSeen: "seen:",
       diagLast: "last:",
+      lastMessage: "Last message",
+      history: "Message history",
+      showHistory: "Show last {n} messages",
+      noHistory: "No messages yet.",
+      justNow: "just now",
+      minutesAgo: "{n} min ago",
+      hoursAgo: "{n} h ago",
+      daysAgo: "{n} d ago",
       chargingSuffix: "(charging)",
       staleSuffix: "(STALE {s}s)",
       seenAgo: "{s}s ago",
@@ -143,6 +156,14 @@
       diagMessage: "mesaj:",
       diagSeen: "văzut:",
       diagLast: "ultimul:",
+      lastMessage: "Ultimul mesaj",
+      history: "Istoric mesaje",
+      showHistory: "Arată ultimele {n} mesaje",
+      noHistory: "Încă niciun mesaj.",
+      justNow: "chiar acum",
+      minutesAgo: "acum {n} min",
+      hoursAgo: "acum {n} h",
+      daysAgo: "acum {n} z",
       chargingSuffix: "(se încarcă)",
       staleSuffix: "(ÎNVECHIT {s}s)",
       seenAgo: "acum {s}s",
@@ -237,19 +258,16 @@
     updateConnPill();
   }
   function renderDiag(d) {
-    var seen = d.last_seen ? new Date(d.last_seen).getTime() : 0;
-    var age = Math.max(0, Math.round((Date.now() - seen) / 1000));
-    var online = d.state !== "offline" && age < staleAfterSeconds(d);
+    var info = GP.statusInfo(d);
     var temp = (typeof d.battery_temp_c === "number") ? " " + d.battery_temp_c.toFixed(1) + "°C" : "";
     var msg = d.text || lastMessageText || "";
     el("diag").textContent =
-      t("diagState") + " " + d.state + (online ? "" : "  " + t("staleSuffix", { s: age })) + "\n" +
+      t("diagState") + " " + d.state + (info.stale ? "  " + t("staleSuffix", { s: info.ageSeconds }) : "") + "\n" +
       t("diagMqtt") + " " + d.mqtt + "\n" +
       t("diagBattery") + " " + d.battery + "%" + (d.charging ? " " + t("chargingSuffix") : "") + temp + "\n" +
       t("diagWifi") + " " + d.wifi + "\n" +
       t("diagMessage") + " " + (d.sender || "-") + (msg ? " — " + msg : "") + "\n" +
-      t("diagLast") + " " + (lastCleanSender || "-") + (lastCleanText ? " — " + lastCleanText : "") + "\n" +
-      t("diagSeen") + " " + t("seenAgo", { s: age });
+      t("diagSeen") + " " + t("seenAgo", { s: info.ageSeconds });
   }
 
   /* Adopt the admin-configured default duration until the user picks their own. */
@@ -259,6 +277,137 @@
     if (typeof m === "number") setMinutes(m);
   }
 
+  /* ---------- message history (retained grandpa/last array) ----------
+     The sender is the writer: it mirrors every message it observes on
+     grandpa/message into a capped, newest-first array on grandpa/last. The topic
+     is reused (no new ACLs); the Android receiver never subscribes to it, so the
+     payload shape is a private web contract. */
+  function clampCount(n) { n = Math.round(n); return Math.max(1, Math.min(50, n)); }
+  function resolveHistoryCount() {
+    // The admin's retained grandpa/config is authoritative and reaches every
+    // sender device; the status echo and localStorage are fallbacks (the receiver
+    // does not echo unknown config fields).
+    if (typeof remoteHistoryCount === "number" && isFinite(remoteHistoryCount)) return clampCount(remoteHistoryCount);
+    var c = lastStatus && lastStatus.config && lastStatus.config.defaults && lastStatus.config.defaults.history_count;
+    if (typeof c === "number" && isFinite(c)) return clampCount(c);
+    try { var ls = parseInt(localStorage.getItem("gp_history_count"), 10); if (isFinite(ls)) return clampCount(ls); } catch (e) {}
+    return DEFAULT_HISTORY;
+  }
+  /* The admin's config (retained) carries defaults.history_count. Reading it here
+     makes the choice consistent across every sender, not just the admin's browser. */
+  function applyRemoteHistoryCount(raw) {
+    var o = null;
+    try { o = raw ? JSON.parse(raw) : null; } catch (e) { return; }
+    var n = o && o.defaults && o.defaults.history_count;
+    if (typeof n === "number" && isFinite(n)) {
+      var v = clampCount(n);
+      if (v !== remoteHistoryCount) { remoteHistoryCount = v; historyCount = resolveHistoryCount(); renderHistory(); }
+    }
+  }
+  function isHistoryMsg(m) { return !!m && typeof m === "object" && (m.id || m.text); }
+  function parseHistory(raw) {
+    try {
+      var o = raw ? JSON.parse(raw) : null;
+      if (!o) return [];
+      if (Array.isArray(o)) return o.filter(isHistoryMsg);
+      if (Array.isArray(o.messages)) return o.messages.filter(isHistoryMsg);
+      if (o.text || o.sender) return [o]; // legacy single-object payload
+    } catch (e) {}
+    return [];
+  }
+  function historyIndexOf(arr, id) {
+    for (var i = 0; i < arr.length; i++) { if (arr[i] && arr[i].id === id) return i; }
+    return -1;
+  }
+  /* Publish the array only when it actually changed, so the retained echo of our
+     own write does not trigger another write (no publish loop). */
+  function commitHistory(arr) {
+    arr = arr.slice(0, historyCount);
+    var sig = JSON.stringify(arr);
+    if (sig === historySig) return;
+    history = arr; historySig = sig;
+    renderHistory();
+    if (client && client.connected) {
+      client.publish(TOPIC.last, JSON.stringify({ v: 1, messages: arr }), { qos: 1, retain: true });
+    }
+  }
+  function recordMessage(msg) {
+    if (!isHistoryMsg(msg) || !msg.id) return;
+    if (!historyLoaded) { pendingMessage = msg; return; } // wait for the retained array first
+    var arr = history.slice();
+    var i = historyIndexOf(arr, msg.id);
+    if (i >= 0) arr[i] = msg; else arr.unshift(msg);
+    commitHistory(arr);
+  }
+  function adoptHistory(raw) {
+    if (historyTimer) { clearTimeout(historyTimer); historyTimer = null; }
+    history = parseHistory(raw).slice(0, historyCount);
+    historySig = JSON.stringify(history);
+    historyLoaded = true;
+    renderHistory();
+    // A message published while no sender was online (e.g. from the phone) is not
+    // in the retained array yet; fold it in now that we have the broker's copy.
+    if (pendingMessage) {
+      var pm = pendingMessage; pendingMessage = null;
+      if (historyIndexOf(history, pm.id) < 0) recordMessage(pm);
+    }
+  }
+  /* Retained delivery is immediate on a healthy link, but when no retained
+     grandpa/last exists yet (the very first message ever) nothing arrives to
+     unlock maintenance. Settle shortly after connect: if the retained array has
+     still not shown up, treat history as empty and flush whatever was buffered. */
+  function armHistorySettle() {
+    if (historyTimer) clearTimeout(historyTimer);
+    historyTimer = setTimeout(function () {
+      historyTimer = null;
+      if (historyLoaded) return;
+      historyLoaded = true;
+      if (pendingMessage) { var pm = pendingMessage; pendingMessage = null; recordMessage(pm); }
+    }, 2500);
+  }
+  function relativeTime(iso) {
+    if (!iso) return "";
+    var t0 = new Date(iso).getTime();
+    if (!isFinite(t0)) return String(iso);
+    var s = Math.max(0, Math.round((Date.now() - t0) / 1000));
+    if (s < 60) return t("justNow");
+    var m = Math.round(s / 60);
+    if (m < 60) return t("minutesAgo", { n: m });
+    var h = Math.round(m / 60);
+    if (h < 24) return t("hoursAgo", { n: h });
+    var d = Math.round(h / 24);
+    if (d < 7) return t("daysAgo", { n: d });
+    return new Date(t0).toLocaleDateString();
+  }
+  function renderHistory() {
+    var card = el("historyCard"), list = el("history"), link = el("historyLink");
+    if (!card || !list) return;
+    var shown = history.slice(0, historyCount);
+    if (!shown.length) {
+      card.hidden = true;
+      if (link) link.hidden = true;
+      renderLastRow();
+      return;
+    }
+    card.hidden = false;
+    if (link) { link.hidden = false; link.textContent = t("showHistory", { n: shown.length }); }
+    list.innerHTML = shown.map(function (m) {
+      return '<div class="histitem"><div class="histmeta"><b>' + escapeHtml(m.sender || "?") +
+        '</b><span>' + escapeHtml(relativeTime(m.created_at)) + '</span></div>' +
+        '<div class="histtext">' + escapeHtml(m.text || "") + '</div></div>';
+    }).join("");
+    renderLastRow();
+  }
+  function renderLastRow() {
+    var row = el("lastRow"), out = el("lastMsg");
+    if (!row || !out) return;
+    var m = history[0];
+    if (!m || !m.text) { row.hidden = true; return; }
+    row.hidden = false;
+    out.innerHTML = escapeHtml(m.text) + ' <span class="when">— ' +
+      escapeHtml(m.sender || "?") + ", " + escapeHtml(relativeTime(m.created_at)) + "</span>";
+  }
+
   /* Non-blocking notice that a message is already on the display (option B).
      Driven by grandpa/status (sender + expiry) so it works with the sender
      token; the message text is shown too if the token may read grandpa/message. */
@@ -266,13 +415,18 @@
     return d && d.sender ? t("bannerFrom", { name: "<b>" + escapeHtml(d.sender) + "</b>" }) : "";
   }
   function bannerExpires(d) {
-    if (!d || !d.expires_at) return "";
-    var mins = Math.max(1, Math.round((new Date(d.expires_at).getTime() - Date.now()) / 60000));
+    var info = GP.statusInfo(d);
+    if (info.remainingMs == null) return "";
+    var mins = Math.max(1, Math.round(info.remainingMs / 60000));
     return t("bannerExpires", { m: mins });
   }
+  /* Only a fresh, unexpired, actually-showing status is presented as live. The
+     status topic is retained, so without this a page opening onto a stale
+     "showing" snapshot would pin the old message with "(expires in 1 min)". */
   function updateBannerFromStatus(d) {
     var b = el("banner");
-    if (!d || d.state !== "showing" || !d.current_message_id) { b.hidden = true; return; }
+    var info = GP.statusInfo(d);
+    if (!d || !info.showLive) { b.hidden = true; return; }
     var replaced = (myLastId && d.current_message_id !== myLastId && (Date.now() - myLastAt) < 6000)
       ? "<br>" + t("bannerReplaced") : "";
     b.hidden = false;
@@ -288,6 +442,8 @@
     if (!text || text === "{}") { updateBannerFromStatus(lastStatus); return; }
     var d; try { d = JSON.parse(text); } catch (e) { return; }
     if (!d || !d.text) { updateBannerFromStatus(lastStatus); return; }
+    var exp = d.expires_at ? new Date(d.expires_at).getTime() : 0;
+    if (exp && exp <= Date.now()) { updateBannerFromStatus(lastStatus); return; } // expired → status decides
     var replaced = (myLastId && d.id && d.id !== myLastId && (Date.now() - myLastAt) < 6000)
       ? "<br>" + t("bannerReplaced") : "";
     b.hidden = false;
@@ -333,7 +489,15 @@
       disconnectedSince = 0;
       setConnected(true);
       el("sendHint").textContent = t("connectedMsg");
+      // Re-adopt the broker's retained history before maintaining it again.
+      historyLoaded = false; pendingMessage = null;
+      historyCount = resolveHistoryCount();
       client.subscribe([TOPIC.status, TOPIC.message, TOPIC.last], { qos: 1 });
+      // The sender token needs `subscribe grandpa/config` for the admin's
+      // history_count to reach every device; a separate call means a denied
+      // config grant cannot affect the subscriptions above.
+      try { client.subscribe([TOPIC.config], { qos: 1 }); } catch (e) {}
+      armHistorySettle();
     });
     client.on("reconnect", function () { el("sendHint").textContent = t("reconnecting"); });
     client.on("close", function () {
@@ -349,19 +513,23 @@
       if (topic === TOPIC.status) {
         try {
           lastStatus = JSON.parse(payload.toString());
+          historyCount = resolveHistoryCount();
           renderDiag(lastStatus); updateBannerFromStatus(lastStatus); applyRemoteDefault(lastStatus); updateConnPill();
+          renderHistory();
         } catch (e) { el("diag").textContent = payload.toString(); }
       } else if (topic === TOPIC.message) {
         var raw = payload.toString();
-        try { var m = raw ? JSON.parse(raw) : null; lastMessageText = (m && m.text) ? m.text : null; }
-        catch (e) { lastMessageText = null; }
+        var m = null;
+        try { m = raw ? JSON.parse(raw) : null; lastMessageText = (m && m.text) ? m.text : null; }
+        catch (e) { lastMessageText = null; m = null; }
         renderBannerFromMessage(raw);
+        if (m) recordMessage(m);
         if (lastStatus) renderDiag(lastStatus);
       } else if (topic === TOPIC.last) {
-        var rawl = payload.toString();
-        try { var l = rawl ? JSON.parse(rawl) : null; lastCleanSender = (l && l.sender) ? l.sender : null; lastCleanText = (l && l.text) ? l.text : null; }
-        catch (e) { lastCleanSender = null; lastCleanText = null; }
+        adoptHistory(payload.toString());
         if (lastStatus) renderDiag(lastStatus);
+      } else if (topic === TOPIC.config) {
+        applyRemoteHistoryCount(payload.toString());
       }
     });
   }
@@ -401,9 +569,9 @@
       duration_minutes: minutes,
     };
     client.publish(TOPIC.message, JSON.stringify(payload), { qos: 1, retain: true });
-    // Also keep it as the "last message" (history). A clear empties
-    // grandpa/message but never touches grandpa/last, so it stays retrievable.
-    client.publish(TOPIC.last, JSON.stringify(payload), { qos: 1, retain: true });
+    // Mirror it into history (grandpa/last). A clear empties grandpa/message but
+    // never touches grandpa/last, so the last message stays retrievable.
+    recordMessage(payload);
     myLastId = payload.id; myLastAt = Date.now();
     el("text").value = "";
     el("sendHint").textContent = t("sentMsg");
@@ -473,6 +641,20 @@
     el("connect").addEventListener("click", connect);
     el("forget").addEventListener("click", forget);
     el("setupSave").addEventListener("click", setupSave);
+
+    // "Show last N messages" scrolls to (and opens) the history section below.
+    if (el("historyLink")) el("historyLink").addEventListener("click", function (e) {
+      e.preventDefault();
+      var det = el("historyDetails"); if (det) det.open = true;
+      if (el("historyCard") && el("historyCard").scrollIntoView) {
+        el("historyCard").scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
+    // The admin page (same origin) mirrors the count to localStorage; follow it
+    // live when it changes in another tab.
+    window.addEventListener("storage", function (e) {
+      if (e.key === "gp_history_count") { historyCount = resolveHistoryCount(); renderHistory(); }
+    });
 
     // Heal a dropped/never-established link without a manual refresh: when the
     // tab is shown again, the network returns, the page is restored from the

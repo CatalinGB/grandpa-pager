@@ -156,5 +156,24 @@ acknowledged in `status.command` (`last`, `received_at`, `result`). Reboot is on
 attempted when the app is device owner; otherwise it is reported, never silently
 ignored. The device owner is never removed remotely.
 
+## D18 — Web message history on the existing `grandpa/last` topic
+The sender/admin need to show the last N messages (N set in the admin console),
+not just one. Adding a new topic would need fresh Flespi ACLs, and the Android
+app (which cannot be updated) must not be disturbed. So the history **reuses the
+already-granted `grandpa/last` topic** (sender pub+sub, admin sub) as a versioned
+array (`{"v":1,"messages":[…]}`); the app never touches it, so the shape is a
+private web contract and can evolve freely. The web sender is the sole writer
+(adopt-then-append, dedupe by `id`, republish only on change) and both web clients
+render it. `defaults.history_count` rides in `grandpa/config` and the **web
+sender subscribes to `grandpa/config`** to read it, so the count is the same on
+every sender device (the one added grant is `subscribe grandpa/config` on the
+sender token; it is a separate SUBSCRIBE so its absence cannot break the other
+subscriptions). `status.config` and the admin's `localStorage.gp_history_count`
+mirror remain fallbacks, because the receiver drops unknown config fields. The
+stale "1 min" banner is fixed by gating the retained `grandpa/status` message on
+freshness **and** expiry (`GP.statusInfo`) instead of trusting `state:"showing"`.
+*Change if* a second writer or cross-origin senders make a dedicated history topic
+worth its ACL cost.
+
 
 

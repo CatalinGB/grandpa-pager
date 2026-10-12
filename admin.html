@@ -14,7 +14,7 @@
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon-192.png">
 <link rel="apple-touch-icon" href="./icon-192.png">
-<script src="./common.js?v=2"></script>
+<script src="./common.js?v=3"></script>
 <script src="./mqtt.min.js"></script>
 <style>
   :root{ --bg:#0f1115; --card:#171b22; --card2:#12161d; --fg:#f2f4f8; --muted:#9aa4b2; --accent:#3b82f6; --line:#2b3140; --ok:#22c55e; --warn:#f59e0b; }
@@ -46,6 +46,19 @@
   .ghost{ flex:1; background:transparent; color:var(--muted); border:1px solid var(--line); border-radius:12px; padding:15px; font-weight:700; }
   .rowbtns{ display:flex; gap:10px; }
   .statusline{ display:flex; gap:8px; flex-wrap:wrap; color:var(--muted); font-size:12px; margin-top:8px; }
+  .statusline .sep{ color:#3a4150; }
+  .lastrow{ background:var(--card2); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-top:10px; }
+  .lasthead{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; color:var(--muted); font-size:12px; }
+  .histlink{ color:var(--accent); text-decoration:none; font-weight:700; white-space:nowrap; }
+  .histlink:hover{ text-decoration:underline; }
+  .lastmsg{ margin-top:6px; font-size:15px; }
+  .lastmsg .when{ color:var(--muted); font-size:12px; }
+  .histlist{ margin-top:10px; }
+  .histitem{ border-top:1px solid var(--line); padding:9px 0; }
+  .histitem:first-child{ border-top:0; }
+  .histmeta{ display:flex; justify-content:space-between; gap:8px; color:var(--muted); font-size:12px; }
+  .histmeta b{ color:var(--fg); }
+  .histtext{ margin-top:2px; }
   pre{ background:#0b0e13; border:1px solid var(--line); border-radius:10px; padding:10px; font-size:11px; color:#9fb3c8; overflow:auto; margin-top:10px; }
   .hint{ color:var(--muted); font-size:12px; margin-top:8px; }
 </style>
@@ -66,6 +79,16 @@
     <div class="card">
       <div class="row" style="border:0;padding-top:0"><h1>Admin · Pager</h1><span id="connPill" class="pill off">disconnected</span></div>
       <div class="statusline" id="devStatus">—</div>
+      <div class="lastrow" id="lastRow" hidden>
+        <div class="lasthead"><span>Last message</span><a href="#historyCard" id="historyLink" class="histlink"></a></div>
+        <div class="lastmsg" id="lastMsg"></div>
+      </div>
+    </div>
+    <div class="card" id="historyCard" hidden>
+      <details id="historyDetails">
+        <summary><strong>Message history</strong></summary>
+        <div class="histlist" id="history"></div>
+      </details>
     </div>
     <div class="card">
       <div class="sec" style="margin-top:0">Display</div>
@@ -115,6 +138,6 @@
     </div>
   </section>
 </div>
-<script src="admin.js?v=14"></script>
+<script src="admin.js?v=15"></script>
 </body>
 </html>

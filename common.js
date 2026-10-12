@@ -26,6 +26,32 @@
     return Math.max(90, m * 60 * 2 + 60);
   };
 
+  /* Interpret a grandpa/status payload for the UI. `grandpa/status` is retained,
+     so a page can open onto a snapshot from long ago; callers must not present
+     its message as live unless `showLive` is true. `expired` means the message's
+     expires_at is in the past — the phone just hasn't republished (offline), so
+     the screen is not showing it any more. */
+  GP.statusInfo = function (d, nowMs) {
+    nowMs = nowMs || Date.now();
+    if (!d) return { online: false, stale: true, showing: false, showLive: false, expired: false, remainingMs: null, ageSeconds: 0 };
+    var seen = d.last_seen ? new Date(d.last_seen).getTime() : 0;
+    var age = Math.max(0, (nowMs - seen) / 1000);
+    var online = d.state !== "offline" && age < GP.staleAfterSeconds(d);
+    var hasExpiry = !!d.expires_at;
+    var remainingMs = hasExpiry ? (new Date(d.expires_at).getTime() - nowMs) : null;
+    var expired = hasExpiry && remainingMs <= 0;
+    var showing = d.state === "showing" && !!d.current_message_id;
+    return {
+      online: online,
+      stale: !online,
+      showing: showing,
+      showLive: showing && online && !expired,
+      expired: expired,
+      remainingMs: remainingMs,
+      ageSeconds: Math.round(age)
+    };
+  };
+
   /* Invitation links carry a token (and usually a name) in the URL fragment
      (preferred — never sent to the server, never leaked via Referer) or the
      query string. `aliases` maps a field to its accepted parameter names. */

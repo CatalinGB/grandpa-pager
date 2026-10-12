@@ -50,8 +50,10 @@ Telematics entity and publish/subscribe anywhere). You must set:
   "access": {
     "type": 2,
     "acl": [
-      { "uri": "mqtt", "topic": "grandpa/message", "actions": ["publish"] },
-      { "uri": "mqtt", "topic": "grandpa/status",  "actions": ["subscribe"] }
+      { "uri": "mqtt", "topic": "grandpa/message", "actions": ["publish", "subscribe"] },
+      { "uri": "mqtt", "topic": "grandpa/last",    "actions": ["publish", "subscribe"] },
+      { "uri": "mqtt", "topic": "grandpa/status",  "actions": ["subscribe"] },
+      { "uri": "mqtt", "topic": "grandpa/config",  "actions": ["subscribe"] }
     ]
   },
   "origins": ["https://catalingb.github.io"],
@@ -59,6 +61,16 @@ Telematics entity and publish/subscribe anywhere). You must set:
   "expire": 0
 }
 ```
+
+> **Note:** the sender subscribes to `grandpa/message` (to mirror each message
+> into history and to show the "already showing" banner), `grandpa/last` (the
+> retained history array it maintains), and `grandpa/config` (to read the
+> admin's `defaults.history_count` so the choice is consistent on **every**
+> device, not just the admin's browser). It publishes to `grandpa/message` and
+> `grandpa/last`. A publish-only grant leaves its subscribers blind and the
+> history unreadable. The config subscription is issued in a separate SUBSCRIBE
+> packet, so if this grant is missing the sender still works (it falls back to a
+> default of 10) — but add the grant to get the configured count everywhere.
 
 `origins` is the key browser lock: with it set, a leaked token **cannot be used
 from any other website**. Use `[]` to block browsers entirely.
@@ -91,9 +103,11 @@ from any other website**. Use `[]` to block browsers entirely.
   "access": {
     "type": 2,
     "acl": [
-      { "uri": "mqtt", "topic": "grandpa/config", "actions": ["publish", "subscribe"] },
+      { "uri": "mqtt", "topic": "grandpa/config",  "actions": ["publish", "subscribe"] },
       { "uri": "mqtt", "topic": "grandpa/command", "actions": ["publish"] },
-      { "uri": "mqtt", "topic": "grandpa/status", "actions": ["subscribe"] }
+      { "uri": "mqtt", "topic": "grandpa/status",  "actions": ["subscribe"] },
+      { "uri": "mqtt", "topic": "grandpa/message", "actions": ["subscribe"] },
+      { "uri": "mqtt", "topic": "grandpa/last",    "actions": ["subscribe"] }
     ]
   },
   "origins": ["https://catalingb.github.io"],
@@ -101,6 +115,10 @@ from any other website**. Use `[]` to block browsers entirely.
   "expire": 0
 }
 ```
+
+> **History:** `grandpa/last` carries the message-history array. The admin
+> subscribes to it (read-only) to render the history; it is published only by the
+> web sender, so no `publish` grant is needed here.
 
 ACL is **default-deny**: only the listed topic+action pairs are permitted.
 

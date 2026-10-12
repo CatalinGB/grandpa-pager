@@ -18,7 +18,7 @@
 <link rel="apple-touch-icon" href="./icon-192.png">
 <!-- Shared helpers (loaded before the page script). MQTT.js vendored locally
      (no CDN dependency). v5.16.0 -->
-<script src="./common.js?v=2"></script>
+<script src="./common.js?v=3"></script>
 <script src="./mqtt.min.js"></script>
 <style>
   :root{
@@ -59,6 +59,20 @@
   .banner b{ color:#fff; }
   details summary{ cursor:pointer; color:var(--muted); }
   .hint{ color:var(--muted); font-size:12px; margin-top:8px; }
+  .lastrow{ background:var(--card2); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-top:10px; }
+  .lasthead{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; color:var(--muted); font-size:12px; }
+  .histlink{ color:var(--accent); text-decoration:none; font-weight:700; white-space:nowrap; }
+  .histlink:hover{ text-decoration:underline; }
+  .lastmsg{ margin-top:6px; font-size:15px; }
+  .lastmsg b{ color:var(--accent); }
+  .lastmsg .when{ color:var(--muted); font-size:12px; font-weight:400; }
+  .histlist{ margin-top:10px; }
+  .histitem{ border-top:1px solid var(--line); padding:9px 0; }
+  .histitem:first-child{ border-top:0; }
+  .histmeta{ display:flex; justify-content:space-between; gap:8px; color:var(--muted); font-size:12px; }
+  .histmeta b{ color:var(--fg); }
+  .histtext{ margin-top:2px; }
+  .histempty{ color:var(--muted); font-size:13px; }
 </style>
 </head>
 <body>
@@ -115,6 +129,20 @@
     <div class="card">
       <div class="label" style="margin-top:0" data-i18n="deviceStatus">Device status</div>
       <div class="diag" id="diag" data-i18n="noStatus">No status yet.</div>
+      <div class="lastrow" id="lastRow" hidden>
+        <div class="lasthead">
+          <span data-i18n="lastMessage">Last message</span>
+          <a href="#historyCard" id="historyLink" class="histlink"></a>
+        </div>
+        <div class="lastmsg" id="lastMsg"></div>
+      </div>
+    </div>
+
+    <div class="card" id="historyCard" hidden>
+      <details id="historyDetails">
+        <summary><strong data-i18n="history">Message history</strong></summary>
+        <div class="histlist" id="history"></div>
+      </details>
     </div>
 
     <div class="card">
@@ -136,6 +164,6 @@
   </section>
 </div>
 
-<script src="sender.js?v=11"></script>
+<script src="sender.js?v=13"></script>
 </body>
 </html>

@@ -65,7 +65,7 @@ notified through the in-process `PagerBus` and by re-reading `SharedPreferences`
 | Topic | Retain | QoS | Direction | Purpose |
 |---|---|---|---|---|
 | `grandpa/message` | yes | 1 | senders → receiver | Latest message (empty payload clears). |
-| `grandpa/last` | yes | 1 | senders → sender/admin | The last non-cleared message (history). A clear empties `grandpa/message` but never touches this, so the last message stays retrievable. |
+| `grandpa/last` | yes | 1 | senders → sender/admin | Message history: a versioned array of the last N messages, newest first. A clear empties `grandpa/message` but never touches this, so history survives. |
 | `grandpa/command` | no | 1 | senders/admin → receiver | `{"action":"clear"}` · `set_connection` · `restart_app` · `reboot_device`. |
 | `grandpa/config` | yes | 1 | admin → receiver | Versioned remote config (see below). |
 | `grandpa/status` | yes | 1 | receiver → senders/admin | Diagnostics + config ack. |
@@ -73,10 +73,22 @@ notified through the in-process `PagerBus` and by re-reading `SharedPreferences`
 There is **no MQTT Last Will**: Flespi rejects a CONNECT carrying a Will for a
 scoped (ACL) token. Offline is detected by **status staleness**.
 
-`grandpa/last` is a retained **history** topic: the web sender mirrors every sent
-message there, so the last message survives a clear (which empties only
-`grandpa/message`) and any sender/admin can still read it. It is the "last
-message" the web clients show alongside the current one.
+`grandpa/last` is a retained **history** topic: the **web sender is its writer**
+(the Android app neither publishes nor subscribes to it — it is a private web
+contract, so the payload shape can evolve without an app update). It mirrors
+every message observed on `grandpa/message` into a capped, newest-first array,
+so the last N messages survive a clear (which empties only `grandpa/message`) and
+any sender/admin can read them. The payload is
+`{"v":1,"messages":[{id,sender,text,created_at,expires_at,duration_minutes}, …]}`;
+a legacy single-object payload is still accepted. The cap is
+`defaults.history_count` (see below). The web sender shows the newest message
+with a link that scrolls to a full history section; the admin console shows the
+same read-only (its token has no publish on `grandpa/last`).
+
+The sender **adopts the retained array before writing** (a fresh page must not
+clobber the broker's copy with its own partial view), dedupes by `id`, and only
+republishes when the array actually changed — so the retained echo of its own
+write cannot start a publish loop.
 
 ## Payloads
 
@@ -139,7 +151,7 @@ Remote config — `grandpa/config` (v1):
                "idle_clock_scale": 1.3, "idle_date_format": "auto", "warn_text": null },
   "cue": { "glow_ms": 9000, "chime": true, "vibrate": false,
            "torch": { "enabled": true, "on_ms": 1500, "off_ms": 1500, "pulses": 3 } },
-  "defaults": { "duration_minutes": 240 },
+  "defaults": { "duration_minutes": 240, "history_count": 10 },
   "telemetry": { "interval_minutes": 15 },
   "power": { "screen_off_when_idle": true },
   "kiosk": { "locked": true },
@@ -162,6 +174,17 @@ the accepted config, re-applies it on every (re)connect and reboot, and **echoes
 the effective config** in `status.config` so the admin UI prefills. Adding an
 optional field under `schema: 1` is backward-compatible (old receivers ignore it
 and default it).
+
+`defaults.history_count` (1–50) is exactly such a field: the receiver ignores it,
+but the admin publishes it in `grandpa/config`, and the **web sender subscribes
+to `grandpa/config`** to read it — so the same count reaches every sender device,
+not just the admin's browser. (This is the one sender-side ACL addition:
+`subscribe grandpa/config`, issued as a separate SUBSCRIBE so a missing grant
+cannot affect the other subscriptions; without it the sender falls back to a
+default of 10.) The receiver does not echo the field because it drops unknown
+config keys, so `status.config` and the admin's `localStorage.gp_history_count`
+mirror are only fallbacks. Resolution order: `grandpa/config` → `status.config`
+→ localStorage → 10.
 
 `display.per_sender_colors` (default `true`) gives each sender a stable colour
 from a 15-colour palette whose every entry clears WCAG **AAA** contrast

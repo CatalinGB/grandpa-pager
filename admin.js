@@ -16,7 +16,7 @@
       idle_clock_scale: 1.3, idle_date_format: "auto", warn_text: null
     },
     cue: { glow_ms: 9000, chime: true, vibrate: false, torch: { enabled: true, on_ms: 1500, off_ms: 1500, pulses: 3 } },
-    defaults: { duration_minutes: 240 },
+    defaults: { duration_minutes: 240, history_count: 10 },
     telemetry: { interval_minutes: 15 },
     power: { screen_off_when_idle: true },
     kiosk: { locked: true },
@@ -30,7 +30,80 @@
   var el = function (id) { return document.getElementById(id); };
   var cfg = JSON.parse(JSON.stringify(DEF));
   var dirty = false, client = null, lastAttempt = 0;
-  var lastMsgSender = null, lastMsgText = null, lastStatusObj = null, mqttUp = false, lastHistSender = null, lastHistText = null;
+  var lastMsgSender = null, lastMsgText = null, lastStatusObj = null, mqttUp = false;
+  /* Message history, read from the retained grandpa/last array the web sender
+     maintains. The admin is read-only here (its token has no publish on
+     grandpa/last). */
+  var history = [], historyCount = 10;
+
+  /* The history count rides in the receiver config (defaults.history_count) and
+     is published in grandpa/config, which the sender pages subscribe to — so it
+     reaches every device. The receiver drops unknown fields, so it is not echoed
+     in status.config; the localStorage mirror below is only a same-origin
+     fallback for the case where the sender's config grant is not yet in place. */
+  function storedHistoryCount() {
+    try { var n = parseInt(localStorage.getItem("gp_history_count"), 10); return isFinite(n) ? Math.max(1, Math.min(50, n)) : null; } catch (e) { return null; }
+  }
+  function applyStoredHistoryCount(c) {
+    var n = storedHistoryCount();
+    if (n != null && c && c.defaults) c.defaults.history_count = n;
+  }
+  applyStoredHistoryCount(cfg);
+  historyCount = (cfg.defaults && cfg.defaults.history_count) || 10;
+  function parseHistory(raw) {
+    function ok(m) { return !!m && typeof m === "object" && (m.id || m.text); }
+    try {
+      var o = raw ? JSON.parse(raw) : null;
+      if (!o) return [];
+      if (Array.isArray(o)) return o.filter(ok);
+      if (Array.isArray(o.messages)) return o.messages.filter(ok);
+      if (o.text || o.sender) return [o]; // legacy single-object payload
+    } catch (e) {}
+    return [];
+  }
+  function relativeTime(iso) {
+    if (!iso) return "";
+    var t0 = new Date(iso).getTime();
+    if (!isFinite(t0)) return String(iso);
+    var s = Math.max(0, Math.round((Date.now() - t0) / 1000));
+    if (s < 60) return "just now";
+    var m = Math.round(s / 60);
+    if (m < 60) return m + " min ago";
+    var h = Math.round(m / 60);
+    if (h < 24) return h + " h ago";
+    var d = Math.round(h / 24);
+    if (d < 7) return d + " d ago";
+    return new Date(t0).toLocaleDateString();
+  }
+  function renderHistory() {
+    var card = el("historyCard"), list = el("history"), link = el("historyLink");
+    if (!card || !list) return;
+    var n = Math.max(1, Math.min(50, historyCount || 10));
+    var shown = history.slice(0, n);
+    if (!shown.length) {
+      card.hidden = true;
+      if (link) link.hidden = true;
+      renderLastRow();
+      return;
+    }
+    card.hidden = false;
+    if (link) { link.hidden = false; link.textContent = "Show last " + shown.length + " messages"; }
+    list.innerHTML = shown.map(function (m) {
+      return '<div class="histitem"><div class="histmeta"><b>' + GP.escapeHtml(m.sender || "?") +
+        '</b><span>' + GP.escapeHtml(relativeTime(m.created_at)) + '</span></div>' +
+        '<div class="histtext">' + GP.escapeHtml(m.text || "") + '</div></div>';
+    }).join("");
+    renderLastRow();
+  }
+  function renderLastRow() {
+    var row = el("lastRow"), out = el("lastMsg");
+    if (!row || !out) return;
+    var m = history[0];
+    if (!m || !m.text) { row.hidden = true; return; }
+    row.hidden = false;
+    out.innerHTML = GP.escapeHtml(m.text) + ' <span class="when">— ' +
+      GP.escapeHtml(m.sender || "?") + ", " + GP.escapeHtml(relativeTime(m.created_at)) + "</span>";
+  }
 
   /* The admin token is persisted in localStorage (the phone is often out of
      physical reach, so re-entering it on every tab is painful). A token left in
@@ -122,7 +195,8 @@
       slider("cue.torch.on_ms", "On", 200, 5000, 100, "ms") +
       slider("cue.torch.off_ms", "Off", 200, 5000, 100, "ms") +
       stepper("cue.torch.pulses", "Pulses", 1, 10, 1);
-    el("sec-defaults").innerHTML = stepper("defaults.duration_minutes", "Default duration", 5, 1440, 30, "h");
+    el("sec-defaults").innerHTML = stepper("defaults.duration_minutes", "Default duration", 5, 1440, 30, "h") +
+      stepper("defaults.history_count", "History count", 1, 50, 1);
     el("sec-telemetry").innerHTML = stepper("telemetry.interval_minutes", "Status interval (min)", 1, 1440, 5);
     el("sec-power").innerHTML = sw("power.screen_off_when_idle", "Screen off when idle", "sleep the display; wake on a new message");
     el("sec-kiosk").innerHTML = sw("kiosk.locked", "Locked (kiosk)", "off = open the launcher");
@@ -139,7 +213,11 @@
       sw("device_owner.restrict_roaming", "Block data roaming");
     preview();
   }
-  function preview() { el("jsonPreview").textContent = JSON.stringify(cfg, null, 1); }
+  function preview() {
+    el("jsonPreview").textContent = JSON.stringify(cfg, null, 1);
+    // Keep the sender pages (same origin) in step with the chosen count.
+    try { if (cfg.defaults && typeof cfg.defaults.history_count === "number") localStorage.setItem("gp_history_count", cfg.defaults.history_count); } catch (e) {}
+  }
 
   /* ---- in-place handlers ---- */
   function toggle(btn) { var p = btn.dataset.path; var v = !get(p); setPath(p, v); btn.classList.toggle("on", v); preview(); }
@@ -186,25 +264,22 @@
 
   function renderDevice(s) {
     if (!s) { el("devStatus").textContent = "—"; return; }
-    var seen = s.last_seen ? new Date(s.last_seen).getTime() : 0;
-    var age = Math.max(0, Math.round((Date.now() - seen) / 1000));
-    var online = s.state !== "offline" && age < staleAfterSeconds(s);
+    var info = GP.statusInfo(s);
     var parts = [];
-    parts.push('<span class="pill ' + (online ? "on" : "off") + '">' + (online ? "connected" : "offline") + '</span>');
+    parts.push('<span class="pill ' + (info.online ? "on" : "off") + '">' + (info.online ? "connected" : "offline") + '</span>');
     parts.push("<span>battery " + s.battery + "%" + (typeof s.battery_temp_c === "number" ? " · " + s.battery_temp_c.toFixed(1) + "°C" : "") + "</span>");
     parts.push("<span>" + (s.charging ? "charging" : "on battery") + "</span>");
     parts.push("<span>wifi " + s.wifi + "</span>");
     parts.push("<span>mqtt " + s.mqtt + "</span>");
     if (typeof s.device_owner === "boolean") parts.push("<span>device owner " + s.device_owner + "</span>");
+    // Only present the on-screen message as live when the status is fresh and the
+    // message has not expired; the retained status can otherwise be hours old.
     var mSender = s.sender || lastMsgSender;
     var mText = s.text || lastMsgText;
-    if (mSender || mText) {
+    if (info.showLive && (mSender || mText)) {
       parts.push("<span>message: " + (mText ? "“" + GP.escapeHtml(mText) + "” " : "") + (mSender ? "— " + GP.escapeHtml(mSender) : "") + "</span>");
     }
-    if (lastHistSender || lastHistText) {
-      parts.push("<span>last: " + (lastHistText ? "“" + GP.escapeHtml(lastHistText) + "” " : "") + (lastHistSender ? "— " + GP.escapeHtml(lastHistSender) : "") + "</span>");
-    }
-    parts.push("<span>seen " + age + "s ago</span>");
+    parts.push("<span>seen " + info.ageSeconds + "s ago" + (info.stale ? " (stale)" : "") + "</span>");
     el("devStatus").innerHTML = parts.join('<span class="sep">·</span>');
   }
 
@@ -235,12 +310,9 @@
         return;
       }
       if (topic === TOPIC.last) {
-        var rawl = payload.toString();
-        try {
-          var l = rawl ? JSON.parse(rawl) : null;
-          lastHistSender = (l && l.sender) ? l.sender : null;
-          lastHistText = (l && l.text) ? l.text : null;
-        } catch (e) { lastHistSender = null; lastHistText = null; }
+        history = parseHistory(payload.toString());
+        historyCount = (cfg.defaults && cfg.defaults.history_count) || 10;
+        renderHistory();
         if (lastStatusObj) renderDevice(lastStatusObj);
         return;
       }
@@ -251,7 +323,16 @@
       updateConnPill();
       if (s.connection) renderConnection(s.connection);
       if (s.command && s.command.last) el("actionHint").textContent = s.command.last + ": " + (s.command.result || "");
-      if (!dirty && s.config) { cfg = deepMerge(JSON.parse(JSON.stringify(DEF)), s.config); cfg.schema = cfg.schema || 1; build(); el("applied").textContent = "current config loaded from the phone"; }
+      if (!dirty && s.config) {
+        cfg = deepMerge(JSON.parse(JSON.stringify(DEF)), s.config);
+        // The receiver drops unknown config fields, so history_count is usually
+        // absent from the echoed config; restore the admin's stored choice.
+        if (!(s.config.defaults && typeof s.config.defaults.history_count === "number")) applyStoredHistoryCount(cfg);
+        cfg.schema = cfg.schema || 1;
+        historyCount = (cfg.defaults && cfg.defaults.history_count) || 10;
+        build(); renderHistory();
+        el("applied").textContent = "current config loaded from the phone";
+      }
     });
   }
 
@@ -318,7 +399,7 @@
     el("actionHint").textContent = action + " requested.";
   }
 
-  function showForm() { el("unlock").hidden = true; el("admin").hidden = false; build(); }
+  function showForm() { el("unlock").hidden = true; el("admin").hidden = false; build(); renderHistory(); }
 
   /* Invitation link: admin.html#token=<admin-token> (fragment preferred — never
      sent to the server nor leaked in Referer; ?token= also works). Parsing and
@@ -365,6 +446,19 @@
     document.addEventListener("visibilitychange", function () { if (!document.hidden) ensureConnected(); });
     setInterval(ensureConnected, 15000);
     setInterval(updateConnPill, 10000);
+    if (el("historyLink")) el("historyLink").addEventListener("click", function (e) {
+      e.preventDefault();
+      var det = el("historyDetails"); if (det) det.open = true;
+      if (el("historyCard") && el("historyCard").scrollIntoView) {
+        el("historyCard").scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
+    window.addEventListener("storage", function (e) {
+      if (e.key === "gp_history_count") {
+        historyCount = storedHistoryCount() || historyCount;
+        renderHistory();
+      }
+    });
     var saved = loadAdminToken();
     var invite = readInvite();
     if (invite) { storeAdminToken(invite); clearInviteParams(); saved = invite; }

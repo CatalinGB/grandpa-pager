@@ -33,6 +33,9 @@ device.
 - **Automatic expiry** (default 4 h, per-message override) enforced *on the
   device* — never trusting broker retention.
 - **Remote clear** and a non-blocking "a message is already showing" warning.
+- **Message history** (web sender + admin): the last N messages are kept on a
+  retained topic and survive a clear, so the most recent message is shown with a
+  link to the full list — N is set in the admin console (default 10).
 - **Attention cue** on a new message: a slow amber glow, a chime and a torch
   pulse (plus an optional double vibration, off by default).
 - **Live diagnostics**: online/offline, battery + charging, Wi-Fi, MQTT, current
@@ -92,7 +95,7 @@ Four topics carry everything:
 | Topic | Direction | Purpose |
 |---|---|---|
 | `grandpa/message` | senders → phone | the latest message (retained; empty clears) |
-| `grandpa/last` | senders → sender/admin | the last message, kept even after a clear (history) |
+| `grandpa/last` | senders → sender/admin | message history — last N, kept even after a clear |
 | `grandpa/command` | senders/admin → phone | `clear` · `set_connection` · `restart_app` · `reboot_device` |
 | `grandpa/config` | admin → phone | versioned remote config (retained) |
 | `grandpa/status` | phone → everyone | diagnostics + config acknowledgement |
