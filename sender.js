@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  var LS = { token: "gp_token", sender: "gp_sender", broker: "gp_broker" };
+  var LS = { token: "gp_token", sender: "gp_sender", broker: "gp_broker", draft: "gp_draft", duration: "gp_duration" };
   var TOPIC = { message: "grandpa/message", command: "grandpa/command", status: "grandpa/status", last: "grandpa/last", config: "grandpa/config" };
   var DEFAULT_BROKER = "wss://mqtt.flespi.io:443";
   var DEFAULT_MIN = 240;
@@ -28,6 +28,7 @@
      partial view (the retained grandpa/message can arrive first). */
   var history = [], historySig = "", historyLoaded = false, pendingMessage = null, historyTimer = null;
   var historyCount = 10, DEFAULT_HISTORY = 10, remoteHistoryCount = null;
+  var dialogOk = null, draftTimer = null;
 
   /* Shared helpers (common.js). */
   var escapeHtml = GP.escapeHtml;
@@ -51,8 +52,14 @@
       message: "Message",
       messagePlaceholder: "Type the message…",
       durationQuestion: "How long should it stay on screen?",
+      onScreenUntil: "On screen until {time}",
+      composeHint: "Enter sends · Shift+Enter for a new line",
       sendButton: "Send to screen",
       clearButton: "Clear the message",
+      clearTitle: "Clear the screen?",
+      clearBody: "The message will disappear from Grandpa's screen.",
+      clearConfirm: "Clear",
+      cancelButton: "Cancel",
       deviceStatus: "Device status",
       noStatus: "No status yet.",
       settings: "Settings",
@@ -120,8 +127,14 @@
       message: "Mesaj",
       messagePlaceholder: "Scrie mesajul…",
       durationQuestion: "Cât timp să rămână pe ecran?",
+      onScreenUntil: "Pe ecran până la {time}",
+      composeHint: "Enter trimite · Shift+Enter linie nouă",
       sendButton: "Trimite pe ecran",
       clearButton: "Șterge mesajul",
+      clearTitle: "Ștergi ecranul?",
+      clearBody: "Mesajul va dispărea de pe ecranul lui Bunicu.",
+      clearConfirm: "Șterge",
+      cancelButton: "Anulează",
       deviceStatus: "Starea dispozitivului",
       noStatus: "Încă nu există status.",
       settings: "Setări",
@@ -221,18 +234,28 @@
     if (m >= 60) { var h = Math.floor(m / 60), mm = m % 60; return mm ? h + " " + t("hourShort") + " " + mm + " " + t("minShort") : h + " " + t("hourShort"); }
     return m + " " + t("minShort");
   }
+  function two(n) { return ("0" + n).slice(-2); }
+  /* The clock time the message would expire at if sent now — far more useful
+     than a bare duration for "will it still be there when I arrive?". */
+  function updateDurWhen() {
+    if (!el("durWhen")) return;
+    var d = new Date(Date.now() + minutes * 60000);
+    el("durWhen").textContent = t("onScreenUntil", { time: two(d.getHours()) + ":" + two(d.getMinutes()) });
+  }
+  function persistDuration() { try { localStorage.setItem(LS.duration, minutes); } catch (e) {} }
   function setMinutes(m) {
     minutes = Math.max(15, Math.min(1440, m));
     el("durValue").textContent = fmt(minutes);
     Array.prototype.forEach.call(el("presets").children, function (b) {
       b.classList.toggle("on", parseInt(b.dataset.min, 10) === minutes);
     });
+    updateDurWhen();
   }
   function buildPresets() {
     PRESETS.forEach(function (m) {
       var b = document.createElement("button");
       b.dataset.min = m; b.textContent = fmt(m);
-      b.addEventListener("click", function () { userChangedDuration = true; setMinutes(m); });
+      b.addEventListener("click", function () { userChangedDuration = true; setMinutes(m); persistDuration(); });
       el("presets").appendChild(b);
     });
   }
@@ -256,7 +279,39 @@
   function setConnected(ok) {
     mqttUp = ok;
     updateConnPill();
+    updateSendEnabled();
   }
+  /* Composing offline is fine, but Send/Clear cannot work without the broker
+     link: disable and dim them so a tap can't silently do nothing. */
+  function updateSendEnabled() {
+    var ok = !!mqttUp;
+    var compose = el("composeCard");
+    if (compose) compose.classList.toggle("offline", !ok);
+    Array.prototype.forEach.call(document.querySelectorAll("#send, #clear"), function (b) { b.disabled = !ok; });
+  }
+
+  /* ---------- draft autosave ---------- */
+  function saveDraft() {
+    if (draftTimer) clearTimeout(draftTimer);
+    draftTimer = setTimeout(function () {
+      try { var v = el("text").value; if (v) localStorage.setItem(LS.draft, v); else localStorage.removeItem(LS.draft); } catch (e) {}
+    }, 400);
+  }
+  function clearDraft() {
+    if (draftTimer) { clearTimeout(draftTimer); draftTimer = null; }
+    try { localStorage.removeItem(LS.draft); } catch (e) {}
+  }
+
+  /* ---------- confirm dialog (CSP-safe; replaces native confirm) ---------- */
+  function showDialog(title, body, okLabel, onOk) {
+    el("modalTitle").textContent = title;
+    el("modalBody").textContent = body;
+    el("modalOk").textContent = okLabel || t("clearConfirm");
+    el("modal").hidden = false;
+    dialogOk = onOk;
+    el("modalOk").focus();
+  }
+  function closeDialog() { el("modal").hidden = true; dialogOk = null; }
   function renderDiag(d) {
     var info = GP.statusInfo(d);
     var temp = (typeof d.battery_temp_c === "number") ? " " + d.battery_temp_c.toFixed(1) + "°C" : "";
@@ -574,13 +629,16 @@
     recordMessage(payload);
     myLastId = payload.id; myLastAt = Date.now();
     el("text").value = "";
+    clearDraft();
     el("sendHint").textContent = t("sentMsg");
   }
 
   function clearDisplay() {
     if (!client || !client.connected) { el("sendHint").textContent = t("errNotConnected"); return; }
-    client.publish(TOPIC.message, "", { qos: 1, retain: true });
-    el("sendHint").textContent = t("clearedMsg");
+    showDialog(t("clearTitle"), t("clearBody"), t("clearConfirm"), function () {
+      client.publish(TOPIC.message, "", { qos: 1, retain: true });
+      el("sendHint").textContent = t("clearedMsg");
+    });
   }
 
   /* ---------- first run ---------- */
@@ -626,21 +684,38 @@
     if (typeof mqtt === "undefined") { el("setupHint").textContent = t("errNoMqtt"); showView("setup"); return; }
 
     buildPresets();
-    setMinutes(DEFAULT_MIN);
+    // Remember the duration this browser last chose; otherwise take the default.
+    var storedDur = parseInt(localStorage.getItem(LS.duration), 10);
+    if (isFinite(storedDur)) { userChangedDuration = true; setMinutes(storedDur); }
+    else { setMinutes(DEFAULT_MIN); }
 
     el("setupName").value = localStorage.getItem(LS.sender) || "";
     el("setupBroker").value = localStorage.getItem(LS.broker) || DEFAULT_BROKER;
     el("sender").value = localStorage.getItem(LS.sender) || "";
     el("brokerUrl").value = localStorage.getItem(LS.broker) || DEFAULT_BROKER;
     el("token").value = localStorage.getItem(LS.token) || "";
+    // Restore a half-typed message (an accidental reload must not lose it).
+    var draft = localStorage.getItem(LS.draft) || "";
+    if (draft) el("text").value = draft;
 
-    el("minus").addEventListener("click", function () { userChangedDuration = true; setMinutes(minutes - 60); });
-    el("plus").addEventListener("click", function () { userChangedDuration = true; setMinutes(minutes + 60); });
+    el("minus").addEventListener("click", function () { userChangedDuration = true; setMinutes(minutes - 60); persistDuration(); });
+    el("plus").addEventListener("click", function () { userChangedDuration = true; setMinutes(minutes + 60); persistDuration(); });
     el("send").addEventListener("click", publishMessage);
     el("clear").addEventListener("click", clearDisplay);
     el("connect").addEventListener("click", connect);
     el("forget").addEventListener("click", forget);
     el("setupSave").addEventListener("click", setupSave);
+    // Enter sends; Shift+Enter inserts a newline.
+    el("text").addEventListener("keydown", function (e) {
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); publishMessage(); }
+    });
+    el("text").addEventListener("input", saveDraft);
+    // Confirm dialog wiring.
+    el("modalCancel").addEventListener("click", closeDialog);
+    el("modalOk").addEventListener("click", function () { var fn = dialogOk; closeDialog(); if (fn) fn(); });
+    el("modal").addEventListener("click", function (e) { if (e.target === el("modal")) closeDialog(); });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !el("modal").hidden) closeDialog(); });
+    updateSendEnabled();
 
     // "Show last N messages" scrolls to (and opens) the history section below.
     if (el("historyLink")) el("historyLink").addEventListener("click", function (e) {
@@ -669,6 +744,8 @@
     // Re-evaluate reachability so the pill flips to "phone offline" when the
     // phone's status goes stale even though the broker link is still up.
     setInterval(updateConnPill, 10000);
+    // Keep the "on screen until HH:MM" line honest as time passes.
+    setInterval(updateDurWhen, 30000);
 
     if (applyInvite()) return;
     if (localStorage.getItem(LS.sender) && localStorage.getItem(LS.token)) {

@@ -26,6 +26,7 @@
     --accent:#3b82f6; --line:#2b3140;
   }
   *{ box-sizing:border-box; margin:0; padding:0; font-family:system-ui,-apple-system,Roboto,sans-serif; }
+  [hidden]{ display:none !important; }
   body{ background:var(--bg); color:var(--fg); display:flex; justify-content:center; padding:18px; }
   #app{ width:100%; max-width:460px; }
   .card{ background:var(--card); border:1px solid var(--line); border-radius:16px; padding:18px; margin-bottom:14px; }
@@ -59,6 +60,14 @@
   .banner b{ color:#fff; }
   details summary{ cursor:pointer; color:var(--muted); }
   .hint{ color:var(--muted); font-size:12px; margin-top:8px; }
+  button:disabled{ opacity:.45; cursor:not-allowed; }
+  .card.offline{ opacity:.75; }
+  #durWhen{ text-align:center; }
+  .modal{ position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; padding:18px; z-index:50; }
+  .modal-card{ background:var(--card); border:1px solid var(--line); border-radius:16px; padding:18px; width:100%; max-width:380px; }
+  .modal-title{ font-size:17px; font-weight:700; margin-bottom:10px; }
+  .modal-body{ color:var(--muted); font-size:14px; margin-bottom:16px; }
+  .rowbtns{ display:flex; gap:10px; }
   .lastrow{ background:var(--card2); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-top:10px; }
   .lasthead{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; color:var(--muted); font-size:12px; }
   .histlink{ color:var(--accent); text-decoration:none; font-weight:700; white-space:nowrap; }
@@ -102,7 +111,7 @@
 
   <!-- Main: message + duration -->
   <section id="mainView" hidden>
-    <div class="card">
+    <div class="card" id="composeCard">
       <h1>Grandpa Pager</h1>
       <div class="sub"><span data-i18n="mainIntro">Send a message to Grandpa's screen.</span> <span id="connPill" class="pill off" data-i18n="connDisconnected">disconnected</span></div>
 
@@ -110,6 +119,7 @@
 
       <div class="label" data-i18n="message">Message</div>
       <textarea id="text" placeholder="Type the message…" data-i18n-ph="messagePlaceholder"></textarea>
+      <div class="hint" data-i18n="composeHint">Enter sends · Shift+Enter for a new line</div>
 
       <div class="label" data-i18n="durationQuestion">How long should it stay on screen?</div>
       <div class="stepper">
@@ -117,6 +127,7 @@
         <div class="value" id="durValue">4 h</div>
         <button class="big" id="plus" aria-label="more">+</button>
       </div>
+      <div class="hint" id="durWhen"></div>
       <div class="presets" id="presets"></div>
 
       <div style="height:14px"></div>
@@ -164,6 +175,14 @@
   </section>
 </div>
 
-<script src="sender.js?v=13"></script>
+<div id="modal" class="modal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-title" id="modalTitle"></div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="rowbtns"><button class="ghost" id="modalCancel" data-i18n="cancelButton">Cancel</button><button class="primary" id="modalOk" style="width:auto;flex:1;padding:14px"></button></div>
+  </div>
+</div>
+
+<script src="sender.js?v=14"></script>
 </body>
 </html>
