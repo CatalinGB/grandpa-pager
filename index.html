@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Grandpa Pager</title>
 <meta name="theme-color" content="#0f1115">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Pager">
 <!-- This page holds a broker token, so lock the document down: only our own
      scripts, only encrypted WebSocket connections (any broker host the user
      configures), no frames/forms/base tricks. `worker-src ... blob:` is required
@@ -18,7 +22,7 @@
 <link rel="apple-touch-icon" href="./icon-192.png">
 <!-- Shared helpers (loaded before the page script). MQTT.js vendored locally
      (no CDN dependency). v5.16.0 -->
-<script src="./common.js?v=3"></script>
+<script src="./common.js?v=4"></script>
 <script src="./mqtt.min.js"></script>
 <style>
   :root{
@@ -156,6 +160,8 @@
       </details>
     </div>
 
+    <div class="card" id="installCard" hidden></div>
+
     <div class="card">
       <details id="settings">
         <summary><strong data-i18n="settings">Settings</strong></summary>
@@ -183,6 +189,6 @@
   </div>
 </div>
 
-<script src="sender.js?v=14"></script>
+<script src="sender.js?v=15"></script>
 </body>
 </html>

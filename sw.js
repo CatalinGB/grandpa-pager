@@ -1,9 +1,10 @@
 /* Grandpa Pager — service worker (enables PWA install + basic offline shell). */
-var CACHE = "grandpa-pager-v20";
+var CACHE = "grandpa-pager-v21";
 var ASSETS = [
   "./", "./index.html", "./sender.js", "./admin.html", "./admin.js", "./common.js", "./mqtt.min.js",
   "./qrcode-generator.js",
-  "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png"
+  "./manifest.webmanifest", "./admin.webmanifest",
+  "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png"
 ];
 
 /* Never cache under a URL that carries a query string: an invitation link

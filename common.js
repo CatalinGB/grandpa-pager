@@ -100,5 +100,98 @@
     return ok(nav) ? nav : "en";
   };
 
+  /* ---------- PWA install affordance ----------
+     Capture `beforeinstallprompt` at load time (before any page script runs) so
+     an early event is never missed, then let a page mount an Install button —
+     or, on browsers that cannot install (Firefox Android, iOS Safari), a short
+     "how to add to home screen" hint. */
+  GP._install = { deferred: null, subs: [] };
+  GP.onInstallAvailable = function (fn) {
+    if (GP._install.deferred) fn(GP._install.deferred);
+    GP._install.subs.push(fn);
+  };
+  (function () {
+    if (!root.addEventListener) return;
+    root.addEventListener("beforeinstallprompt", function (e) {
+      if (e && e.preventDefault) e.preventDefault();
+      GP._install.deferred = e;
+      GP._install.subs.forEach(function (fn) { try { fn(e); } catch (err) {} });
+    });
+    root.addEventListener("appinstalled", function () {
+      GP._install.deferred = null;
+      GP._install.subs.forEach(function (fn) { try { fn(null); } catch (err) {} });
+    });
+  })();
+
+  /* Already launched as an installed app? */
+  GP.standalone = function () {
+    try {
+      return (root.matchMedia && root.matchMedia("(display-mode: standalone)").matches) ||
+        root.navigator.standalone === true;
+    } catch (e) { return false; }
+  };
+
+  /* Fill `containerId` with an install button (Chromium) or a manual hint. */
+  GP.setupInstall = function (containerId) {
+    var box = root.document && root.document.getElementById(containerId);
+    if (!box || GP.standalone()) return;
+    var loc = GP.detectLocale(["en", "ro"]);
+    var STR = {
+      en: {
+        title: "Install the app", install: "Install",
+        ios: "Tap the Share button, then “Add to Home Screen”.",
+        firefox: "Open the menu (⋮) and tap “Add to Home screen”. Firefox on Android can’t install standalone apps.",
+        inapp: "You’re in an in-app browser. Open this page in Chrome or Brave, then use the browser menu to install.",
+        menu: "Open the browser menu (⋮) and tap “Install app”."
+      },
+      ro: {
+        title: "Instalează aplicația", install: "Instalează",
+        ios: "Apasă butonul Partajează, apoi „Adaugă la ecran”.",
+        firefox: "Deschide meniul (⋮) și apasă „Adaugă la ecran”. Firefox pe Android nu poate instala aplicații standalone.",
+        inapp: "Ești într-un browser integrat. Deschide pagina în Chrome sau Brave, apoi folosește meniul browserului pentru a instala.",
+        menu: "Deschide meniul browserului (⋮) și apasă „Instalează aplicația”."
+      }
+    };
+    function T(k) { return (STR[loc] && STR[loc][k]) || STR.en[k] || k; }
+    var ua = (root.navigator && root.navigator.userAgent) || "";
+    var isIOS = /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && "ontouchend" in root.document);
+    var isFirefox = /Firefox|FxiOS/.test(ua);
+    var isAndroid = /Android/.test(ua);
+    // In-app browsers (a link tapped inside a chat/social app) cannot install PWAs.
+    var isInApp = /(FBAN|FBAV|FB_IAB|Instagram|Line\/|WhatsApp|Twitter|SnapChat|MicroMessenger|; wv\))/i.test(ua);
+
+    function hint(text) {
+      box.innerHTML = '<div class="label" style="margin-top:0">' + GP.escapeHtml(T("title")) + '</div>' +
+        '<div class="hint">' + GP.escapeHtml(text) + '</div>';
+      box.hidden = false;
+    }
+    function button() {
+      box.innerHTML = '<div class="label" style="margin-top:0">' + GP.escapeHtml(T("title")) + '</div>' +
+        '<button class="primary" id="gpInstallBtn" style="width:100%">' + GP.escapeHtml(T("install")) + '</button>';
+      var b = root.document.getElementById("gpInstallBtn");
+      if (b) b.addEventListener("click", function () {
+        var d = GP._install.deferred;
+        if (!d) return;
+        b.disabled = true;
+        try { d.prompt(); } catch (e) {}
+        var p = d.userChoice;
+        if (p && p.then) p.then(function () { GP._install.deferred = null; box.hidden = true; });
+        else box.hidden = true;
+      });
+      box.hidden = false;
+    }
+
+    if (GP._install.deferred) { button(); return; }
+    GP.onInstallAvailable(function (e) { if (e) button(); else box.hidden = true; });
+    if (isInApp) { hint(T("inapp")); return; }
+    if (isIOS) { hint(T("ios")); return; }
+    if (isFirefox) { hint(T("firefox")); return; }
+    // Chromium: the event should arrive; if not (and we are not installed),
+    // fall back to the menu instructions after a moment.
+    if (isAndroid) {
+      root.setTimeout(function () { if (!GP._install.deferred && !GP.standalone()) hint(T("menu")); }, 3000);
+    }
+  };
+
   root.GP = GP;
 })(window);

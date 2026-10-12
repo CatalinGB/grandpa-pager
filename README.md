@@ -171,7 +171,9 @@ remotely.
 ```
 index.html · sender.js         web sender      (GitHub Pages, MQTT.js over WSS)
 admin.html · admin.js          web admin       (token-gated remote config)
-mqtt.min.js · sw.js · manifest vendored lib + PWA shell + icons
+mqtt.min.js · qrcode-generator.js   vendored libs (MQTT over WSS, QR encoder)
+sw.js · manifest.webmanifest · admin.webmanifest   PWA shell + separate sender/admin install manifests
+common.js                      shared browser helpers (i18n, install UI, status)
 android/                       Kotlin app (roles: receiver / admin / family)
   app/src/main/java/…          PagerService, MqttController, RemoteConfig, activities
   app/src/test/…               JVM unit tests

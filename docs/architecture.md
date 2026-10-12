@@ -59,8 +59,9 @@ notified through the in-process `PagerBus` and by re-reading `SharedPreferences`
 | `DeviceOwnerManager.kt` | Device-owner kiosk: lock task, persistent home, status bar. |
 | `index.html` / `sender.js` | GitHub Pages sender (MQTT.js over WSS). |
 | `admin.html` / `admin.js` | GitHub Pages admin console (token-gated remote config; live receiver preview, invite link + QR, bilingual EN/RO). |
-| `common.js` | Shared browser helpers (i18n locale, escape, invite parsing, status freshness). |
+| `common.js` | Shared browser helpers (i18n locale, escape, invite parsing, status freshness, PWA install UI). |
 | `qrcode-generator.js` | Vendored MIT QR encoder (offline, no CDN) for the admin invite QR. |
+| `sw.js` + `manifest.webmanifest` / `admin.webmanifest` | PWA shell + separate install manifests, so the sender and the admin install as two distinct apps. `common.js` captures `beforeinstallprompt` and renders an Install button (or an "add to home screen" hint on Firefox/iOS). |
 
 ## Topics
 

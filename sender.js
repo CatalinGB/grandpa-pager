@@ -716,6 +716,8 @@
     el("modal").addEventListener("click", function (e) { if (e.target === el("modal")) closeDialog(); });
     document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !el("modal").hidden) closeDialog(); });
     updateSendEnabled();
+    // Offer an "Install app" button (or a hint on browsers that can't install).
+    if (GP.setupInstall) GP.setupInstall("installCard");
 
     // "Show last N messages" scrolls to (and opens) the history section below.
     if (el("historyLink")) el("historyLink").addEventListener("click", function (e) {

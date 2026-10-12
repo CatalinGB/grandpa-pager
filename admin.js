@@ -729,6 +729,8 @@
         renderHistory();
       }
     });
+    // Offer an "Install app" button (or a hint on browsers that can't install).
+    if (GP.setupInstall) GP.setupInstall("installCard");
     var saved = loadAdminToken();
     var invite = readInvite();
     if (invite) { storeAdminToken(invite); clearInviteParams(); saved = invite; }

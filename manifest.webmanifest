@@ -2,7 +2,6 @@
   "name": "Grandpa Pager",
   "short_name": "Pager",
   "description": "Send messages to Grandpa's screen",
-  "id": "/grandpa-pager/",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
