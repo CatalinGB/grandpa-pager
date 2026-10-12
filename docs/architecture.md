@@ -58,7 +58,9 @@ notified through the in-process `PagerBus` and by re-reading `SharedPreferences`
 | `BootReceiver.kt` | Restart service after reboot / update. |
 | `DeviceOwnerManager.kt` | Device-owner kiosk: lock task, persistent home, status bar. |
 | `index.html` / `sender.js` | GitHub Pages sender (MQTT.js over WSS). |
-| `admin.html` / `admin.js` | GitHub Pages admin console (token-gated remote config). |
+| `admin.html` / `admin.js` | GitHub Pages admin console (token-gated remote config; live receiver preview, invite link + QR, bilingual EN/RO). |
+| `common.js` | Shared browser helpers (i18n locale, escape, invite parsing, status freshness). |
+| `qrcode-generator.js` | Vendored MIT QR encoder (offline, no CDN) for the admin invite QR. |
 
 ## Topics
 

@@ -16,9 +16,11 @@
 <link rel="apple-touch-icon" href="./icon-192.png">
 <script src="./common.js?v=3"></script>
 <script src="./mqtt.min.js"></script>
+<script src="./qrcode-generator.js"></script>
 <style>
   :root{ --bg:#0f1115; --card:#171b22; --card2:#12161d; --fg:#f2f4f8; --muted:#9aa4b2; --accent:#3b82f6; --line:#2b3140; --ok:#22c55e; --warn:#f59e0b; }
   *{ box-sizing:border-box; margin:0; padding:0; font-family:system-ui,-apple-system,Roboto,sans-serif; }
+  [hidden]{ display:none !important; }
   body{ background:var(--bg); color:var(--fg); display:flex; justify-content:center; padding:16px; }
   #app{ width:100%; max-width:440px; }
   .card{ background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; margin-bottom:12px; }
@@ -59,85 +61,146 @@
   .histmeta{ display:flex; justify-content:space-between; gap:8px; color:var(--muted); font-size:12px; }
   .histmeta b{ color:var(--fg); }
   .histtext{ margin-top:2px; }
+  .warnbar{ background:#3a2f12; border:1px solid #5a4a12; color:#fbbf24; border-radius:10px; padding:9px 12px; font-size:13px; margin-top:10px; }
+  .dirty{ background:#3a2f12; color:#fbbf24; border:1px solid #5a4a12; border-radius:999px; font-size:11px; font-weight:700; padding:3px 9px; }
+  .langbtn{ background:transparent; border:1px solid var(--line); color:var(--muted); border-radius:8px; padding:4px 8px; font-size:12px; font-weight:700; }
+  /* live receiver preview */
+  .preview{ background:#000; border:1px solid var(--line); border-radius:12px; padding:14px 12px; min-height:150px; display:flex; flex-direction:column; justify-content:center; gap:8px; overflow:hidden; }
+  .pv-name{ text-align:center; font-weight:700; line-height:1.1; }
+  .pv-msg{ text-align:center; font-weight:700; line-height:1.1; word-break:break-word; }
+  .pv-count{ text-align:center; font-size:12px; }
+  .pv-warn{ text-align:center; font-size:12px; }
+  /* modal */
+  .modal{ position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; padding:18px; z-index:50; }
+  .modal-card{ background:var(--card); border:1px solid var(--line); border-radius:16px; padding:18px; width:100%; max-width:380px; }
+  .modal-title{ font-size:17px; font-weight:700; margin-bottom:10px; }
+  .modal-body{ color:var(--muted); font-size:14px; margin-bottom:16px; white-space:pre-wrap; }
+  .qrbox{ background:#fff; border-radius:12px; padding:10px; margin-top:10px; text-align:center; }
+  .qrbox svg{ width:180px; height:180px; }
   pre{ background:#0b0e13; border:1px solid var(--line); border-radius:10px; padding:10px; font-size:11px; color:#9fb3c8; overflow:auto; margin-top:10px; }
   .hint{ color:var(--muted); font-size:12px; margin-top:8px; }
+  details summary{ cursor:pointer; color:var(--muted); }
 </style>
 </head>
 <body>
 <div id="app">
   <section id="unlock" class="card">
-    <h1>Admin · Pager</h1>
-    <div class="sub">Enter the admin token to configure the pager.</div>
+    <div class="row" style="border:0;padding-top:0"><h1>Admin · Pager</h1><button class="langbtn" id="langBtn0">RO</button></div>
+    <div class="sub" data-i18n="unlockIntro">Enter the admin token to configure the pager.</div>
     <div style="height:12px"></div>
-    <input id="adminToken" type="password" placeholder="admin token" autocomplete="off">
+    <input id="adminToken" type="password" placeholder="admin token" data-i18n-ph="tokenPhAdmin" autocomplete="off">
     <div style="height:12px"></div>
-    <button class="apply" style="width:100%" id="unlockBtn">Connect</button>
-    <div class="hint" id="unlockHint">The token is saved in this browser (localStorage).</div>
+    <button class="apply" style="width:100%" id="unlockBtn" data-i18n="connectBtn">Connect</button>
+    <div class="hint" id="unlockHint" data-i18n="unlockHint">The token is saved in this browser (localStorage).</div>
   </section>
 
   <section id="admin" hidden>
     <div class="card">
-      <div class="row" style="border:0;padding-top:0"><h1>Admin · Pager</h1><span id="connPill" class="pill off">disconnected</span></div>
+      <div class="row" style="border:0;padding-top:0"><h1>Admin · Pager</h1><button class="langbtn" id="langBtn">RO</button><span id="connPill" class="pill off" data-i18n="connDisconnected">disconnected</span></div>
       <div class="statusline" id="devStatus">—</div>
+      <div class="warnbar" id="configError" hidden></div>
       <div class="lastrow" id="lastRow" hidden>
-        <div class="lasthead"><span>Last message</span><a href="#historyCard" id="historyLink" class="histlink"></a></div>
+        <div class="lasthead"><span data-i18n="lastMessage">Last message</span><a href="#historyCard" id="historyLink" class="histlink"></a></div>
         <div class="lastmsg" id="lastMsg"></div>
       </div>
     </div>
     <div class="card" id="historyCard" hidden>
       <details id="historyDetails">
-        <summary><strong>Message history</strong></summary>
+        <summary><strong data-i18n="history">Message history</strong></summary>
         <div class="histlist" id="history"></div>
       </details>
     </div>
+
     <div class="card">
-      <div class="sec" style="margin-top:0">Display</div>
+      <div class="row" style="border:0;padding-top:0">
+        <div class="sec" style="margin:0" data-i18n="secPreview">Live preview</div>
+        <span id="dirtyBadge" class="dirty" hidden data-i18n="unsaved">Unsaved changes</span>
+      </div>
+      <div class="preview" id="receiverPreview">
+        <div class="pv-name" id="pvName">Maria</div>
+        <div class="pv-msg" id="pvMsg">Lunch is ready</div>
+        <div class="pv-count" id="pvCount">Received 14:20, expires 16:20</div>
+        <div class="pv-warn" id="pvWarn">A message is already showing</div>
+      </div>
+      <div class="sec" data-i18n="secDisplay">Display</div>
       <div id="sec-display"></div>
-      <div class="sec">New-message cue</div>
+      <div class="sec" data-i18n="secCue">New-message cue</div>
       <div id="sec-cue"></div>
-      <div class="sec">Messages</div>
+      <div class="sec" data-i18n="secMessages">Messages</div>
       <div id="sec-defaults"></div>
-      <div class="sec">Telemetry</div>
+      <div class="sec" data-i18n="secTelemetry">Telemetry</div>
       <div id="sec-telemetry"></div>
-      <div class="sec">Power</div>
+      <div class="sec" data-i18n="secPower">Power</div>
       <div id="sec-power"></div>
-      <div class="sec">Kiosk</div>
+      <div class="sec" data-i18n="secKiosk">Kiosk</div>
       <div id="sec-kiosk"></div>
-      <div class="sec">Device owner</div>
+      <div class="sec" data-i18n="secDeviceOwner">Device owner</div>
       <div id="sec-device_owner"></div>
       <div style="height:12px"></div>
-      <div class="rowbtns"><button class="ghost" id="reset">Reset</button><button class="apply" id="apply">Apply to phone</button></div>
+      <div class="rowbtns"><button class="ghost" id="reset" data-i18n="resetBtn">Reset</button><button class="apply" id="apply" data-i18n="applyBtn">Apply to phone</button></div>
       <div class="hint" id="applied"></div>
-      <pre id="jsonPreview"></pre>
+      <details id="jsonBox" style="margin-top:10px">
+        <summary data-i18n="jsonLabel">JSON</summary>
+        <pre id="jsonPreview"></pre>
+      </details>
     </div>
+
     <div class="card">
-      <div class="sec" style="margin-top:0">Connection (guarded)</div>
-      <div class="sub">A broker/credential change is transactional: the phone tests it, then commits or auto-reverts within the window.</div>
-      <div class="row"><div>Host</div><input id="cHost" type="text" placeholder="mqtt.example.com"></div>
-      <div class="row"><div>Port</div><input id="cPort" type="text" value="8883"></div>
-      <div class="row"><div>Use TLS</div><input id="cTls" type="checkbox" checked></div>
-      <div class="row"><div>Username</div><input id="cUser" type="text" placeholder="(unchanged if blank)"></div>
-      <div class="row"><div>Password</div><input id="cPass" type="password" placeholder="(unchanged if blank)"></div>
-      <div class="row"><div>Keepalive (s)</div><input id="cKeep" type="text" value="30"></div>
-      <div class="row"><div>Timeout (s)</div><input id="cTimeout" type="text" value="15"></div>
-      <div class="row"><div>Auto-reconnect</div><input id="cAuto" type="checkbox" checked></div>
-      <div class="row"><div>QoS</div><input id="cQos" type="text" value="1"></div>
-      <div class="row"><div>Max inflight</div><input id="cInflight" type="text" value="20"></div>
-      <div class="row"><div>Revert after (s)</div><input id="cRevert" type="text" value="90"></div>
+      <div class="sec" style="margin-top:0" data-i18n="secInvite">Invite a sender</div>
+      <div class="sub" data-i18n="inviteIntro">Build a one-tap link (and QR) that carries the sender token, so a family member is ready after opening it.</div>
+      <div class="row"><div data-i18n="inviteToken">Sender token</div><input id="invToken" type="password" placeholder="sender token" data-i18n-ph="tokenPhSender" autocomplete="off"></div>
+      <div class="row"><div data-i18n="inviteName">Name (optional)</div><input id="invName" type="text" placeholder="e.g. Maria"></div>
+      <div class="row"><div data-i18n="inviteBroker">Broker</div><input id="invBroker" type="text" value="wss://mqtt.flespi.io:443"></div>
       <div style="height:8px"></div>
-      <button class="apply" style="width:100%" id="applyConn">Change connection…</button>
+      <button class="apply" style="width:100%" id="invBuild" data-i18n="inviteBuild">Build invite</button>
+      <div id="invOut" hidden>
+        <div style="height:10px"></div>
+        <input id="invLink" type="text" readonly>
+        <div style="height:8px"></div>
+        <button class="ghost" style="width:100%" id="invCopy" data-i18n="copyBtn">Copy link</button>
+        <div class="qrbox" id="invQr"></div>
+      </div>
+      <div class="hint" id="invHint"></div>
+    </div>
+
+    <div class="card">
+      <div class="sec" style="margin-top:0" data-i18n="secConn">Connection (guarded)</div>
+      <div class="sub" data-i18n="connIntro">A broker/credential change is transactional: the phone tests it, then commits or auto-reverts within the window.</div>
+      <div class="row"><div data-i18n="connHost">Host</div><input id="cHost" type="text" placeholder="mqtt.example.com"></div>
+      <div class="row"><div data-i18n="connPort">Port</div><input id="cPort" type="text" value="8883"></div>
+      <div class="row"><div data-i18n="connTls">Use TLS</div><input id="cTls" type="checkbox" checked></div>
+      <div class="row"><div data-i18n="connUser">Username</div><input id="cUser" type="text" placeholder="(unchanged if blank)"></div>
+      <div class="row"><div data-i18n="connPass">Password</div><input id="cPass" type="password" placeholder="(unchanged if blank)"></div>
+      <div class="row"><div data-i18n="connKeep">Keepalive (s)</div><input id="cKeep" type="text" value="30"></div>
+      <div class="row"><div data-i18n="connTimeout">Timeout (s)</div><input id="cTimeout" type="text" value="15"></div>
+      <div class="row"><div data-i18n="connAuto">Auto-reconnect</div><input id="cAuto" type="checkbox" checked></div>
+      <div class="row"><div data-i18n="connQos">QoS</div><input id="cQos" type="text" value="1"></div>
+      <div class="row"><div data-i18n="connInflight">Max inflight</div><input id="cInflight" type="text" value="20"></div>
+      <div class="row"><div data-i18n="connRevert">Revert after (s)</div><input id="cRevert" type="text" value="90"></div>
+      <div style="height:8px"></div>
+      <button class="apply" style="width:100%" id="applyConn" data-i18n="connChange">Change connection…</button>
       <div class="hint" id="connState">—</div>
     </div>
+
     <div class="card">
-      <div class="sec" style="margin-top:0">Device actions</div>
+      <div class="sec" style="margin-top:0" data-i18n="secActions">Device actions</div>
       <div class="rowbtns">
-        <button class="ghost" id="restartApp">Restart app</button>
-        <button class="ghost" id="rebootDevice">Reboot device</button>
+        <button class="ghost" id="restartApp" data-i18n="restartApp">Restart app</button>
+        <button class="ghost" id="rebootDevice" data-i18n="rebootDevice">Reboot device</button>
       </div>
       <div class="hint" id="actionHint"></div>
     </div>
   </section>
 </div>
-<script src="admin.js?v=15"></script>
+
+<div id="modal" class="modal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-title" id="modalTitle"></div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="rowbtns"><button class="ghost" id="modalCancel" data-i18n="cancelBtn">Cancel</button><button class="apply" id="modalOk" data-i18n="okBtn">OK</button></div>
+  </div>
+</div>
+
+<script src="admin.js?v=16"></script>
 </body>
 </html>

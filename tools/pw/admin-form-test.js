@@ -15,7 +15,8 @@ const CHROME = process.env.CHROME || "/usr/bin/chromium";
   page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
 
   await page.goto(PAGE);
-  await page.waitForSelector("#jsonPreview");
+  await page.waitForSelector("#app");
+  await page.locator("#jsonBox").evaluate((e) => { e.open = true; });
 
   const slider = page.locator('input[data-path="display.name_size_sp"]');
   const label = () => slider.evaluate((el) => el.nextElementSibling.textContent);

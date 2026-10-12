@@ -43,7 +43,9 @@ device.
 - **Admin console** (browser): text size, orientation, the received/expires time
   line, message auto-size bounds, colours, idle clock/date format, the arrival
   cue, the default duration, the status cadence (default 15 min), the idle
-  screen-off toggle, the kiosk lock, and the device-owner hardening toggles.
+  screen-off toggle, the kiosk lock, and the device-owner hardening toggles —
+  with a **live receiver preview**, an **invite link + QR** for onboarding
+  senders, an unsaved-changes guard, and a **bilingual (EN/RO)** UI.
 - **Guarded remote reconfiguration**: change the broker and MQTT tuning from the
   console — the phone probes the candidate and **auto-reverts** within the window
   if it cannot connect, so a bad push can't strand it; and issue **restart /
