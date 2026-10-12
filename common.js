@@ -142,6 +142,7 @@
         ios: "Tap the Share button, then “Add to Home Screen”.",
         firefox: "Open the menu (⋮) and tap “Add to Home screen”. Firefox on Android can’t install standalone apps.",
         inapp: "You’re in an in-app browser. Open this page in Chrome or Brave, then use the browser menu to install.",
+        insecure: "Installing needs a secure address. Open the app at its https:// URL — a local http:// address can’t be installed on Android.",
         menu: "Open the browser menu (⋮) and tap “Install app”."
       },
       ro: {
@@ -149,6 +150,7 @@
         ios: "Apasă butonul Partajează, apoi „Adaugă la ecran”.",
         firefox: "Deschide meniul (⋮) și apasă „Adaugă la ecran”. Firefox pe Android nu poate instala aplicații standalone.",
         inapp: "Ești într-un browser integrat. Deschide pagina în Chrome sau Brave, apoi folosește meniul browserului pentru a instala.",
+        insecure: "Instalarea necesită o adresă securizată. Deschide aplicația la adresa ei https:// — o adresă locală http:// nu poate fi instalată pe Android.",
         menu: "Deschide meniul browserului (⋮) și apasă „Instalează aplicația”."
       }
     };
@@ -183,6 +185,9 @@
 
     if (GP._install.deferred) { button(); return; }
     GP.onInstallAvailable(function (e) { if (e) button(); else box.hidden = true; });
+    // A non-secure origin (http:// on a LAN IP) can never install on Android:
+    // no service worker, and Chrome/Brave show "This app cannot be installed".
+    if (root.isSecureContext === false) { hint(T("insecure")); return; }
     if (isInApp) { hint(T("inapp")); return; }
     if (isIOS) { hint(T("ios")); return; }
     if (isFirefox) { hint(T("firefox")); return; }
