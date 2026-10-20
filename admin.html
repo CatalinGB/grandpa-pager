@@ -32,7 +32,6 @@
   .sub{ color:var(--muted); font-size:13px; }
   input[type=password],input[type=text]{ width:100%; padding:12px; border-radius:10px; border:1px solid var(--line); background:var(--card2); color:var(--fg); font-size:16px; }
   button{ cursor:pointer; }
-  .pill{ font-size:12px; font-weight:700; padding:3px 10px; border-radius:999px; }
   .on{ background:#14351f; color:#4ade80; } .off{ background:#3a1717; color:#f87171; } .warn{ background:#3a2f12; color:#fbbf24; }
   .sec{ color:var(--muted); font-size:12px; letter-spacing:.08em; text-transform:uppercase; margin:16px 0 8px; }
   .row{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid var(--line); }
@@ -51,25 +50,19 @@
   .apply{ flex:2; padding:15px; border:0; border-radius:12px; background:var(--accent); color:#fff; font-size:17px; font-weight:700; }
   .ghost{ flex:1; background:transparent; color:var(--muted); border:1px solid var(--line); border-radius:12px; padding:15px; font-weight:700; }
   .rowbtns{ display:flex; gap:10px; }
-  .statusline{ display:flex; gap:8px; flex-wrap:wrap; color:var(--muted); font-size:12px; margin-top:8px; }
-  .statusline .sep{ color:#3a4150; }
-  .lastrow{ background:var(--card2); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-top:10px; }
-  .lasthead{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; color:var(--muted); font-size:12px; }
-  .histlink{ color:var(--accent); text-decoration:none; font-weight:700; white-space:nowrap; }
-  .histlink:hover{ text-decoration:underline; }
-  .lastmsg{ margin-top:6px; font-size:15px; }
-  .lastmsg .when{ color:var(--muted); font-size:12px; }
+  .topbar{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:2px 4px 10px; }
   .histlist{ margin-top:10px; }
   .histitem{ border-top:1px solid var(--line); padding:9px 0; }
   .histitem:first-child{ border-top:0; }
   .histmeta{ display:flex; justify-content:space-between; gap:8px; color:var(--muted); font-size:12px; }
   .histmeta b{ color:var(--fg); }
   .histtext{ margin-top:2px; }
-  .warnbar{ background:#3a2f12; border:1px solid #5a4a12; color:#fbbf24; border-radius:10px; padding:9px 12px; font-size:13px; margin-top:10px; }
+  .histempty{ color:var(--muted); font-size:13px; padding:10px 0; }
+  .warnbar{ background:#3a2f12; border:1px solid #5a4a12; color:#fbbf24; border-radius:10px; padding:9px 12px; font-size:13px; margin:0 0 10px; }
   .dirty{ background:#3a2f12; color:#fbbf24; border:1px solid #5a4a12; border-radius:999px; font-size:11px; font-weight:700; padding:3px 9px; }
   .langbtn{ background:transparent; border:1px solid var(--line); color:var(--muted); border-radius:8px; padding:4px 8px; font-size:12px; font-weight:700; }
   /* tabs + telemetry */
-  .tabs{ display:flex; gap:6px; padding:5px; background:var(--card); border:1px solid var(--line); border-radius:14px; margin-bottom:12px; }
+  .tabs{ display:flex; gap:6px; padding:5px; background:var(--card); border:1px solid var(--line); border-radius:14px; margin-bottom:12px; position:sticky; top:0; z-index:20; }
   .tab{ flex:1; padding:11px 10px; border:0; border-radius:10px; background:transparent; color:var(--muted); font-weight:700; font-size:14px; }
   .tab.on{ background:var(--accent); color:#fff; }
   .tabpane{ animation:tabfade .18s ease; }
@@ -114,14 +107,15 @@
   </section>
 
   <section id="admin" hidden>
-    <div class="card">
-      <div class="row" style="border:0;padding-top:0"><h1>Admin · Pager</h1><button class="langbtn" id="langBtn">RO</button><span id="connPill" class="pill off" data-i18n="connDisconnected">disconnected</span></div>
-      <div class="statusline" id="devStatus">—</div>
-      <div class="warnbar" id="configError" hidden></div>
+    <div class="topbar">
+      <h1>Admin · Pager</h1>
+      <button class="langbtn" id="langBtn">RO</button>
     </div>
+    <div class="warnbar" id="configError" hidden></div>
 
     <div class="tabs" id="tabs" role="tablist">
       <button class="tab on" data-tab="telemetry" role="tab" aria-selected="true" data-i18n="tabTelemetry">Telemetry</button>
+      <button class="tab" data-tab="messages" role="tab" aria-selected="false" data-i18n="tabMessages">Messages</button>
       <button class="tab" data-tab="settings" role="tab" aria-selected="false" data-i18n="tabSettings">Settings</button>
     </div>
 
@@ -133,15 +127,15 @@
         </div>
         <div class="statgrid" id="telGrid"></div>
       </div>
-      <div class="card" id="lastRow" hidden>
-        <div class="lasthead"><span data-i18n="lastMessage">Last message</span><a href="#historyCard" id="historyLink" class="histlink"></a></div>
-        <div class="lastmsg" id="lastMsg"></div>
-      </div>
-      <div class="card" id="historyCard" hidden>
-        <details id="historyDetails">
-          <summary><strong data-i18n="history">Message history</strong></summary>
-          <div class="histlist" id="history"></div>
-        </details>
+    </div>
+
+    <div class="tabpane" id="tab-messages" hidden>
+      <div class="card" id="historyCard">
+        <div class="row" style="border:0;padding-top:0">
+          <div class="sec" style="margin:0" data-i18n="history">Message history</div>
+          <span class="hint" id="msgCount" style="margin:0"></span>
+        </div>
+        <div class="histlist" id="history"></div>
       </div>
     </div>
 
@@ -239,6 +233,6 @@
   </div>
 </div>
 
-<script src="admin.js?v=18"></script>
+<script src="admin.js?v=19"></script>
 </body>
 </html>

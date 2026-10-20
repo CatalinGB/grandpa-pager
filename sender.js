@@ -20,7 +20,6 @@
   var lastAttempt = 0;          // epoch ms of the last connect() call
   var minutes = DEFAULT_MIN;
   var myLastId = null, myLastAt = 0, lastStatus = null;
-  var lastMessageText = null;
   var userChangedDuration = false;
   /* Message history, mirrored to the retained grandpa/last topic as a versioned
      array. `historyLoaded` gates maintenance until the retained array has been
@@ -315,13 +314,11 @@
   function renderDiag(d) {
     var info = GP.statusInfo(d);
     var temp = (typeof d.battery_temp_c === "number") ? " " + d.battery_temp_c.toFixed(1) + "°C" : "";
-    var msg = d.text || lastMessageText || "";
     el("diag").textContent =
       t("diagState") + " " + d.state + (info.stale ? "  " + t("staleSuffix", { s: info.ageSeconds }) : "") + "\n" +
       t("diagMqtt") + " " + d.mqtt + "\n" +
       t("diagBattery") + " " + d.battery + "%" + (d.charging ? " " + t("chargingSuffix") : "") + temp + "\n" +
       t("diagWifi") + " " + d.wifi + "\n" +
-      t("diagMessage") + " " + (d.sender || "-") + (msg ? " — " + msg : "") + "\n" +
       t("diagSeen") + " " + t("seenAgo", { s: info.ageSeconds });
   }
 
@@ -575,8 +572,7 @@
       } else if (topic === TOPIC.message) {
         var raw = payload.toString();
         var m = null;
-        try { m = raw ? JSON.parse(raw) : null; lastMessageText = (m && m.text) ? m.text : null; }
-        catch (e) { lastMessageText = null; m = null; }
+        try { m = raw ? JSON.parse(raw) : null; } catch (e) { m = null; }
         renderBannerFromMessage(raw);
         if (m) recordMessage(m);
         if (lastStatus) renderDiag(lastStatus);
