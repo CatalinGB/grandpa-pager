@@ -68,6 +68,21 @@
   .warnbar{ background:#3a2f12; border:1px solid #5a4a12; color:#fbbf24; border-radius:10px; padding:9px 12px; font-size:13px; margin-top:10px; }
   .dirty{ background:#3a2f12; color:#fbbf24; border:1px solid #5a4a12; border-radius:999px; font-size:11px; font-weight:700; padding:3px 9px; }
   .langbtn{ background:transparent; border:1px solid var(--line); color:var(--muted); border-radius:8px; padding:4px 8px; font-size:12px; font-weight:700; }
+  /* tabs + telemetry */
+  .tabs{ display:flex; gap:6px; padding:5px; background:var(--card); border:1px solid var(--line); border-radius:14px; margin-bottom:12px; }
+  .tab{ flex:1; padding:11px 10px; border:0; border-radius:10px; background:transparent; color:var(--muted); font-weight:700; font-size:14px; }
+  .tab.on{ background:var(--accent); color:#fff; }
+  .tabpane{ animation:tabfade .18s ease; }
+  @keyframes tabfade{ from{opacity:.35} to{opacity:1} }
+  .statgrid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px; }
+  .stat{ background:var(--card2); border:1px solid var(--line); border-radius:12px; padding:10px 12px; min-height:62px; }
+  .stat.wide{ grid-column:1 / -1; }
+  .stat-k{ color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.06em; }
+  .stat-v{ font-size:16px; font-weight:700; margin-top:4px; word-break:break-word; }
+  .stat-v.big{ font-size:22px; letter-spacing:.02em; }
+  .stat-v.small{ font-size:13px; font-weight:600; }
+  .stat-v.on{ color:#4ade80; background:transparent; } .stat-v.off{ color:#f87171; background:transparent; } .stat-v.warn{ color:#fbbf24; background:transparent; } .stat-v.muted{ color:var(--muted); font-weight:600; }
+  .stat-s{ color:var(--muted); font-size:11px; margin-top:3px; word-break:break-word; }
   /* live receiver preview */
   .preview{ background:#000; border:1px solid var(--line); border-radius:12px; padding:14px 12px; min-height:150px; display:flex; flex-direction:column; justify-content:center; gap:8px; overflow:hidden; }
   .pv-name{ text-align:center; font-weight:700; line-height:1.1; }
@@ -103,18 +118,34 @@
       <div class="row" style="border:0;padding-top:0"><h1>Admin · Pager</h1><button class="langbtn" id="langBtn">RO</button><span id="connPill" class="pill off" data-i18n="connDisconnected">disconnected</span></div>
       <div class="statusline" id="devStatus">—</div>
       <div class="warnbar" id="configError" hidden></div>
-      <div class="lastrow" id="lastRow" hidden>
+    </div>
+
+    <div class="tabs" id="tabs" role="tablist">
+      <button class="tab on" data-tab="telemetry" role="tab" aria-selected="true" data-i18n="tabTelemetry">Telemetry</button>
+      <button class="tab" data-tab="settings" role="tab" aria-selected="false" data-i18n="tabSettings">Settings</button>
+    </div>
+
+    <div class="tabpane" id="tab-telemetry">
+      <div class="card">
+        <div class="row" style="border:0;padding-top:0">
+          <div class="sec" style="margin:0" data-i18n="telTitle">Device telemetry</div>
+          <span class="hint" id="telUpdated" style="margin:0"></span>
+        </div>
+        <div class="statgrid" id="telGrid"></div>
+      </div>
+      <div class="card" id="lastRow" hidden>
         <div class="lasthead"><span data-i18n="lastMessage">Last message</span><a href="#historyCard" id="historyLink" class="histlink"></a></div>
         <div class="lastmsg" id="lastMsg"></div>
       </div>
-    </div>
-    <div class="card" id="historyCard" hidden>
-      <details id="historyDetails">
-        <summary><strong data-i18n="history">Message history</strong></summary>
-        <div class="histlist" id="history"></div>
-      </details>
+      <div class="card" id="historyCard" hidden>
+        <details id="historyDetails">
+          <summary><strong data-i18n="history">Message history</strong></summary>
+          <div class="histlist" id="history"></div>
+        </details>
+      </div>
     </div>
 
+    <div class="tabpane" id="tab-settings" hidden>
     <div class="card">
       <div class="row" style="border:0;padding-top:0">
         <div class="sec" style="margin:0" data-i18n="secPreview">Live preview</div>
@@ -196,6 +227,7 @@
     </div>
 
     <div class="card" id="installCard" hidden></div>
+    </div><!-- /tab-settings -->
   </section>
 </div>
 
@@ -207,6 +239,6 @@
   </div>
 </div>
 
-<script src="admin.js?v=17"></script>
+<script src="admin.js?v=18"></script>
 </body>
 </html>

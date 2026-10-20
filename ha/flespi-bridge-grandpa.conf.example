@@ -1,0 +1,43 @@
+# Flespi -> home Mosquitto bridge for Grandpa Pager.
+#
+# Copy this file into the Mosquitto extensions directory. On the Unraid setup:
+#   /mnt/secondpool/appdata/mosquitto/config/extensions/flespi-grandpa.conf
+# Inside the container it is:
+#   /mosquitto/config/extensions/flespi-grandpa.conf
+# chmod 644 and restart `mosquitto`.
+#
+# `remote_username` is a Flespi ACL token with publish+subscribe on `grandpa/#`
+# (create it as `grandpa-pager-home`, see ha/README.md). It is a secret; keep
+# this file private and out of git (the .example is the tracked copy).
+#
+# The pager's own tokens are too narrow for a two-way bridge: the sender token
+# cannot publish commands/config and the admin token cannot publish messages.
+# A single combined `grandpa/#` token keeps this bridge simple.
+#
+# No LWT: Flespi rejects a CONNECT carrying a Will for scoped tokens. Mosquitto's
+# default notification topic is outside the token ACL, so notifications are off.
+connection flespi-grandpa
+address mqtt.flespi.io:8883
+remote_username <GRANDPA_HOME_TOKEN>
+remote_clientid grandpa-pager-home
+bridge_protocol_version mqttv311
+bridge_cafile /etc/ssl/certs/ca-certificates.crt
+bridge_tls_version tlsv1.2
+try_private false
+notifications false
+cleansession false
+start_type automatic
+restart_timeout 10 180
+
+# Inbound only (Flespi -> HA): what HA reads.
+topic grandpa/status in 1
+topic grandpa/last in 1
+topic grandpa/config in 1
+
+# Messages travel both ways: HA sends, and sees messages from the family.
+topic grandpa/message both 1
+
+# Outbound only (HA -> Flespi): device commands (restart/reboot).
+# NEVER bridge grandpa/last out: a stale local copy could overwrite the real
+# history array on Flespi. The web sender remains its only writer.
+topic grandpa/command out 1

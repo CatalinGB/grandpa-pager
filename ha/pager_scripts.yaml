@@ -1,0 +1,105 @@
+# Reference copy of the four scripts created via the HA config API.
+# (scripts.yaml shape, keyed by script id.)
+
+pager_send:
+  alias: "Pager: send message"
+  description: >-
+    Send a message to Grandpa's screen. Call it with `message` (and optional
+    `sender` / `duration_minutes`) from automations, scripts, Assist or Developer
+    Tools; with no fields it uses the dashboard helpers.
+  mode: single
+  fields:
+    message:
+      description: "Text to show. Leave out to use the Pager message helper."
+      selector:
+        text:
+          multiline: true
+    sender:
+      description: "Sender name. Leave out to use the Pager sender helper."
+      selector:
+        text:
+    duration_minutes:
+      description: "Minutes on screen. Leave out to use the Pager duration helper."
+      selector:
+        number:
+          min: 5
+          max: 1440
+          step: 5
+          unit_of_measurement: min
+          mode: box
+  variables:
+    msg: "{{ message | default('', true) | trim }}"
+    helper_msg: >-
+      {{ states('input_text.pager_message') | trim
+         if states('input_text.pager_message') not in ['unknown', 'unavailable'] else '' }}
+    final_msg: "{{ msg or helper_msg }}"
+    helper_sender: >-
+      {{ states('input_text.pager_sender') | trim
+         if states('input_text.pager_sender') not in ['unknown', 'unavailable'] else '' }}
+    final_sender: "{{ (sender | default('', true) | trim) or helper_sender or 'Home Assistant' }}"
+    final_duration: >-
+      {{ (duration_minutes | default(0, true) | int(0))
+         or (states('input_number.pager_duration') | int(240)) }}
+    use_helper: "{{ not msg }}"
+  sequence:
+    - if:
+        - condition: template
+          value_template: "{{ final_msg | length > 0 }}"
+      then:
+        - action: mqtt.publish
+          data:
+            topic: grandpa/message
+            qos: 1
+            retain: true
+            payload: >-
+              {{ { 'id': 'ha-' ~ utcnow().strftime('%Y%m%dT%H%M%S%f'),
+                   'sender': final_sender,
+                   'text': final_msg,
+                   'created_at': utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),
+                   'expires_at': (utcnow() + timedelta(minutes=final_duration)).strftime('%Y-%m-%dT%H:%M:%SZ'),
+                   'duration_minutes': final_duration } | tojson }}
+        - if:
+            - condition: template
+              value_template: "{{ use_helper }}"
+          then:
+            - action: input_text.set_value
+              target:
+                entity_id: input_text.pager_message
+              data:
+                value: ""
+
+pager_clear:
+  alias: "Pager: clear screen"
+  description: "Clear the retained message so the screen goes idle."
+  mode: single
+  sequence:
+    - action: mqtt.publish
+      data:
+        topic: grandpa/message
+        payload: ""
+        qos: 1
+        retain: true
+
+pager_restart_app:
+  alias: "Pager: restart app"
+  description: "Ask the pager app to restart."
+  mode: single
+  sequence:
+    - action: mqtt.publish
+      data:
+        topic: grandpa/command
+        payload: '{"action":"restart_app"}'
+        qos: 1
+        retain: false
+
+pager_reboot:
+  alias: "Pager: reboot phone"
+  description: "Ask the pager phone to reboot (device owner only)."
+  mode: single
+  sequence:
+    - action: mqtt.publish
+      data:
+        topic: grandpa/command
+        payload: '{"action":"reboot_device"}'
+        qos: 1
+        retain: false

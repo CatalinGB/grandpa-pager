@@ -46,8 +46,52 @@ device/browser side, not the app.
    fixed GitHub Pages path, but drops portability (custom domain / different
    repo name would need edits).
 
-**Related uncommitted change:** `common.js` now shows an "installing needs a
-secure https:// address" hint when `window.isSecureContext === false` (the
-`http://` case that produces the same Android message). This does **not** apply to
-the owner's case (they are on HTTPS) but is a good guard — commit/push when
-convenient.
+**Related change (shipped):** `common.js` shows an "installing needs a secure
+https:// address" hint when `window.isSecureContext === false` (the `http://` case
+that produces the same Android message). Not the owner's case (they are on
+HTTPS) but a good guard.
+
+## Periodic self-maintenance on the receiver (scheduled reboot / app restart)
+
+**Status:** idea — needs an app update, so deferred (the deployed app cannot be
+updated right now).
+
+**Motivation:** the phone can eventually become unreachable after days of
+uptime; a periodic reboot (or app restart) could clear app/OS drift and memory
+leaks and get it back to a known-good state. Explicitly **not** a fix for
+power/Wi-Fi outages.
+
+**Key constraint:** the trigger must be **on-device**. A remote command (the
+admin's existing `reboot_device`/`restart_app`) needs connectivity, so it cannot
+rescue a phone that is already unreachable. The web admin is a static page with no
+backend and cannot run a reliable scheduler either.
+
+**Proposed design (app update):**
+- New config under `schema: 1`, e.g.
+  `maintenance: { restart_every_hours: 0, reboot_every_days: 0, at_hour: 4 }`
+  (0 = off; the receiver ignores unknown fields, so this is backward-compatible).
+- Receiver schedules an `AlarmManager.setExactAndAllowWhileIdle` (re-armed on boot
+  in `BootReceiver`), at a low-use local hour.
+- Prefer `restart_app` (cheap, ~seconds, clears app-level leaks) by default; only
+  use `DevicePolicyManager.reboot()` for the full reboot when the device is owner
+  and enabled. If not device owner, fall back to the app restart and record it in
+  status.
+- Admin UI: a "Maintenance" section (enable + interval + hour) with a warning
+  that a reboot takes the screen offline for ~1 min.
+- Telemetry: record `last_restart_at` / `last_reboot_at` in `status` so the
+  admin can see it happened.
+
+**Risks / notes:**
+- A message arriving during the reboot is retained, but if its TTL expires while
+  booting it may be missed (late-arrival grace is 10 min / 1 min show).
+- Scheduling relies on the alarm firing under Doze; prefer device-owner APIs.
+- Interim (no app update): use the admin's manual **Restart app / Reboot device**
+  when the phone is reachable; for power-related outages look at
+  `tools/scripts/charge-controller.js` (smart plug) instead.
+- **Interim (HA, 2026-10):** a Home Assistant automation now restarts the app
+  daily and reboots the phone every 3 days at 00:00 (`ha/`). It works through
+  MQTT, so it only fires while the phone is reachable — it does **not** replace
+  an on-device schedule, it just removes the manual step in the normal case.
+- Investigate the actual failure mode first (battery/charging/wifi/mqtt/last_seen
+  from the last status) — a reboot masks it.
+

@@ -30,6 +30,7 @@
   var el = function (id) { return document.getElementById(id); };
   var cfg = JSON.parse(JSON.stringify(DEF));
   var dirty = false, client = null, lastAttempt = 0, pendingOk = null, revertTimer = null;
+  var sessionStart = Date.now(), linkUpSince = 0, deviceOnlineSince = 0;
   var lastMsgSender = null, lastMsgText = null, lastStatusObj = null, mqttUp = false;
   /* Message history, read from the retained grandpa/last array the web sender
      maintains. The admin is read-only here (its token has no publish on
@@ -89,6 +90,22 @@
       lastMessage: "Last message", history: "Message history", showHistory: "Show last {n} messages",
       justNow: "just now", minutesAgo: "{n} min ago", hoursAgo: "{n} h ago", daysAgo: "{n} d ago",
       connStateLabel: "state", passwordSet: "password set", passwordNotSet: "password not set",
+      tabTelemetry: "Telemetry", tabSettings: "Settings",
+      telTitle: "Device telemetry", telLink: "Link", telDevice: "Device", telStatus: "Status",
+      telBattery: "Battery", telNetwork: "Network",
+      telUptime: "Device uptime", telAppUptime: "App uptime", telUptimeEst: "Uptime (estimated)",
+      originApp: "reported by the app", originAppProcess: "reported by the app (process)",
+      originCommand: "estimated from the last restart/reboot", originLastSeen: "not reported by the app",
+      bootedAt: "booted {t}", appUptimeSub: "app {d}", lastSeenAt: "last seen {t}",
+      telSession: "Admin session", telLastStatus: "Last status", telLastRestart: "Last restart / reboot",
+      telConfig: "Config applied", telMessage: "Current message", telConnection: "Connection",
+      upFor: "up for {d}", onlineFor: "online for {d}",
+      since: "since {t}", sinceLast: "since last {action} · {t}", observedSince: "observed online since {t}",
+      never: "never", notReported: "not reported", lastCmdHint: "the app keeps only the last command",
+      asOf: "as of {t}", resetsOnReload: "resets when this page reloads",
+      noError: "no error", stateIdle: "idle", stateShowing: "showing",
+      yes: "yes", no: "no", idleScreen: "idle — nothing on the screen", until: "until {t}",
+      messages: "messages", noMessages: "no messages yet",
       dlgChangeConnTitle: "Change the receiver's broker?",
       dlgChangeConnBody: "It will test the new connection and revert automatically within {n}s if it cannot connect.",
       dlgRestartTitle: "Restart the receiver app?", dlgRestartBody: "The screen will briefly go blank while it restarts.",
@@ -145,6 +162,22 @@
       lastMessage: "Ultimul mesaj", history: "Istoric mesaje", showHistory: "Arată ultimele {n} mesaje",
       justNow: "chiar acum", minutesAgo: "acum {n} min", hoursAgo: "acum {n} h", daysAgo: "acum {n} z",
       connStateLabel: "stare", passwordSet: "parolă setată", passwordNotSet: "parolă nesetată",
+      tabTelemetry: "Telemetrie", tabSettings: "Setări",
+      telTitle: "Telemetrie dispozitiv", telLink: "Legătură", telDevice: "Dispozitiv", telStatus: "Stare",
+      telBattery: "Baterie", telNetwork: "Rețea",
+      telUptime: "Uptime dispozitiv", telAppUptime: "Uptime aplicație", telUptimeEst: "Uptime (estimat)",
+      originApp: "raportat de aplicație", originAppProcess: "raportat de aplicație (proces)",
+      originCommand: "estimat de la ultima repornire", originLastSeen: "nereportat de aplicație",
+      bootedAt: "pornit {t}", appUptimeSub: "aplicație {d}", lastSeenAt: "văzut ultima dată {t}",
+      telSession: "Sesiune admin", telLastStatus: "Ultimul status", telLastRestart: "Ultima repornire",
+      telConfig: "Config aplicat", telMessage: "Mesaj curent", telConnection: "Conexiune",
+      upFor: "activ de {d}", onlineFor: "online de {d}",
+      since: "din {t}", sinceLast: "de la ultima {action} · {t}", observedSince: "online observat din {t}",
+      never: "niciodată", notReported: "nereportat", lastCmdHint: "aplicația păstrează doar ultima comandă",
+      asOf: "la {t}", resetsOnReload: "se resetează la reîncărcarea paginii",
+      noError: "fără erori", stateIdle: "inactiv", stateShowing: "afișează",
+      yes: "da", no: "nu", idleScreen: "inactiv — nimic pe ecran", until: "până la {t}",
+      messages: "mesaje", noMessages: "încă niciun mesaj",
       dlgChangeConnTitle: "Schimbi brokerul receptorului?",
       dlgChangeConnBody: "Va testa noua conexiune și va reveni automat în {n}s dacă nu se poate conecta.",
       dlgRestartTitle: "Repornești aplicația receptorului?", dlgRestartBody: "Ecranul va deveni scurt negru în timpul repornirii.",
@@ -176,6 +209,7 @@
     renderHistory();
     if (lastStatusObj) renderDevice(lastStatusObj);
     updateConnPill();
+    renderTelemetry();
   }
   function toggleLocale() { setLocale(LOCALE === "en" ? "ro" : "en"); }
 
@@ -441,11 +475,19 @@
      phone is reachable; amber = broker up but phone offline; red = no broker. */
   function updateConnPill() {
     var p = el("connPill");
-    if (mqttUp && phoneOnline()) { p.textContent = tr("connConnected"); p.className = "pill on"; }
+    var on = phoneOnline();
+    if (on && !deviceOnlineSince) deviceOnlineSince = Date.now();
+    if (!on) deviceOnlineSince = 0;
+    if (mqttUp && on) { p.textContent = tr("connConnected"); p.className = "pill on"; }
     else if (mqttUp) { p.textContent = tr("connPhoneOffline"); p.className = "pill warn"; }
     else { p.textContent = tr("connDisconnected"); p.className = "pill off"; }
   }
-  function setMqtt(ok) { mqttUp = ok; updateConnPill(); }
+  function setMqtt(ok) {
+    mqttUp = ok;
+    linkUpSince = ok ? (linkUpSince || Date.now()) : 0;
+    updateConnPill();
+    renderTelemetry();
+  }
 
   function renderDevice(s) {
     if (!s) { el("devStatus").textContent = "—"; return; }
@@ -454,9 +496,9 @@
     parts.push('<span class="pill ' + (info.online ? "on" : "off") + '">' + (info.online ? tr("online") : tr("offline")) + '</span>');
     parts.push("<span>" + tr("battery") + " " + s.battery + "%" + (typeof s.battery_temp_c === "number" ? " · " + s.battery_temp_c.toFixed(1) + "°C" : "") + "</span>");
     parts.push("<span>" + (s.charging ? tr("charging") : tr("onBattery")) + "</span>");
-    parts.push("<span>" + tr("wifi") + " " + s.wifi + "</span>");
-    parts.push("<span>" + tr("mqtt") + " " + s.mqtt + "</span>");
-    if (typeof s.device_owner === "boolean") parts.push("<span>" + tr("deviceOwner") + " " + s.device_owner + "</span>");
+    parts.push("<span>" + tr("wifi") + " " + (s.wifi ? tr("yes") : tr("no")) + "</span>");
+    parts.push("<span>" + tr("mqtt") + " " + (s.mqtt ? tr("yes") : tr("no")) + "</span>");
+    if (typeof s.device_owner === "boolean") parts.push("<span>" + tr("deviceOwner") + " " + (s.device_owner ? tr("yes") : tr("no")) + "</span>");
     // Only present the on-screen message as live when the status is fresh and the
     // message has not expired; the retained status can otherwise be hours old.
     var mSender = s.sender || lastMsgSender;
@@ -472,6 +514,138 @@
     var bar = el("configError"); if (!bar) return;
     if (s && s.config_error) { bar.hidden = false; bar.textContent = tr("configError", { msg: s.config_error }); }
     else { bar.hidden = true; bar.textContent = ""; }
+  }
+
+  /* ---------- telemetry tab ---------- */
+  function pad2(n) { return ("0" + n).slice(-2); }
+  function fmtDur(ms) {
+    if (!isFinite(ms) || ms < 0) ms = 0;
+    var s = Math.floor(ms / 1000);
+    var d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    if (d > 0) return d + "d " + h + "h";
+    if (h > 0) return h + "h " + pad2(m) + "m";
+    if (m > 0) return m + "m " + pad2(sec) + "s";
+    return sec + "s";
+  }
+  function fmtClock(ms) {
+    try { return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }); }
+    catch (e) { return "—"; }
+  }
+  function fmtDateTime(iso) {
+    if (!iso) return "—";
+    var t = new Date(iso);
+    if (!isFinite(t.getTime())) return String(iso);
+    try { return t.toLocaleString([], { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" }); }
+    catch (e) { return String(iso); }
+  }
+  function stat(label, valueHtml, subHtml, valueCls, wide) {
+    return '<div class="stat' + (wide ? " wide" : "") + '">' +
+      '<div class="stat-k">' + GP.escapeHtml(label) + '</div>' +
+      '<div class="stat-v' + (valueCls ? " " + valueCls : "") + '">' + valueHtml + '</div>' +
+      (subHtml ? '<div class="stat-s">' + subHtml + '</div>' : "") + '</div>';
+  }
+  function renderTelemetry() {
+    var grid = el("telGrid"); if (!grid) return;
+    var now = Date.now(), s = lastStatusObj, info = s ? GP.statusInfo(s) : null;
+    var html = "";
+    if (!s) {
+      html += stat(tr("telStatus"), GP.escapeHtml(tr("noStatus")), "", "muted", true);
+    } else {
+      var linkVal = !mqttUp ? tr("connDisconnected") : (info.online ? tr("connConnected") : tr("connPhoneOffline"));
+      var linkCls = mqttUp && info.online ? "on" : (mqttUp ? "warn" : "off");
+      html += stat(tr("telLink"), GP.escapeHtml(linkVal), linkUpSince ? GP.escapeHtml(tr("upFor", { d: fmtDur(now - linkUpSince) })) : "", linkCls);
+
+      var devSub = deviceOnlineSince
+        ? tr("onlineFor", { d: fmtDur(now - deviceOnlineSince) }) + " · " + tr("since", { t: fmtClock(deviceOnlineSince) })
+        : (s.last_seen ? tr("asOf", { t: fmtDateTime(s.last_seen) }) : tr("never"));
+      html += stat(tr("telDevice"), GP.escapeHtml(info.online ? tr("online") : tr("offline")), GP.escapeHtml(devSub), info.online ? "on" : "off");
+
+      var stName = s.state === "showing" ? tr("stateShowing") : (s.state === "idle" ? tr("stateIdle") : String(s.state || "—"));
+      html += stat(tr("telStatus"), GP.escapeHtml(stName), GP.escapeHtml(tr("seenAgo", { s: info.ageSeconds }) + (info.stale ? " " + tr("stale") : "")), info.showing ? "on" : "");
+
+      var batt = (s.battery != null ? s.battery + "%" : "—") + (s.charging ? " · " + tr("charging") : "") + (typeof s.battery_temp_c === "number" ? " · " + s.battery_temp_c.toFixed(1) + "°C" : "");
+      html += stat(tr("telBattery"), GP.escapeHtml(batt), s.last_seen ? GP.escapeHtml(tr("asOf", { t: fmtDateTime(s.last_seen) })) : "", "");
+
+      var net = tr("wifi") + " " + (s.wifi ? tr("yes") : tr("no")) + " · " + tr("mqtt") + " " + (s.mqtt ? tr("yes") : tr("no"));
+      html += stat(tr("telNetwork"), GP.escapeHtml(net), GP.escapeHtml(tr("deviceOwner") + " " + (s.device_owner ? tr("yes") : tr("no"))), "");
+
+      var cmd = s.command || {};
+      var restartAt = 0;
+      if ((cmd.last === "restart_app" || cmd.last === "reboot_device") && cmd.received_at) {
+        var rt = new Date(cmd.received_at).getTime();
+        if (isFinite(rt) && rt <= now) { restartAt = rt; }
+      }
+      var devUp = (typeof s.device_uptime_ms === "number" && isFinite(s.device_uptime_ms) && s.device_uptime_ms >= 0) ? s.device_uptime_ms : null;
+      var appUp = (typeof s.app_uptime_ms === "number" && isFinite(s.app_uptime_ms) && s.app_uptime_ms >= 0) ? s.app_uptime_ms : null;
+      var upLabel, upVal, upSub, upCls;
+      if (devUp != null) {
+        var bootAt = s.boot_time || new Date(now - devUp).toISOString();
+        upLabel = tr("telUptime");
+        upVal = fmtDur(devUp);
+        upSub = tr("originApp") + " · " + tr("bootedAt", { t: fmtDateTime(bootAt) });
+        if (appUp != null) upSub += " · " + tr("appUptimeSub", { d: fmtDur(appUp) });
+        upCls = "big";
+      } else if (appUp != null) {
+        upLabel = tr("telAppUptime");
+        upVal = fmtDur(appUp);
+        upSub = tr("originAppProcess") + " · " + tr("since", { t: fmtDateTime(new Date(now - appUp).toISOString()) });
+        upCls = "big";
+      } else if (restartAt) {
+        upLabel = tr("telUptimeEst");
+        upVal = fmtDur(now - restartAt);
+        upSub = tr("originCommand") + (s.last_seen ? " · " + tr("lastSeenAt", { t: fmtDateTime(s.last_seen) }) : "");
+        upCls = "big";
+      } else {
+        upLabel = tr("telUptimeEst");
+        upVal = "—";
+        upSub = tr("originLastSeen") + (s.last_seen ? " · " + tr("lastSeenAt", { t: fmtDateTime(s.last_seen) }) : " · " + tr("never"));
+        upCls = "muted";
+      }
+      html += stat(upLabel, GP.escapeHtml(upVal), GP.escapeHtml(upSub), upCls);
+
+      html += stat(tr("telLastStatus"), GP.escapeHtml(fmtDateTime(s.last_seen)), GP.escapeHtml(relativeTime(s.last_seen)), "");
+
+      var isRestart = cmd.last === "restart_app" || cmd.last === "reboot_device";
+      var rrVal = isRestart ? (cmd.last === "restart_app" ? tr("restartApp") : tr("rebootDevice")) + " · " + (cmd.result || "") : tr("notReported");
+      var rrSub = isRestart ? fmtDateTime(cmd.received_at) : tr("lastCmdHint") + (cmd.last ? " · " + cmd.last : "");
+      html += stat(tr("telLastRestart"), GP.escapeHtml(rrVal), GP.escapeHtml(rrSub), isRestart ? "" : "muted small");
+
+      html += stat(tr("telConfig"), GP.escapeHtml(s.config_applied_at ? fmtDateTime(s.config_applied_at) : "—"), GP.escapeHtml(s.config_error || tr("noError")), s.config_error ? "warn" : "");
+
+      var msgVal, msgSub;
+      if (info.showLive && s.text) {
+        msgVal = "“" + GP.escapeHtml(s.text) + "”";
+        msgSub = "— " + GP.escapeHtml(s.sender || "?") + (s.expires_at ? " · " + tr("until", { t: fmtClock(new Date(s.expires_at).getTime()) }) : "");
+      } else {
+        msgVal = GP.escapeHtml(tr("idleScreen"));
+        msgSub = "";
+      }
+      html += stat(tr("telMessage"), msgVal, msgSub, info.showLive ? "" : "muted small", true);
+
+      var c = s.connection;
+      if (c) {
+        var cv = (c.host || "—") + ":" + (c.port || "—") + (c.use_tls ? " · TLS" : "");
+        var cs = (c.state || "—") + " · " + (c.password_set ? tr("passwordSet") : tr("passwordNotSet")) + (c.last_error ? " · " + c.last_error : "");
+        html += stat(tr("telConnection"), GP.escapeHtml(cv), GP.escapeHtml(cs), "", true);
+      } else {
+        html += stat(tr("telConnection"), "—", "", "muted", true);
+      }
+    }
+    html += stat(tr("telSession"), GP.escapeHtml(fmtDur(now - sessionStart)), GP.escapeHtml(tr("since", { t: fmtClock(sessionStart) }) + " · " + tr("resetsOnReload")), "big");
+    var h = history[0];
+    html += stat(tr("history"), GP.escapeHtml(String(history.length)), h ? GP.escapeHtml((h.sender || "?") + " · " + relativeTime(h.created_at)) : GP.escapeHtml(tr("noMessages")), "small");
+    grid.innerHTML = html;
+    if (el("telUpdated")) el("telUpdated").textContent = tr("asOf", { t: fmtClock(now) });
+  }
+  function showTab(name) {
+    Array.prototype.forEach.call(document.querySelectorAll("#tabs .tab"), function (b) {
+      var on = b.getAttribute("data-tab") === name;
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    if (el("tab-telemetry")) el("tab-telemetry").hidden = name !== "telemetry";
+    if (el("tab-settings")) el("tab-settings").hidden = name !== "settings";
+    if (name === "telemetry") renderTelemetry();
   }
 
   function connect() {
@@ -498,6 +672,7 @@
           lastMsgText = (m && m.text) ? m.text : null;
         } catch (e) { lastMsgSender = null; lastMsgText = null; }
         if (lastStatusObj) renderDevice(lastStatusObj);
+        renderTelemetry();
         return;
       }
       if (topic === TOPIC.last) {
@@ -505,6 +680,7 @@
         historyCount = (cfg.defaults && cfg.defaults.history_count) || 10;
         renderHistory();
         if (lastStatusObj) renderDevice(lastStatusObj);
+        renderTelemetry();
         return;
       }
       if (topic !== TOPIC.status) return;
@@ -513,6 +689,7 @@
       renderDevice(s);
       updateConnPill();
       renderConfigError(s);
+      renderTelemetry();
       if (s.connection) renderConnection(s.connection);
       if (s.command && s.command.last) el("actionHint").textContent = s.command.last + ": " + (s.command.result || "");
       if (!dirty && s.config) {
@@ -617,7 +794,7 @@
     });
   }
 
-  function showForm() { el("unlock").hidden = true; el("admin").hidden = false; build(); renderHistory(); }
+  function showForm() { el("unlock").hidden = true; el("admin").hidden = false; build(); renderHistory(); renderTelemetry(); }
 
   /* Invitation link: admin.html#token=<admin-token> (fragment preferred — never
      sent to the server nor leaked in Referer; ?token= also works). Parsing and
@@ -688,6 +865,10 @@
     var q = new URLSearchParams(location.search);
     applyStatic();
     wireControls();
+    Array.prototype.forEach.call(document.querySelectorAll("#tabs .tab"), function (b) {
+      b.addEventListener("click", function () { showTab(b.getAttribute("data-tab")); });
+    });
+    showTab(q.get("tab") === "settings" ? "settings" : "telemetry");
     if (q.get("demo") === "1") { showForm(); el("applied").textContent = "demo mode (no broker)"; }
     el("unlockBtn").addEventListener("click", connect);
     el("apply").addEventListener("click", apply);
@@ -716,6 +897,9 @@
     window.addEventListener("beforeunload", function (e) { if (dirty) { e.preventDefault(); e.returnValue = ""; return ""; } });
     setInterval(ensureConnected, 15000);
     setInterval(updateConnPill, 10000);
+    setInterval(function () {
+      if (el("tab-telemetry") && !el("tab-telemetry").hidden) renderTelemetry();
+    }, 1000);
     if (el("historyLink")) el("historyLink").addEventListener("click", function (e) {
       e.preventDefault();
       var det = el("historyDetails"); if (det) det.open = true;
@@ -764,6 +948,35 @@
     // The live preview reflects the change.
     t("preview reflects name size", function () { renderPreview(); }, null);
     checks.push(((el("pvName").style.fontSize === "60px") ? "OK " : "FAIL ") + "preview name font-size (is '" + el("pvName").style.fontSize + "')");
+    // Telemetry tab: inject a sample status and check it renders.
+    var nowIso = new Date().toISOString();
+    var restartIso = new Date(Date.now() - 3661e3).toISOString();
+    lastStatusObj = {
+      state: "idle", battery: 87, charging: true, wifi: true, mqtt: true,
+      device_owner: true, last_seen: nowIso, app: "receiver",
+      command: { last: "restart_app", received_at: restartIso, result: "ok" },
+      config_applied_at: nowIso, config_error: null,
+      connection: { state: "idle", host: "mqtt.example", port: 8883, use_tls: true, password_set: true, last_error: null }
+    };
+    renderTelemetry();
+    var tel = el("telGrid").innerHTML;
+    checks.push((tel.indexOf(tr("telUptimeEst")) >= 0 ? "OK " : "FAIL ") + "uptime falls back to last restart");
+    checks.push((tel.indexOf("1h 01m") >= 0 ? "OK " : "FAIL ") + "fallback uptime is ~1h");
+    checks.push((tel.indexOf(tr("originCommand")) >= 0 ? "OK " : "FAIL ") + "fallback uptime origin is visible");
+    checks.push((tel.indexOf(tr("restartApp")) >= 0 ? "OK " : "FAIL ") + "telemetry shows last restart");
+    // A newer app reports device/app uptime: it must win and show its origin.
+    lastStatusObj.device_uptime_ms = 7200000;
+    lastStatusObj.app_uptime_ms = 3600000;
+    lastStatusObj.boot_time = new Date(Date.now() - 7200000).toISOString();
+    renderTelemetry();
+    tel = el("telGrid").innerHTML;
+    checks.push((tel.indexOf("2h 00m") >= 0 ? "OK " : "FAIL ") + "reported uptime is used");
+    checks.push((tel.indexOf(tr("originApp")) >= 0 ? "OK " : "FAIL ") + "reported uptime origin is visible");
+    checks.push((tel.indexOf(tr("appUptimeSub", { d: "1h 00m" })) >= 0 ? "OK " : "FAIL ") + "app uptime is shown");
+    showTab("settings");
+    checks.push((el("tab-settings").hidden === false && el("tab-telemetry").hidden === true ? "OK " : "FAIL ") + "settings tab switches");
+    showTab("telemetry");
+    checks.push((el("tab-telemetry").hidden === false ? "OK " : "FAIL ") + "telemetry tab switches back");
     var fails = checks.filter(function (c) { return c.indexOf("OK ") !== 0; }).length;
     document.title = fails ? ("SELFTEST_FAIL " + fails) : "SELFTEST_OK";
     el("jsonBox").open = true;

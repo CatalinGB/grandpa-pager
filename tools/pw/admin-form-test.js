@@ -16,6 +16,8 @@ const CHROME = process.env.CHROME || "/usr/bin/chromium";
 
   await page.goto(PAGE);
   await page.waitForSelector("#app");
+  // Settings now live in a tab; switch to it before touching the controls.
+  await page.locator('#tabs .tab[data-tab="settings"]').click();
   await page.locator("#jsonBox").evaluate((e) => { e.open = true; });
 
   const slider = page.locator('input[data-path="display.name_size_sp"]');

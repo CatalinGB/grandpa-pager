@@ -40,12 +40,18 @@ device.
   pulse (plus an optional double vibration, off by default).
 - **Live diagnostics**: online/offline, battery + charging, Wi-Fi, MQTT, current
   message and how long ago it was last seen.
-- **Admin console** (browser): text size, orientation, the received/expires time
-  line, message auto-size bounds, colours, idle clock/date format, the arrival
-  cue, the default duration, the status cadence (default 15 min), the idle
-  screen-off toggle, the kiosk lock, and the device-owner hardening toggles —
-  with a **live receiver preview**, an **invite link + QR** for onboarding
-  senders, an unsaved-changes guard, and a **bilingual (EN/RO)** UI.
+- **Admin console** (browser): two tabs — **Telemetry** (device/app uptime
+  reported by the app, with a last-restart/last-seen fallback and the origin
+  shown, plus link/device status, battery, network, last status, last
+  restart/reboot, config state, connection details and message history) and
+  **Settings** (text size, orientation, the received/expires time line, message
+  auto-size bounds, colours, idle clock/date format, the arrival cue, the default
+  duration, the status cadence, the idle screen-off toggle, the kiosk lock, and
+  the device-owner hardening toggles) — plus a **live receiver preview**, an
+  **invite link + QR**, an unsaved-changes guard, and a **bilingual (EN/RO)** UI.
+- **Home Assistant** (optional): a Flespi↔Mosquitto bridge turns the pager into
+  HA entities — status sensors, a send-message form, clear/restart/reboot
+  actions, and a dedicated dashboard. See [`ha/`](ha/README.md).
 - **Guarded remote reconfiguration**: change the broker and MQTT tuning from the
   console — the phone probes the candidate and **auto-reverts** within the window
   if it cannot connect, so a bad push can't strand it; and issue **restart /
@@ -174,6 +180,7 @@ admin.html · admin.js          web admin       (token-gated remote config)
 mqtt.min.js · qrcode-generator.js   vendored libs (MQTT over WSS, QR encoder)
 sw.js · manifest.webmanifest · admin.webmanifest   PWA shell + separate sender/admin install manifests
 common.js                      shared browser helpers (i18n, install UI, status)
+ha/                            Home Assistant bridge, MQTT discovery, scripts, automations, dashboard
 android/                       Kotlin app (roles: receiver / admin / family)
   app/src/main/java/…          PagerService, MqttController, RemoteConfig, activities
   app/src/test/…               JVM unit tests

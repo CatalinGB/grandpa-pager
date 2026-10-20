@@ -83,7 +83,14 @@ data class DiagnosticsPayload(
     /** Battery temperature in °C (tenths from BatteryManager), or null if unknown.
      *  Always-on devices run hot while charging — the single best early-warning
      *  signal for a degrading cell. A charge-controller can also gate on it. */
-    val battery_temp_c: Double? = null
+    val battery_temp_c: Double? = null,
+    /** Device uptime since boot (SystemClock.elapsedRealtime()), or null on older builds.
+     *  Additive field: older apps omit it and older clients simply ignore it. */
+    val device_uptime_ms: Long? = null,
+    /** App process uptime (now - Process.getStartElapsedRealtime()), or null if unknown. */
+    val app_uptime_ms: Long? = null,
+    /** Phone-local boot timestamp (now - device uptime) as ISO-8601 UTC. */
+    val boot_time: String? = null
 )
 
 /** ISO-8601 UTC helpers that work down to API 24 (no java.time). */

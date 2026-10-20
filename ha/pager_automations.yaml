@@ -1,0 +1,31 @@
+# Reference copy of the two automations created via the HA config API.
+# Times are local (Europe/Bucharest on the current instance).
+
+- id: pager_restart_app_daily
+  alias: "Pager — restart app daily"
+  description: "Every night at 00:00, restart the pager app so it starts each day clean."
+  mode: single
+  triggers:
+    - trigger: time
+      at: "00:00:00"
+  actions:
+    - action: button.press
+      target:
+        entity_id: button.grandpa_pager_restart_app
+
+- id: pager_reboot_every_3_days
+  alias: "Pager — reboot phone every 3 days"
+  description: >-
+    At 00:00 on every third day, reboot the pager phone. The app restarts on
+    boot. There is no native "every N days" trigger, so the cadence is a
+    template condition on the epoch day number.
+  mode: single
+  triggers:
+    - trigger: time
+      at: "00:00:00"
+  conditions:
+    - "{{ ((now().timestamp() // 86400) | int) % 3 == 0 }}"
+  actions:
+    - action: button.press
+      target:
+        entity_id: button.grandpa_pager_reboot_phone

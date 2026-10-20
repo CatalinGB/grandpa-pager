@@ -21,6 +21,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
+import android.os.Process
 import android.os.SystemClock
 import android.util.Log
 import com.google.gson.Gson
@@ -559,6 +560,11 @@ class PagerService : Service(), MqttController.Listener {
     private fun publishStatus() {
         if (cfg.role != Role.RECEIVER) return
         val m = mqtt ?: return
+        // Uptime is additive: older clients ignore it; `boot_time` is computed from
+        // the phone's own wall clock so the admin can show the real boot moment.
+        val nowMs = System.currentTimeMillis()
+        val deviceUptime = SystemClock.elapsedRealtime()
+        val appStart = runCatching { Process.getStartElapsedRealtime() }.getOrDefault(0L)
         val d = DiagnosticsPayload(
             state = if (cfg.hasActiveMessage()) "showing" else "idle",
             sender = cfg.currentSender,
@@ -586,7 +592,10 @@ class PagerService : Service(), MqttController.Listener {
             command = cfg.lastCommandJson?.let {
                 runCatching { gson.fromJson(it, CommandStatus::class.java) }.getOrNull()
             },
-            battery_temp_c = batteryTempC()
+            battery_temp_c = batteryTempC(),
+            device_uptime_ms = deviceUptime,
+            app_uptime_ms = if (appStart > 0L && deviceUptime >= appStart) deviceUptime - appStart else null,
+            boot_time = TimeUtil.toIso(nowMs - deviceUptime)
         )
         m.publish(Topics.STATUS, PagerJson.diagnostics(d), retained = true)
     }

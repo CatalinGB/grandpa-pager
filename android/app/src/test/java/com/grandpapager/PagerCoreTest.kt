@@ -89,6 +89,39 @@ class PagerCoreTest {
     }
 
     @Test
+    fun diagnostics_carriesUptimeAdditively() {
+        val d = DiagnosticsPayload(
+            state = "idle", sender = null, battery = 68, charging = true,
+            wifi = true, mqtt = true, current_message_id = null,
+            expires_at = null, last_seen = "2026-01-01T00:00:00Z",
+            app = "receiver",
+            device_uptime_ms = 3_723_000, app_uptime_ms = 120_000,
+            boot_time = "2025-12-31T22:57:57Z"
+        )
+        val json = PagerJson.diagnostics(d)
+        assertTrue(json.contains("\"device_uptime_ms\":3723000"))
+        assertTrue(json.contains("\"app_uptime_ms\":120000"))
+        assertTrue(json.contains("\"boot_time\":\"2025-12-31T22:57:57Z\""))
+        val back = PagerJson.toDiagnostics(json)!!
+        assertEquals(3_723_000L, back.device_uptime_ms)
+        assertEquals(120_000L, back.app_uptime_ms)
+        assertEquals("2025-12-31T22:57:57Z", back.boot_time)
+    }
+
+    @Test
+    fun diagnostics_omitsUptimeWhenUnknown() {
+        val d = DiagnosticsPayload(
+            state = "idle", sender = null, battery = 68, charging = true,
+            wifi = true, mqtt = true, current_message_id = null,
+            expires_at = null, last_seen = "2026-01-01T00:00:00Z", app = "receiver"
+        )
+        val json = PagerJson.diagnostics(d)
+        assertFalse(json.contains("device_uptime_ms"))
+        assertFalse(json.contains("app_uptime_ms"))
+        assertFalse(json.contains("boot_time"))
+    }
+
+    @Test
     fun diagnostics_carriesCurrentMessageTextAndSender() {
         val d = DiagnosticsPayload(
             state = "showing", sender = "Maria", text = "Lunch is ready", battery = 60,

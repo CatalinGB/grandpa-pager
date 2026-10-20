@@ -125,7 +125,9 @@ Diagnostics — `grandpa/status`:
   "device_owner": true,
   "connection": { "state": "active", "host": "mqtt.flespi.io", "port": 8883,
                   "use_tls": true, "password_set": true, "last_error": null },
-  "command": { "last": "restart_app", "received_at": "…", "result": "ok" }
+  "command": { "last": "restart_app", "received_at": "…", "result": "ok" },
+  "device_uptime_ms": 3723000, "app_uptime_ms": 120000,
+  "boot_time": "2026-10-10T13:52:42Z"
 }
 ```
 
@@ -141,6 +143,14 @@ password itself**. `command` echoes the last device-control command and its resu
 device that is powered on permanently it is the best early-warning signal for a
 degrading cell; `tools/scripts/charge-controller.js` can also gate a smart plug
 on it. See [`device-hardening.md`](device-hardening.md).
+
+`device_uptime_ms` / `app_uptime_ms` / `boot_time` are **additive and nullable**.
+A current receiver reports the device uptime since boot
+(`SystemClock.elapsedRealtime()`), the app process uptime
+(`Process.getStartElapsedRealtime()`) and the phone-local boot timestamp. Older
+builds omit them; clients ignore unknown fields, and the web admin then falls
+back to the last restart/reboot command, then to the `last_seen` timestamp — and
+labels which origin it used, so nothing breaks before the app is updated.
 
 Remote config — `grandpa/config` (v1):
 
