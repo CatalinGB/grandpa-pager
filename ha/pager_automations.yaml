@@ -1,5 +1,21 @@
-# Reference copy of the two automations created via the HA config API.
+# Reference copy of the three automations created via the HA config API.
 # Times are local (Europe/Bucharest on the current instance).
+
+- id: pager_republish_discovery
+  alias: "Pager — republish MQTT discovery on start"
+  description: >-
+    Re-publish the pager's retained MQTT discovery payloads shortly after Home
+    Assistant starts. Without this, a broker that lost its retained messages
+    leaves every pager entity stuck as "unavailable" (and the restart/reboot
+    buttons dead) until the payloads are published again.
+  mode: single
+  triggers:
+    - trigger: homeassistant
+      event: start
+  actions:
+    # Give the MQTT client time to connect before publishing.
+    - delay: "00:00:10"
+    - action: script.pager_publish_discovery
 
 - id: pager_restart_app_daily
   alias: "Pager — restart app daily"

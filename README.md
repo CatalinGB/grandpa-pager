@@ -52,7 +52,9 @@ device.
   (EN/RO)** UI.
 - **Home Assistant** (optional): a Flespi↔Mosquitto bridge turns the pager into
   HA entities — status sensors, a send-message form, clear/restart/reboot
-  actions, and a dedicated dashboard. See [`ha/`](ha/README.md).
+  actions, and a dedicated dashboard. The discovery payloads are retained and a
+  start automation re-publishes them, so the entities heal themselves after a
+  restart. See [`ha/`](ha/README.md).
 - **Guarded remote reconfiguration**: change the broker and MQTT tuning from the
   console — the phone probes the candidate and **auto-reverts** within the window
   if it cannot connect, so a bad push can't strand it; and issue **restart /

@@ -95,3 +95,24 @@ backend and cannot run a reliable scheduler either.
 - Investigate the actual failure mode first (battery/charging/wifi/mqtt/last_seen
   from the last status) — a reboot masks it.
 
+
+## Home Assistant hardening (2026-10-25)
+
+Two failure modes showed up while the HA integration was running unattended:
+
+1. **Retained MQTT discovery vanished.** After an HA restart every
+   `grandpa_pager_*` entity came back as `unavailable` (`restored: true`), so the
+   dashboard showed nothing and — worse — the daily restart automation pressed a
+   dead `button.grandpa_pager_restart_app`, silently doing nothing.
+   Fixed twice over:
+   - `script.pager_publish_discovery` re-publishes all 17 retained discovery
+     payloads (`ha/discovery/pager.json` is the source of truth).
+   - `automation.pager_republish_mqtt_discovery_on_start` runs it 10 s after HA
+     starts, so a restart repairs itself.
+   - **Still worth doing on the broker:** `persistence true` plus a
+     `persistence_location` on a mapped volume in `mosquitto.conf`, so retained
+     messages survive a Mosquitto restart and the repair step stays a fallback.
+2. **The app stopped publishing `grandpa/status`** (hung at 03:49, resumed
+   instantly on `restart_app`). Telemetry silently went stale for 17 h.
+   Candidate follow-up: an HA alert when `sensor.grandpa_pager_last_seen` is
+   older than ~45 min, so a hung app is noticed the same day instead of by luck.

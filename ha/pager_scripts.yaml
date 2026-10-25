@@ -1,4 +1,4 @@
-# Reference copy of the four scripts created via the HA config API.
+# Reference copy of the five scripts created via the HA config API.
 # (scripts.yaml shape, keyed by script id.)
 
 pager_send:
@@ -103,3 +103,115 @@ pager_reboot:
         payload: '{"action":"reboot_device"}'
         qos: 1
         retain: false
+pager_publish_discovery:
+  alias: "Pager: publish MQTT discovery"
+  description: >-
+    Re-publishes the retained MQTT discovery payloads for the pager device.
+    Source of truth: ha/discovery/pager.json in the repo. Run it by hand if the
+    entities ever show up as "unavailable"; the start automation below runs it
+    automatically on every Home Assistant start.
+  icon: mdi:cloud-upload
+  mode: single
+  sequence:
+    - action: mqtt.publish
+      data:
+        topic: homeassistant/sensor/pager_state/config
+        qos: 1
+        retain: true
+        payload: "{% raw %}{\"name\":\"State\",\"object_id\":\"pager_state\",\"unique_id\":\"grandpa_pager_state\",\"state_topic\":\"grandpa/status\",\"value_template\":\"{{ value_json.state }}\",\"icon\":\"mdi:cellphone\",\"device\":{\"identifiers\":[\"grandpa_pager\"],\"name\":\"Grandpa Pager\",\"manufacturer\":\"Grandpa Pager\",\"model\":\"Android pager\"}}{% endraw %}"
+    - action: mqtt.publish
+      data:
+        topic: homeassistant/sensor/pager_battery/config
+        qos: 1
+        retain: true
+        payload: "{% raw %}{\"name\":\"Battery\",\"object_id\":\"pager_battery\",\"unique_id\":\"grandpa_pager_battery\",\"state_topic\":\"grandpa/status\",\"value_template\":\"{{ value_json.battery }}\",\"unit_of_measurement\":\"%\",\"device_class\":\"battery\",\"state_class\":\"measurement\",\"device\":{\"identifiers\":[\"grandpa_pager\"],\"name\":\"Grandpa Pager\",\"manufacturer\":\"Grandpa Pager\",\"model\":\"Android pager\"}}{% endraw %}"
+    - action: mqtt.publish
+      data:
+        topic: homeassistant/binary_sensor/pager_charging/config
+        qos: 1
+        retain: true
+        payload: "{% raw %}{\"name\":\"Charging\",\"object_id\":\"pager_charging\",\"unique_id\":\"grandpa_pager_charging\",\"state_topic\":\"grandpa/status\",\"value_template\":\"{{ 'ON' if value_json.charging else 'OFF' }}\",\"device_class\":\"battery_charging\",\"device\":{\"identifiers\":[\"grandpa_pager\"],\"name\":\"Grandpa Pager\",\"manufacturer\":\"Grandpa Pager\",\"model\":\"Android pager\"}}{% endraw %}"
+    - action: mqtt.publish
+      data:
+        topic: homeassistant/sensor/pager_wifi/config
+        qos: 1
+        retain: true
+        payload: "{% raw %}{\"name\":\"Wi-Fi\",\"object_id\":\"pager_wifi\",\"unique_id\":\"grandpa_pager_wifi\",\"state_topic\":\"grandpa/status\",\"value_template\":\"{{ 'on' if value_json.wifi else 'off' }}\",\"icon\":\"mdi:wifi\",\"device\":{\"identifiers\":[\"grandpa_pager\"],\"name\":\"Grandpa Pager\",\"manufacturer\":\"Grandpa Pager\",\"model\":\"Android pager\"}}{% endraw %}"
+    - action: mqtt.publish
+      data:
+        topic: homeassistant/binary_sensor/pager_mqtt/config
+        qos: 1
+        retain: true
+        payload: "{% raw %}{\"name\":\"MQTT link\",\"object_id\":\"pager_mqtt\",\"unique_id\":\"grandpa_pager_mqtt\",\"state_topic\":\"grandpa/status\",\"value_template\":\"{{ 'ON' if value_json.mqtt else 'OFF' }}\",\"device_class\":\"connectivity\",\"device\":{\"identifiers\":[\"grandpa_pager\"],\"name\":\"Grandpa Pager\",\"manufacturer\":\"Grandpa Pager\",\"model\":\"Android pager\"}}{% endraw %}"
+    - action: mqtt.publish
+      data:
+        topic: homeassistant/sensor/pager_sender_current/config
+        qos: 1
+        retain: true
+        payload: "{% raw %}{\"name\":\"Current sender\",\"object_id\":\"pager_sender_current\",\"unique_id\":\"grandpa_pager_sender_current\",\"state_topic\":\"grandpa/status\",\"value_template\":\"{{ value_json.sender }}\",\"icon\":\"mdi:account\",\"device\":{\"identifiers\":[\"grandpa_pager\"],\"name\":\"Grandpa Pager\",\"manufacturer\":\"Grandpa Pager\",\"model\":\"Android pager\"}}{% endraw %}"
+    - action: mqtt.publish
+      data:
+        topic: homeassistant/sensor/pager_message_current/config
+        qos: 1
+        retain: true
+        payload: "{% raw %}{\"name\":\"Current message\",\"object_id\":\"pager_message_current\",\"unique_id\":\"grandpa_pager_message_current\",\"state_topic\":\"grandpa/status\",\"value_template\":\"{{ value_json.text }}\",\"icon\":\"mdi:message-text\",\"device\":{\"identifiers\":[\"grandpa_pager\"],\"name\":\"Grandpa Pager\",\"manufacturer\":\"Grandpa Pager\",\"model\":\"Android pager\"}}{% endraw %}"
+    - action: mqtt.publish
+      data:
+        topic: homeassistant/sensor/pager_last_seen/config
+        qos: 1
+        retain: true
+        payload: "{% raw %}{\"name\":\"Last seen\",\"object_id\":\"pager_last_seen\",\"unique_id\":\"grandpa_pager_last_seen\",\"state_topic\":\"grandpa/status\",\"value_template\":\"{{ value_json.last_seen }}\",\"device_class\":\"timestamp\",\"device\":{\"identifiers\":[\"grandpa_pager\"],\"name\":\"Grandpa Pager\",\"manufacturer\":\"Grandpa Pager\",\"model\":\"Android pager\"}}{% endraw %}"
+    - action: mqtt.publish
+      data:
+        topic: homeassistant/sensor/pager_message_expires/config
+        qos: 1
+        retain: true
+        payload: "{% raw %}{\"name\":\"Message expires\",\"object_id\":\"pager_message_expires\",\"unique_id\":\"grandpa_pager_message_expires\",\"state_topic\":\"grandpa/status\",\"value_template\":\"{{ value_json.expires_at }}\",\"device_class\":\"timestamp\",\"device\":{\"identifiers\":[\"grandpa_pager\"],\"name\":\"Grandpa Pager\",\"manufacturer\":\"Grandpa Pager\",\"model\":\"Android pager\"}}{% endraw %}"
+    - action: mqtt.publish
+      data:
+        topic: homeassistant/binary_sensor/pager_device_owner/config
+        qos: 1
+        retain: true
+        payload: "{% raw %}{\"name\":\"Device owner\",\"object_id\":\"pager_device_owner\",\"unique_id\":\"grandpa_pager_device_owner\",\"state_topic\":\"grandpa/status\",\"value_template\":\"{{ 'ON' if value_json.device_owner else 'OFF' }}\",\"device\":{\"identifiers\":[\"grandpa_pager\"],\"name\":\"Grandpa Pager\",\"manufacturer\":\"Grandpa Pager\",\"model\":\"Android pager\"}}{% endraw %}"
+    - action: mqtt.publish
+      data:
+        topic: homeassistant/sensor/pager_config_error/config
+        qos: 1
+        retain: true
+        payload: "{% raw %}{\"name\":\"Config error\",\"object_id\":\"pager_config_error\",\"unique_id\":\"grandpa_pager_config_error\",\"state_topic\":\"grandpa/status\",\"value_template\":\"{{ value_json.config_error }}\",\"icon\":\"mdi:alert-circle\",\"device\":{\"identifiers\":[\"grandpa_pager\"],\"name\":\"Grandpa Pager\",\"manufacturer\":\"Grandpa Pager\",\"model\":\"Android pager\"}}{% endraw %}"
+    - action: mqtt.publish
+      data:
+        topic: homeassistant/sensor/pager_last_command/config
+        qos: 1
+        retain: true
+        payload: "{% raw %}{\"name\":\"Last command\",\"object_id\":\"pager_last_command\",\"unique_id\":\"grandpa_pager_last_command\",\"state_topic\":\"grandpa/status\",\"value_template\":\"{{ (value_json.command.last ~ ': ' ~ value_json.command.result) if value_json.command is defined and value_json.command.last else 'none' }}\",\"icon\":\"mdi:console\",\"device\":{\"identifiers\":[\"grandpa_pager\"],\"name\":\"Grandpa Pager\",\"manufacturer\":\"Grandpa Pager\",\"model\":\"Android pager\"}}{% endraw %}"
+    - action: mqtt.publish
+      data:
+        topic: homeassistant/sensor/pager_last_message/config
+        qos: 1
+        retain: true
+        payload: "{% raw %}{\"name\":\"Last message\",\"object_id\":\"pager_last_message\",\"unique_id\":\"grandpa_pager_last_message\",\"state_topic\":\"grandpa/last\",\"value_template\":\"{% set m = value_json.messages if value_json.messages is defined else [value_json] %}{{ (m[0].text if m else '') | default('') }}\",\"json_attributes_topic\":\"grandpa/last\",\"icon\":\"mdi:history\",\"device\":{\"identifiers\":[\"grandpa_pager\"],\"name\":\"Grandpa Pager\",\"manufacturer\":\"Grandpa Pager\",\"model\":\"Android pager\"}}{% endraw %}"
+    - action: mqtt.publish
+      data:
+        topic: homeassistant/sensor/pager_history/config
+        qos: 1
+        retain: true
+        payload: "{% raw %}{\"name\":\"History\",\"object_id\":\"pager_history\",\"unique_id\":\"grandpa_pager_history\",\"state_topic\":\"grandpa/last\",\"value_template\":\"{{ (value_json.messages or []) | count }}\",\"json_attributes_topic\":\"grandpa/last\",\"icon\":\"mdi:history\",\"device\":{\"identifiers\":[\"grandpa_pager\"],\"name\":\"Grandpa Pager\",\"manufacturer\":\"Grandpa Pager\",\"model\":\"Android pager\"}}{% endraw %}"
+    - action: mqtt.publish
+      data:
+        topic: homeassistant/button/pager_clear_message/config
+        qos: 1
+        retain: true
+        payload: "{% raw %}{\"name\":\"Clear message\",\"object_id\":\"pager_clear_message\",\"unique_id\":\"grandpa_pager_clear_message\",\"command_topic\":\"grandpa/message\",\"payload_press\":\"\",\"retain\":true,\"qos\":1,\"icon\":\"mdi:monitor-off\",\"device\":{\"identifiers\":[\"grandpa_pager\"],\"name\":\"Grandpa Pager\",\"manufacturer\":\"Grandpa Pager\",\"model\":\"Android pager\"}}{% endraw %}"
+    - action: mqtt.publish
+      data:
+        topic: homeassistant/button/pager_restart_app/config
+        qos: 1
+        retain: true
+        payload: "{% raw %}{\"name\":\"Restart app\",\"object_id\":\"pager_restart_app\",\"unique_id\":\"grandpa_pager_restart_app\",\"command_topic\":\"grandpa/command\",\"payload_press\":\"{\\\"action\\\":\\\"restart_app\\\"}\",\"qos\":1,\"icon\":\"mdi:restart\",\"device\":{\"identifiers\":[\"grandpa_pager\"],\"name\":\"Grandpa Pager\",\"manufacturer\":\"Grandpa Pager\",\"model\":\"Android pager\"}}{% endraw %}"
+    - action: mqtt.publish
+      data:
+        topic: homeassistant/button/pager_reboot/config
+        qos: 1
+        retain: true
+        payload: "{% raw %}{\"name\":\"Reboot phone\",\"object_id\":\"pager_reboot\",\"unique_id\":\"grandpa_pager_reboot\",\"command_topic\":\"grandpa/command\",\"payload_press\":\"{\\\"action\\\":\\\"reboot_device\\\"}\",\"qos\":1,\"icon\":\"mdi:power-cycle\",\"device\":{\"identifiers\":[\"grandpa_pager\"],\"name\":\"Grandpa Pager\",\"manufacturer\":\"Grandpa Pager\",\"model\":\"Android pager\"}}{% endraw %}"

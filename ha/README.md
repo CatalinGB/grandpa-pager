@@ -5,8 +5,8 @@ The pager is MQTT-native, so Home Assistant consumes it the same way the
 **MQTT discovery** entities, plus scripts/automations and a dedicated dashboard.
 
 All of the HA objects below are already created on the instance
-(`http://192.168.1.200:8123`, HA 2026.10.2). The only missing piece is the bridge
-(one Mosquitto config file + one Flespi token) — see [Setup](#setup-the-bridge).
+(`http://192.168.1.200:8123`, HA 2026.10.2), and the bridge is installed on the
+Unraid host — see [Setup](#setup-the-bridge) if it ever has to be rebuilt.
 
 ## What was created
 
@@ -30,8 +30,11 @@ All of the HA objects below are already created on the instance
 | `button.grandpa_pager_restart_app` | restart the app |
 | `button.grandpa_pager_reboot_phone` | reboot the phone (device owner) |
 
-Discovery payloads are in [`discovery/pager.json`](discovery/pager.json) (already
-published retained under `homeassistant/.../config`).
+Discovery payloads are in [`discovery/pager.json`](discovery/pager.json) and are
+published **retained** under `homeassistant/.../config`. They are re-published by
+`script.pager_publish_discovery`, which the start automation runs on every Home
+Assistant start — a broker (or HA) restart therefore can no longer leave the
+entities orphaned.
 
 ### Helpers
 
@@ -44,10 +47,12 @@ published retained under `homeassistant/.../config`).
 ### Scripts
 
 `script.pager_send`, `script.pager_clear`, `script.pager_restart_app`,
-`script.pager_reboot` — reference copies in
-[`pager_scripts.yaml`](pager_scripts.yaml). They publish to `grandpa/message`
-(JSON payload with `id`, `sender`, `text`, `created_at`, `expires_at`,
-`duration_minutes`) and `grandpa/command`.
+`script.pager_reboot`, `script.pager_publish_discovery` — reference copies in
+[`pager_scripts.yaml`](pager_scripts.yaml). The first four publish to
+`grandpa/message` (JSON payload with `id`, `sender`, `text`, `created_at`,
+`expires_at`, `duration_minutes`) and `grandpa/command`; the last one re-publishes
+the retained discovery payloads (17 `mqtt.publish` calls) and is safe to run at
+any time.
 
 ### Sending a message from HA
 
@@ -74,8 +79,11 @@ conversation/LLM tool that can call scripts can send a message.
 
 ### Automations
 
-[`pager_automations.yaml`](pager_automations.yaml):
+`pager_automations.yaml`:
 
+- **Pager — republish MQTT discovery on start** — 10 s after Home Assistant
+  starts → runs `script.pager_publish_discovery`, so the entities come back even
+  if the broker lost the retained discovery payloads.
 - **Pager — restart app daily** — `00:00` every day → presses
   `button.grandpa_pager_restart_app`.
 - **Pager — reboot phone every 3 days** — `00:00` on every third day → presses
@@ -153,6 +161,15 @@ Tools. To test the schedule, run the automation's actions manually; for the
   sender page is open at that moment. The receiver does not care.
 - **Entity IDs** are device-prefixed (`sensor.grandpa_pager_state`, etc.) because
   MQTT discovery used the device name; the dashboard references those exact IDs.
+- **Everything shows `unavailable`?** The retained discovery payloads are missing
+  from the home broker. Run `script.pager_publish_discovery`; the start automation
+  does it automatically after the next HA restart. To make it permanently
+  unnecessary, give Mosquitto `persistence true` and a `persistence_location` on a
+  mapped volume so retained messages survive a broker restart.
+- **`sensor.grandpa_pager_last_seen` stops advancing** while the phone is on: the
+  app has stopped publishing (it can hang after days of uptime). Press
+  `button.grandpa_pager_restart_app` (or the daily automation) — the command is
+  acked within seconds and the status cadence resumes.
 - **Reboot** requires the receiver to be device owner; otherwise the command is
   acknowledged as failed and the phone stays up.
 - The iframes require the GitHub Pages CSP to allow framing — it does (no
