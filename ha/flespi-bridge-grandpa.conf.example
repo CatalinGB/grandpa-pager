@@ -10,6 +10,10 @@
 # (create it as `grandpa-pager-home`, see ha/README.md). It is a secret; keep
 # this file private and out of git (the .example is the tracked copy).
 #
+# The publish side must include `grandpa/message` (not just `grandpa/command`):
+# Flespi drops an unauthorised publish silently, which shows up as "Restart and
+# Reboot work, Send and Clear do nothing".
+#
 # The pager's own tokens are too narrow for a two-way bridge: the sender token
 # cannot publish commands/config and the admin token cannot publish messages.
 # A single combined `grandpa/#` token keeps this bridge simple.

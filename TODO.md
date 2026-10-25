@@ -117,23 +117,33 @@ Two failure modes showed up while the HA integration was running unattended:
    Candidate follow-up: an HA alert when `sensor.grandpa_pager_last_seen` is
    older than ~45 min, so a hung app is noticed the same day instead of by luck.
 
-### Open: `grandpa/message` is bridged one way only (2026-10-25)
+### Open: `grandpa/message` outbound is dropped by Flespi's ACL (2026-10-25)
 
-Checked both directions after the Mosquitto restart:
+Measured both directions on the live bridge (config unchanged, `both` in place):
 
 | Direction | Test | Result |
 |---|---|---|
-| Flespi → home | publish on Flespi, read `sensor` on `grandpa/message` | **works** (instant) |
-| home → Flespi | `mqtt.publish` / Clear button, watch Flespi live + retained | **broken** — nothing arrives |
-| home → Flespi (`grandpa/command`) | press Restart app | **works** (27 ms, app acked) |
+| Flespi → home | publish on Flespi, read `grandpa/message` locally | **works** (instant) |
+| home → Flespi | `mqtt.publish` + Clear button, watch Flespi live/retained | **dropped** |
+| home → Flespi (`grandpa/command`) | press Restart app | **works** (27 ms, app acks) |
+| home → Flespi with the bridge token | publish as `grandpa-pager-home` | **dropped** |
+| home → Flespi with the sender token | publish as `grandpa-web-sender` | **works** |
 
-So the session, token and bridge are healthy; it is specifically the
-`grandpa/message` direction. Consequence: **Send and Clear from the HA dashboard
-do not reach the phone** (the earlier "clear reached Flespi" check was probably
-made with `mosquitto_sub` against the home broker, which does see the empty
-message). This is not an app incompatibility — the app never receives the
-payload at all.
+So it is the **token ACL**, not the bridge and not the app: `grandpa-pager-home`
+may publish `grandpa/command`, subscribe to everything, but not publish
+`grandpa/message`. Consequence: **Send and Clear from the HA dashboard do not
+reach the phone** (the earlier "clear reached Flespi" check was made against the
+home broker, which does see the empty message).
 
-Host-side fix: `topic grandpa/message both 1` in the bridge file (and make sure
-the `grandpa-pager-home` token can publish `grandpa/#`), then restart Mosquitto.
-Verify by sending from the dashboard and seeing the text on the phone.
+Self-inflicted incident while testing a workaround: a second bridge for the
+outbound direction (`message in` on one connection, `message out` on another)
+makes Mosquitto echo the topic between the two bridges — ~15k messages in three
+minutes, the app then drained the queued backlog and republished a status per
+message (~19/s for ~5 min). The extra session was also refused by Flespi
+(`Connection Refused: not authorised`). Config restored byte-for-byte from the
+backup; the queue drained on its own and the pager was never affected (all test
+payloads were already expired, so nothing was displayed).
+
+Fix: Flespi → Tokens → `grandpa-pager-home` → allow **publish** on
+`grandpa/message` (or `grandpa/#`), restart Mosquitto, then send one message from
+the dashboard and confirm it appears on the phone. No app change, no HA change.

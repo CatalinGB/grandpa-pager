@@ -130,6 +130,9 @@ frontend to pick it up.
    }
    ```
    It is a server-side token, not used by any browser (`origins: []`).
+   The ACL must cover **publish** on `grandpa/message` as well as
+   `grandpa/command`: Flespi drops an unauthorised publish silently, so the
+   symptom is "Restart/Reboot work, Send/Clear do nothing".
 
 2. **Install the Mosquitto bridge.** Copy
    [`flespi-bridge-grandpa.conf.example`](flespi-bridge-grandpa.conf.example) to
@@ -156,14 +159,20 @@ Tools. To test the schedule, run the automation's actions manually; for the
   out — a stale local copy could overwrite the real history array on Flespi; the
   web sender stays its only writer. Discovery topics live under
   `homeassistant/`, so they stay on the home broker.
-- **Sending from HA does nothing, but Restart/Reboot work?** `grandpa/message` is
-  bridged `in` only (or the bridge token may not publish to it). Both directions
-  were checked on 2026-10-25: a message published on Flespi reached the home
-  broker instantly, while a message published on the home broker never appeared
-  on Flespi — `grandpa/command` did. Fix the host config to
-  `topic grandpa/message both 1` (restart Mosquitto; bridge topology changes are
-  not reloaded by `SIGHUP`), then send a message from the dashboard and confirm
-  it appears on the phone.
+- **Sending from HA does nothing, but Restart/Reboot work?** The bridge line is
+  right (`topic grandpa/message both 1`) — the **Flespi token ACL is the
+  problem**. Measured on 2026-10-25: the `grandpa-pager-home` token can
+  *subscribe* to `grandpa/message` (family messages reach HA) and *publish* to
+  `grandpa/command` (buttons work), but a publish to `grandpa/message` is
+  silently dropped by Flespi (MQTT 3.1.1 has no negative PUBACK, so Mosquitto
+  reports nothing).
+  Fix in the Flespi UI: Tokens → `grandpa-pager-home` → allow **publish** on
+  `grandpa/message` (or `grandpa/#`), then restart Mosquitto. Verify by sending
+  from the dashboard and watching the phone.
+  **Do not** work around it with a second bridge for the outbound direction:
+  with `message in` on one connection and `message out` on another, Mosquitto
+  echoes the topic between them and floods the phone; Flespi also refuses the
+  extra session (`Connection Refused: not authorised`).
 - **History:** the web sender is the writer of `grandpa/last`. A message sent
   from HA is shown on the phone, but it only enters the history array if a web
   sender page is open at that moment. The receiver does not care.
