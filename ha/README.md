@@ -156,6 +156,14 @@ Tools. To test the schedule, run the automation's actions manually; for the
   out — a stale local copy could overwrite the real history array on Flespi; the
   web sender stays its only writer. Discovery topics live under
   `homeassistant/`, so they stay on the home broker.
+- **Sending from HA does nothing, but Restart/Reboot work?** `grandpa/message` is
+  bridged `in` only (or the bridge token may not publish to it). Both directions
+  were checked on 2026-10-25: a message published on Flespi reached the home
+  broker instantly, while a message published on the home broker never appeared
+  on Flespi — `grandpa/command` did. Fix the host config to
+  `topic grandpa/message both 1` (restart Mosquitto; bridge topology changes are
+  not reloaded by `SIGHUP`), then send a message from the dashboard and confirm
+  it appears on the phone.
 - **History:** the web sender is the writer of `grandpa/last`. A message sent
   from HA is shown on the phone, but it only enters the history array if a web
   sender page is open at that moment. The receiver does not care.

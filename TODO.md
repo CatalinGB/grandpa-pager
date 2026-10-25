@@ -116,3 +116,24 @@ Two failure modes showed up while the HA integration was running unattended:
    instantly on `restart_app`). Telemetry silently went stale for 17 h.
    Candidate follow-up: an HA alert when `sensor.grandpa_pager_last_seen` is
    older than ~45 min, so a hung app is noticed the same day instead of by luck.
+
+### Open: `grandpa/message` is bridged one way only (2026-10-25)
+
+Checked both directions after the Mosquitto restart:
+
+| Direction | Test | Result |
+|---|---|---|
+| Flespi → home | publish on Flespi, read `sensor` on `grandpa/message` | **works** (instant) |
+| home → Flespi | `mqtt.publish` / Clear button, watch Flespi live + retained | **broken** — nothing arrives |
+| home → Flespi (`grandpa/command`) | press Restart app | **works** (27 ms, app acked) |
+
+So the session, token and bridge are healthy; it is specifically the
+`grandpa/message` direction. Consequence: **Send and Clear from the HA dashboard
+do not reach the phone** (the earlier "clear reached Flespi" check was probably
+made with `mosquitto_sub` against the home broker, which does see the empty
+message). This is not an app incompatibility — the app never receives the
+payload at all.
+
+Host-side fix: `topic grandpa/message both 1` in the bridge file (and make sure
+the `grandpa-pager-home` token can publish `grandpa/#`), then restart Mosquitto.
+Verify by sending from the dashboard and seeing the text on the phone.
