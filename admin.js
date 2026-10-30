@@ -61,6 +61,11 @@
       inviteBroker: "Broker", inviteBuild: "Build invite", copyBtn: "Copy link",
       inviteHintEmpty: "Enter the sender token first.", inviteCopied: "Link copied.",
       inviteNoQr: "QR unavailable — share the link instead.",
+      secProvision: "Provision the pager (QR)",
+      provIntro: "A link (and QR) that opens the app and saves the entire configuration — for a fresh install or a rebuilt phone.",
+      provToken: "Receiver token", provHost: "Broker host", provPort: "Port",
+      provName: "Display name (optional)", provBuild: "Build setup link", provHintEmpty: "Enter the receiver token first.",
+      provWarn: "The link contains the token: treat it like a password and delete the screenshot afterwards.",
       secConn: "Connection (guarded)",
       connIntro: "A broker/credential change is transactional: the phone tests it, then commits or auto-reverts within the window.",
       connHost: "Host", connPort: "Port", connTls: "Use TLS", connUser: "Username", connPass: "Password",
@@ -144,6 +149,11 @@
       inviteBroker: "Broker", inviteBuild: "Creează invitația", copyBtn: "Copiază linkul",
       inviteHintEmpty: "Introdu mai întâi tokenul de expeditor.", inviteCopied: "Link copiat.",
       inviteNoQr: "Codul QR nu este disponibil — distribuie linkul.",
+      secProvision: "Configurează pagerul (QR)",
+      provIntro: "Un link (și cod QR) care deschide aplicația și salvează toată configurația — pentru o instalare nouă sau un telefon resetați.",
+      provToken: "Token receiver", provHost: "Host broker", provPort: "Port",
+      provName: "Nume afișat (opțional)", provBuild: "Creează linkul", provHintEmpty: "Introdu mai întâi tokenul de receiver.",
+      provWarn: "Linkul conține tokenul: tratează-l ca pe o parolă și șterge captura după folosire.",
       secConn: "Conexiune (protejată)",
       connIntro: "O schimbare de broker/credențiale este tranzacțională: telefonul o testează, apoi o confirmă sau revine automat în fereastra dată.",
       connHost: "Host", connPort: "Port", connTls: "Folosește TLS", connUser: "Utilizator", connPass: "Parolă",
@@ -829,8 +839,8 @@
     invStore("gp_inv_token", token); invStore("gp_inv_name", name); invStore("gp_inv_broker", broker);
     renderQr(link);
   }
-  function renderQr(text) {
-    var box = el("invQr"); if (!box) return;
+  function renderQr(text, boxId) {
+    var box = el(boxId || "invQr"); if (!box) return;
     if (typeof qrcode !== "function") { box.hidden = true; el("invHint").textContent = tr("inviteNoQr"); return; }
     try {
       var qr = qrcode(0, "M");
@@ -844,6 +854,35 @@
     var v = el("invLink").value;
     function done() { el("invHint").textContent = tr("inviteCopied"); }
     function fallback() { el("invLink").select(); try { document.execCommand("copy"); done(); } catch (e) {} }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(v).then(done, fallback);
+    else fallback();
+  }
+
+  /* ---- provision the pager (deep link + QR) ---- */
+  function buildProvision() {
+    var host = el("provHost").value.trim() || "mqtt.flespi.io";
+    var port = el("provPort").value.trim() || "8883";
+    var token = el("provToken").value.trim();
+    var out = el("provOut"), hint = el("provHint");
+    if (!token) { hint.textContent = tr("provHintEmpty"); out.hidden = true; return; }
+    var params = "host=" + encodeURIComponent(host) +
+      "&port=" + encodeURIComponent(port) +
+      "&user=" + encodeURIComponent(token) +
+      "&tls=1" +
+      "&role=receiver";
+    var name = el("provName").value.trim();
+    if (name) params += "&name=" + encodeURIComponent(name);
+    var base = location.href.split("#")[0].split("?")[0].replace(/admin\.html$/, "setup.html");
+    var link = base + "#" + params;
+    el("provLink").value = link;
+    out.hidden = false;
+    hint.textContent = "";
+    renderQr(link, "provQr");
+  }
+  function copyProvision() {
+    var v = el("provLink").value;
+    function done() { el("provHint").textContent = tr("inviteCopied"); }
+    function fallback() { el("provLink").select(); try { document.execCommand("copy"); done(); } catch (e) {} }
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(v).then(done, fallback);
     else fallback();
   }
@@ -901,6 +940,8 @@
     document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !el("modal").hidden) closeDialog(); });
     el("invBuild").addEventListener("click", buildInvite);
     el("invCopy").addEventListener("click", copyInvite);
+    if (el("provBuild")) el("provBuild").addEventListener("click", buildProvision);
+    if (el("provCopy")) el("provCopy").addEventListener("click", copyProvision);
     // Restore the last invite details (the sender token is a shareable token).
     try {
       if (localStorage.getItem("gp_inv_token")) el("invToken").value = localStorage.getItem("gp_inv_token");
@@ -995,6 +1036,17 @@
     checks.push((tel.indexOf(tr("restartApp")) >= 0 ? "OK " : "FAIL ") + "telemetry shows last restart");
     checks.push((tel.indexOf(tr("telMaint")) >= 0 ? "OK " : "FAIL ") + "telemetry shows the maintenance plan");
     checks.push((tel.indexOf(tr("telCrash")) >= 0 ? "OK " : "FAIL ") + "telemetry shows the last crash");
+    // Provisioning link: must carry everything ProvisionLink.parse expects.
+    el("provHost").value = "mqtt.example";
+    el("provPort").value = "8883";
+    el("provToken").value = "test-token-123";
+    el("provName").value = "Bunicu";
+    buildProvision();
+    var prov = el("provLink").value;
+    checks.push((prov.indexOf("setup.html#host=mqtt.example") >= 0 ? "OK " : "FAIL ") + "provision link has the host");
+    checks.push((prov.indexOf("role=receiver") >= 0 && prov.indexOf("user=test-token-123") >= 0 ? "OK " : "FAIL ") + "provision link has role and token");
+    checks.push((prov.indexOf("name=Bunicu") >= 0 ? "OK " : "FAIL ") + "provision link has the display name");
+    checks.push((prov.indexOf("tls=1") >= 0 ? "OK " : "FAIL ") + "provision link has TLS");
     checks.push((tel.indexOf(tr("telDrop")) >= 0 ? "OK " : "FAIL ") + "telemetry shows the last link drop");
     // A newer app reports device/app uptime: it must win and show its origin.
     lastStatusObj.device_uptime_ms = 7200000;

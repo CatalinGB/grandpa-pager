@@ -180,6 +180,16 @@ Paho's `deliveryComplete` — a broker acknowledgement — never on "queued".
 ignore it. It reports the *armed* plan, which is what lets the admin prove that a
 silent pager will still restart/reboot itself.
 
+### Magic-link provisioning (`grandpapager://setup`)
+
+`setup.html` (GitHub Pages) turns `#host=…&port=…&tls=…&user=…&pass=…&role=…&name=…`
+into a `grandpapager://setup?…` link, handled by `SetupActivity`. The fragment is
+forwarded verbatim (already percent-encoded) and parsed by `ProvisionLink`, which
+validates host/port/role and ignores unknown parameters, so the link can grow.
+Only the connection is carried; everything else is the retained config. Applying
+a link that would replace a different existing broker/username asks for
+confirmation; a fresh install applies it directly.
+
 ### Self-maintenance supervisor (phone-owned)
 
 `MaintenanceScheduler` arms three exact, wake-capable alarms from the persisted

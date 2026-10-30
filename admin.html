@@ -196,6 +196,26 @@
     </div>
 
     <div class="card">
+      <div class="sec" style="margin-top:0" data-i18n="secProvision">Provision the pager (QR)</div>
+      <div class="sub" data-i18n="provIntro">A link (and QR) that opens the app and saves the entire configuration — for a fresh install or a rebuilt phone.</div>
+      <div class="row"><div data-i18n="provHost">Broker host</div><input id="provHost" type="text" value="mqtt.flespi.io" autocapitalize="none" spellcheck="false"></div>
+      <div class="row"><div data-i18n="provPort">Port</div><input id="provPort" type="text" value="8883" inputmode="numeric"></div>
+      <div class="row"><div data-i18n="provToken">Receiver token</div><input id="provToken" type="password" autocomplete="off"></div>
+      <div class="row"><div data-i18n="provName">Display name (optional)</div><input id="provName" type="text" placeholder="Grandpa"></div>
+      <div style="height:8px"></div>
+      <button class="apply" style="width:100%" id="provBuild" data-i18n="provBuild">Build setup link</button>
+      <div id="provOut" hidden>
+        <div style="height:10px"></div>
+        <input id="provLink" type="text" readonly>
+        <div style="height:8px"></div>
+        <button class="ghost" style="width:100%" id="provCopy" data-i18n="copyBtn">Copy link</button>
+        <div class="qrbox" id="provQr"></div>
+      </div>
+      <div class="hint" id="provHint"></div>
+      <div class="hint" data-i18n="provWarn">The link contains the token: treat it like a password and delete the screenshot afterwards.</div>
+    </div>
+
+    <div class="card">
       <div class="sec" style="margin-top:0" data-i18n="secConn">Connection (guarded)</div>
       <div class="sub" data-i18n="connIntro">A broker/credential change is transactional: the phone tests it, then commits or auto-reverts within the window.</div>
       <div class="row"><div data-i18n="connHost">Host</div><input id="cHost" type="text" placeholder="mqtt.example.com"></div>
@@ -236,6 +256,6 @@
   </div>
 </div>
 
-<script src="admin.js?v=21"></script>
+<script src="admin.js?v=22"></script>
 </body>
 </html>

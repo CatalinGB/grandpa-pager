@@ -72,4 +72,9 @@
     <string name="notif_running">Running</string>
     <string name="notif_listening">Listening for messages</string>
     <string name="notif_connected">Connected to Grandpa\'s pager</string>
+
+    <!-- Magic-link provisioning (grandpapager://setup?…) -->
+    <string name="provision_title">Apply configuration from link</string>
+    <string name="provision_confirm">This link would repoint the pager.\n\nBroker: %1$s\nUser: %2$s\n\nApply it?</string>
+    <string name="provision_apply">Apply</string>
 </resources>

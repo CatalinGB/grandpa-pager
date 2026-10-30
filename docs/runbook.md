@@ -108,6 +108,31 @@ Observed results (2026-10-10, Mi A1 / Android 9, via `adb reverse`):
    `grandpa/status` battery readings) and complete the physical/thermal/network
    checklist in [`device-hardening.md`](device-hardening.md).
 
+## 5c. Provision the pager without typing (QR / magic link)
+
+The admin console can hand the phone its whole connection in one link.
+
+1. Admin → **Settings → Provision the pager (QR)**: broker host, port, the
+   **receiver** token, an optional display name → **Build setup link**.
+2. The page shows an `https://…/setup.html#host=…&user=…&port=…&role=receiver`
+   link and a QR. The payload lives in the URL **fragment**, so it is never sent
+   to GitHub/Pages (and does not appear in server logs).
+3. On the phone: leave the kiosk (five taps in the bottom-left corner), scan the
+   QR with any scanner or open the link in a browser. `setup.html` forwards it to
+   `grandpapager://setup?…`, which `SetupActivity` parses (`ProvisionLink`).
+4. The app applies the configuration, is already device owner (a plain install is
+   not, so kiosk/reboot stay off until `dpm set-device-owner`), starts the
+   service and goes to the receiver screen. It then fetches the retained
+   `grandpa/config`, so display/cue/kiosk/maintenance arrive automatically.
+
+Notes:
+- A **fresh install** applies the link immediately. A pager that already has a
+  different broker/username shows a confirmation dialog (a stray link must not
+  silently repoint a working device).
+- The link contains the token: treat the QR/screenshot like a password.
+- The same link works for `role=admin|family` (the sender app), which only needs
+  the token and name.
+
 ## 5b. Release build
 
 The project has a Gradle wrapper (`android/gradlew`), so CI and contributors do

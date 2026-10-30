@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Grandpa Pager — setup link</title>
+<style>
+  :root{ color-scheme:dark; }
+  body{ margin:0; min-height:100vh; display:grid; place-items:center; background:#0d1117; color:#e6edf3;
+        font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; padding:24px; }
+  main{ width:100%; max-width:420px; }
+  h1{ font-size:20px; margin:0 0 4px; }
+  p{ color:#8b949e; margin:0 0 16px; }
+  .card{ background:#161b22; border:1px solid #30363d; border-radius:14px; padding:16px; }
+  .kv{ display:flex; justify-content:space-between; gap:12px; padding:6px 0; border-top:1px solid #21262d; font-size:14px; }
+  .kv:first-child{ border-top:0; }
+  .kv b{ font-weight:600; word-break:break-all; text-align:right; }
+  .kv span{ color:#8b949e; }
+  .btn{ display:block; width:100%; margin-top:14px; padding:14px; border:0; border-radius:12px;
+        background:#2f81f7; color:#fff; font:600 16px system-ui,sans-serif; text-align:center; text-decoration:none; }
+  .btn.secondary{ background:#21262d; color:#e6edf3; margin-top:8px; }
+  .hint{ color:#8b949e; font-size:13px; margin-top:12px; }
+  .err{ color:#f85149; }
+  .ok{ color:#3fb950; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Opening Grandpa Pager…</h1>
+  <p id="lead">This link contains a pager configuration. Nothing was sent to a server.</p>
+
+  <div class="card" id="summary" hidden>
+    <div class="kv"><span>Broker</span><b id="vHost">—</b></div>
+    <div class="kv"><span>Role</span><b id="vRole">—</b></div>
+    <div class="kv"><span>Token</span><b id="vUser">—</b></div>
+    <div class="kv"><span>TLS</span><b id="vTls">—</b></div>
+  </div>
+
+  <a class="btn" id="open" href="#" hidden>Open Grandpa Pager</a>
+  <a class="btn secondary" id="retry" href="#" hidden>Try again</a>
+
+  <div class="hint" id="hint"></div>
+</main>
+<script>
+(function () {
+  "use strict";
+  /* The payload lives in the URL fragment, so the browser never sends it to the
+     Pages server. We forward it verbatim (it is already percent-encoded) into the
+     app's custom scheme, which SetupActivity parses with ProvisionLink. */
+  var APP = "grandpapager://setup?";
+  var raw = (location.hash || "").replace(/^#/, "").trim();
+  var open = document.getElementById("open");
+  var retry = document.getElementById("retry");
+  var hint = document.getElementById("hint");
+  var lead = document.getElementById("lead");
+
+  function param(name) {
+    var m = new RegExp("(?:^|&)" + name + "=([^&]*)").exec(raw);
+    if (!m) return "";
+    try { return decodeURIComponent(m[1]); } catch (e) { return m[1]; }
+  }
+  function mask(v) {
+    if (!v) return "—";
+    if (v.length <= 8) return "••••";
+    return v.slice(0, 4) + "…" + v.slice(-4);
+  }
+
+  if (!raw) {
+    lead.textContent = "This page needs a setup link from the admin console.";
+    lead.className = "err";
+    hint.textContent = "Open Admin → Settings → Provision the pager (QR) and scan that code.";
+    return;
+  }
+
+  var target = APP + raw;
+  document.getElementById("summary").hidden = false;
+  document.getElementById("vHost").textContent = (param("host") || param("broker") || "—") + ":" + (param("port") || "8883");
+  document.getElementById("vRole").textContent = param("role") || "receiver";
+  document.getElementById("vUser").textContent = mask(param("user") || param("username"));
+  document.getElementById("vTls").textContent = ["0", "false", "no", "off"].indexOf((param("tls") || "").toLowerCase()) >= 0 ? "off" : "on";
+
+  open.href = target;
+  open.hidden = false;
+  retry.href = target;
+  retry.hidden = false;
+  hint.textContent = "If nothing happens, tap the button above. The app shows a confirmation when it would replace an existing configuration.";
+
+  /* Auto-open: a top-level navigation to a custom scheme is allowed without a
+     user gesture in Chrome. The button stays as the fallback. */
+  setTimeout(function () {
+    try { location.href = target; } catch (e) {}
+  }, 250);
+})();
+</script>
+</body>
+</html>

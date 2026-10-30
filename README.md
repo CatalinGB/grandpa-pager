@@ -55,6 +55,12 @@ device.
   kiosk lock, and the device-owner hardening toggles) — plus a **live receiver
   preview**, an **invite link + QR**, an unsaved-changes guard, and a **bilingual
   (EN/RO)** UI.
+- **One-link provisioning**: the admin console builds a link/QR
+  (`setup.html#host=…&user=…`) that opens the app and saves the whole connection
+  (broker, port, TLS, token, role) — no typing on the phone. Everything else
+  (display, cue, kiosk, maintenance) follows from the retained `grandpa/config`
+  on the first connect. A link that would replace an existing configuration asks
+  for confirmation first.
 - **Home Assistant** (optional): a Flespi↔Mosquitto bridge turns the pager into
   HA entities — status sensors, a send-message form, clear/restart/reboot
   actions, and a dedicated dashboard. The discovery payloads are retained and a
@@ -190,6 +196,7 @@ remotely.
 
 ```
 index.html · sender.js         web sender      (GitHub Pages, MQTT.js over WSS)
+setup.html                     deep-link redirect for QR provisioning (grandpapager://setup)
 admin.html · admin.js          web admin       (token-gated remote config)
 mqtt.min.js · qrcode-generator.js   vendored libs (MQTT over WSS, QR encoder)
 sw.js · manifest.webmanifest · admin.webmanifest   PWA shell + separate sender/admin install manifests
