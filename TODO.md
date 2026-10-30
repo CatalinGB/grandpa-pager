@@ -178,3 +178,32 @@ Still open:
   guaranteed; expect either a one-tap installer prompt (needs someone at the
   device) or ADB over TCP (needs `adb tcpip 5555` after each boot). Investigate
   device-owner install behaviour on the actual device before relying on it.
+
+### 2026-10-30 review follow-ups (1.3.0)
+
+Fixed:
+- **liveness was fake**: `MqttController.publish()` no-ops when disconnected and
+  `publishStatus()` still refreshed `lastPublishAt`, so the supervisor could
+  report "healthy" while doing nothing. Liveness now comes only from Paho's
+  `deliveryComplete` (D20).
+- sender-role installs no longer arm/execute maintenance (role gate in the
+  scheduler and the receiver).
+- stale reboots now back off exponentially (6 h → 12 h → 24 h, cap) and the
+  backoff resets on the first acked publish.
+- a scheduled restart is recorded only after the start was handed to the system.
+- telemetry added: memory/native/threads/CPU/storage/Doze/RSSI/last crash/last
+  disconnect/counters/last acked publish/service starts (+ admin cards).
+
+Still open:
+- **supervisor shares the app process**: a blocked main looper also blocks the
+  AlarmManager receiver, so a wedged (not killed) process cannot self-rescue.
+  Moving `MaintenanceReceiver` to `android:process=":maintenance"` would fix it,
+  but SharedPreferences are not coherent across processes — it needs a
+  file/heartbeat store first. Deliberately not rushed in 1.3.0.
+- **APK signing key changed**: v1.1.0 was signed with a debug cert
+  (`aa2533…`) that no longer exists on this machine; local builds use
+  (`1099d3…`). An in-place update over the installed app will be refused. Either
+  recover the old keystore or uninstall/reinstall once (needs physical access).
+  Add a real `android/keystore.properties` + keep it backed up before the next
+  release so updates stay in-place.
+

@@ -212,3 +212,30 @@ network from turning into an unbounded reboot loop.
 
 *Change if* the device ever gets a trustworthy out-of-band channel (see the OTA
 question), in which case the reactive ladder can become advisory only.
+
+---
+
+## D20 — Liveness means "the broker acknowledged a publish"
+
+**Decision:** `lastPublishAt` is written only from Paho's `deliveryComplete`
+callback, never from "we handed the message to the client". A completed CONNACK
+counts only as a connection event (counter), not as liveness.
+
+**Context:** during review of 1.2.0, `MqttController.publish()` turned out to be a
+silent no-op when the client was null or disconnected, while `publishStatus()`
+unconditionally refreshed `lastPublishAt` afterwards. A pager whose socket had
+gone half-open therefore looked perfectly healthy to the supervisor: no restart,
+no reboot, no alarm — the exact failure the supervisor exists to catch.
+
+**Consequences:**
+- the supervisor's thresholds are measured in *acked* publishes, so a broken
+  broker path is silence even if the process is alive and "connected";
+- `diag.last_publish_ok_at` is the authoritative "last time the outside world
+  heard from us" signal (the admin shows it next to the crash/drop cards);
+- repeated stale reboots double the cooldown (capped at 24 h) and the backoff is
+  cleared by the first acked publish, so a permanently unreachable pager is not
+  rebooted four times a day forever.
+
+*Change if* the device gets a second, independent liveness channel (e.g. an
+on-device heartbeat written to storage) — then the stricter signal can be
+cross-checked instead of trusted alone.

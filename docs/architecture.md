@@ -132,6 +132,18 @@ Diagnostics — `grandpa/status`:
     "last_stale_restart_at": null, "last_reboot_at": "2026-10-29T02:00:00Z",
     "last_reboot_reason": "scheduled"
   },
+  "diag": {
+    "heap_used_kb": 24576, "heap_max_kb": 131072, "native_heap_kb": 8192,
+    "threads": 12, "cpu_ms": 61000, "free_storage_kb": 1048576,
+    "ignoring_battery_optimizations": true, "device_idle": false,
+    "power_save": false, "interactive": false, "lock_task": true, "wifi_rssi": -58,
+    "connect_count": 41, "disconnect_count": 3,
+    "last_publish_ok_at": "2026-10-30T12:00:01Z",
+    "service_start_count": 12, "last_start_reason": "stale",
+    "last_crash": { "at": "2026-10-29T20:13:41Z", "type": "IllegalStateException", "message": "boom" },
+    "last_disconnect": { "at": "2026-10-29T20:28:44Z", "reason": "MqttException: Connection lost" },
+    "reboot_backoff": 0
+  },
   "device_uptime_ms": 3723000, "app_uptime_ms": 120000,
   "boot_time": "2026-10-10T13:52:42Z"
 }
@@ -153,6 +165,18 @@ on it. See [`device-hardening.md`](device-hardening.md).
 `device_uptime_ms` / `app_uptime_ms` / `boot_time` are **additive and nullable**.
 
 `maintenance` is additive too: it is absent on builds before 1.2 and older clients
+
+`diag` (1.3+) is additive as well and exists purely for remote debugging: heap and
+native memory, thread count, cumulative process CPU time, free storage, Doze /
+battery-optimisation state, Wi-Fi RSSI, the last uncaught exception, the last MQTT
+disconnect reason, connect/disconnect counters, the last broker-acknowledged
+publish, and the service start count/reason. Strings are whitespace-collapsed and
+length-capped (`DiagFormat`), so a stack-trace-sized message cannot bloat the
+retained status.
+
+**Liveness rule:** `last_publish_at` (and `diag.last_publish_ok_at`) move only on
+Paho's `deliveryComplete` — a broker acknowledgement — never on "queued".
+
 ignore it. It reports the *armed* plan, which is what lets the admin prove that a
 silent pager will still restart/reboot itself.
 

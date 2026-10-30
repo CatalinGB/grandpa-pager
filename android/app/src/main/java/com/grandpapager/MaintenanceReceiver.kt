@@ -23,13 +23,21 @@ class MaintenanceReceiver : BroadcastReceiver() {
         val now = System.currentTimeMillis()
         val action = intent?.action
 
+        // Defence in depth: never let a sender install restart/reboot itself.
+        if (cfg.role != Role.RECEIVER) {
+            Log.i(TAG, "ignoring $action: role=${cfg.role}")
+            MaintenanceScheduler.cancelAll(app)
+            return
+        }
+
         try {
             when (action) {
                 MaintenanceScheduler.ACTION_CHECK -> runSelfCheck(app, cfg, now)
                 MaintenanceScheduler.ACTION_SCHEDULED_RESTART -> {
                     Log.i(TAG, "scheduled app restart")
-                    cfg.lastScheduledRestartAt = now
-                    restartService(app, "scheduled")
+                    // Record only once the start was actually handed to the system,
+                    // otherwise a refused start burns a whole interval.
+                    if (restartService(app, "scheduled")) cfg.lastScheduledRestartAt = now
                 }
                 MaintenanceScheduler.ACTION_SCHEDULED_REBOOT -> {
                     Log.i(TAG, "scheduled phone reboot")
@@ -63,7 +71,8 @@ class MaintenanceReceiver : BroadcastReceiver() {
             lastPublishMs = cfg.lastPublishAt,
             lastRestartMs = cfg.lastStaleRestartAt,
             lastRebootMs = cfg.lastStaleRebootAt,
-            batteryPct = battery
+            batteryPct = battery,
+            rebootBackoff = cfg.rebootBackoff
         )
         val silentMin = if (cfg.lastPublishAt > 0L) (now - cfg.lastPublishAt) / MaintenancePolicy.MINUTE_MS else -1
 
@@ -77,6 +86,9 @@ class MaintenanceReceiver : BroadcastReceiver() {
                 Log.w(TAG, "still silent after a restart (${silentMin}min); rebooting the phone")
                 cfg.lastStaleRebootAt = now
                 cfg.lastRebootReason = "stale"
+                // Each reboot that does not restore the link doubles the next
+                // cooldown (reset by the first acked publish).
+                cfg.rebootBackoff = (cfg.rebootBackoff + 1).coerceAtMost(4)
                 if (!DeviceOwnerManager.reboot(app)) {
                     Log.w(TAG, "stale reboot refused (not device owner?)")
                 }
@@ -85,10 +97,10 @@ class MaintenanceReceiver : BroadcastReceiver() {
         }
     }
 
-    private fun restartService(app: Context, reason: String) {
+    private fun restartService(app: Context, reason: String): Boolean =
         runCatching { PagerService.start(app, forceRestart = true, reason = reason) }
             .onFailure { Log.w(TAG, "could not start the pager service", it) }
-    }
+            .isSuccess
 
     private fun batteryPercent(context: Context): Int? {
         val sticky = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return null

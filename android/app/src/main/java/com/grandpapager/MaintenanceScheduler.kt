@@ -47,8 +47,10 @@ object MaintenanceScheduler {
         cancel(app, am, REQ_RESTART, ACTION_SCHEDULED_RESTART)
         cancel(app, am, REQ_REBOOT, ACTION_SCHEDULED_REBOOT)
 
-        if (!cfg.isConfigured() || !plan.enabled) {
-            Log.i(TAG, "maintenance disabled; alarms cleared")
+        // Receiver only: the sender build is a normal phone and must never reboot
+        // itself just because it shares the retained config.
+        if (!cfg.isConfigured() || cfg.role != Role.RECEIVER || !plan.enabled) {
+            Log.i(TAG, "maintenance not armed (role=${cfg.role}, enabled=${plan.enabled})")
             return
         }
 

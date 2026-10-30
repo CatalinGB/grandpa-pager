@@ -92,8 +92,78 @@ data class DiagnosticsPayload(
     /** Phone-local boot timestamp (now - device uptime) as ISO-8601 UTC. */
     val boot_time: String? = null,
     /** On-device maintenance plan state (additive; older clients ignore it). */
-    val maintenance: MaintenanceStatus? = null
+    val maintenance: MaintenanceStatus? = null,
+    /** Runtime diagnostics for remote debugging (additive; omitted if disabled). */
+    val diag: DiagStatus? = null
 )
+
+/** Last uncaught exception we saw, persisted before the process died. */
+data class CrashInfo(
+    /** ISO-8601 UTC. */
+    val at: String,
+    val type: String? = null,
+    val message: String? = null
+)
+
+/** Why the MQTT link dropped last time. */
+data class DisconnectInfo(
+    /** ISO-8601 UTC. */
+    val at: String,
+    val reason: String? = null
+)
+
+/**
+ * Runtime health, so a device that cannot be touched can still be diagnosed.
+ * Every field is nullable: they are additive, and a value the platform cannot
+ * provide is simply omitted.
+ */
+data class DiagStatus(
+    val heap_used_kb: Long? = null,
+    val heap_max_kb: Long? = null,
+    val native_heap_kb: Long? = null,
+    val threads: Int? = null,
+    /** Cumulative process CPU time (Process.getElapsedCpuTime). */
+    val cpu_ms: Long? = null,
+    val free_storage_kb: Long? = null,
+    val ignoring_battery_optimizations: Boolean? = null,
+    val device_idle: Boolean? = null,
+    val power_save: Boolean? = null,
+    val interactive: Boolean? = null,
+    val lock_task: Boolean? = null,
+    /** Wi-Fi RSSI in dBm (only when on Wi-Fi). */
+    val wifi_rssi: Int? = null,
+    val last_crash: CrashInfo? = null,
+    val last_disconnect: DisconnectInfo? = null,
+    val connect_count: Long? = null,
+    val disconnect_count: Long? = null,
+    /** Last broker-acknowledged publish (ISO-8601 UTC). */
+    val last_publish_ok_at: String? = null,
+    val service_start_count: Long? = null,
+    /** Why the service last started: boot, command, stale, scheduled, … */
+    val last_start_reason: String? = null,
+    /** Consecutive stale reboots without a successful publish (backoff level). */
+    val reboot_backoff: Int? = null
+)
+
+/** Pure helpers so the diagnostics are testable without an Android runtime. */
+object DiagFormat {
+    const val MAX_REASON = 160
+    const val MAX_MESSAGE = 220
+
+    /** Collapse whitespace/newlines and cap the length so status stays small. */
+    fun clip(value: String?, max: Int): String? {
+        if (value.isNullOrBlank()) return null
+        val flat = value.replace(Regex("\\s+"), " ").trim()
+        return if (flat.length <= max) flat else flat.substring(0, max - 1) + "…"
+    }
+
+    /** One-line rendering of a throwable for the status payload. */
+    fun describe(t: Throwable?): String? {
+        if (t == null) return null
+        val msg = clip(t.message, MAX_MESSAGE)
+        return clip(if (msg == null) t.javaClass.simpleName else t.javaClass.simpleName + ": " + msg, MAX_MESSAGE)
+    }
+}
 
 /**
  * What the phone's own supervisor is doing. Everything is nullable so the field

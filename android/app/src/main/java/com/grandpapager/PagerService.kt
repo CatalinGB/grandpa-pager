@@ -134,6 +134,8 @@ class PagerService : Service(), MqttController.Listener {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         cfg = Config(this)
+        cfg.serviceStartCount = cfg.serviceStartCount + 1
+        cfg.lastStartReason = startReason(intent)
         if (!cfg.isConfigured()) {
             stopSelf()
             return START_NOT_STICKY
@@ -169,6 +171,16 @@ class PagerService : Service(), MqttController.Listener {
     }
 
     // ---------------------------------------------------------------- lifecycle
+
+    /** Why this instance started — shown in the status so restarts are auditable. */
+    private fun startReason(intent: Intent?): String = when (intent?.action) {
+        ACTION_SELF_RESTART -> intent.getStringExtra(EXTRA_REASON) ?: "maintenance"
+        ACTION_SEND -> "send"
+        ACTION_CLEAR -> "clear"
+        ACTION_EXPIRY -> "expiry"
+        null -> "start"
+        else -> intent.action?.substringAfterLast('.') ?: "start"
+    }
 
     private fun withConnection(after: () -> Unit) {
         executor.execute {
@@ -259,8 +271,7 @@ class PagerService : Service(), MqttController.Listener {
     override fun onConnected() {
         Log.i(TAG, "onConnected (reconnect complete)")
         Link.connected = true
-        // A completed MQTT connection is proof the app can reach the outside world.
-        cfg.lastPublishAt = System.currentTimeMillis()
+        cfg.connectCount = cfg.connectCount + 1
         executor.execute {
             // A live link while a connection change is switched in starts (or
             // restarts) the confirm clock.
@@ -272,10 +283,26 @@ class PagerService : Service(), MqttController.Listener {
         }
     }
 
-    override fun onConnectionLost() {
-        Log.w(TAG, "onConnectionLost")
+    override fun onConnectionLost(cause: Throwable?) {
+        Log.w(TAG, "onConnectionLost: ${cause?.message}")
         Link.connected = false
+        cfg.disconnectCount = cfg.disconnectCount + 1
+        cfg.lastDisconnectAt = System.currentTimeMillis()
+        cfg.lastDisconnectReason = DiagFormat.describe(cause)
         PagerBus.notifyChanged()
+    }
+
+    /**
+     * The broker acknowledged a publish. This — not "handed to Paho" — is what the
+     * maintenance supervisor treats as proof of life: a half-open socket or a
+     * broker that stops acking must count as silence.
+     */
+    override fun onDelivered(topics: Array<String>?) {
+        if (topics != null && topics.isNotEmpty() && !topics.contains(Topics.STATUS)) return
+        val now = System.currentTimeMillis()
+        cfg.lastPublishAt = now
+        cfg.lastPublishOkAt = now
+        if (cfg.rebootBackoff != 0) cfg.rebootBackoff = 0
     }
 
     override fun onMessage(topic: String, payload: ByteArray) {
@@ -636,12 +663,12 @@ class PagerService : Service(), MqttController.Listener {
             device_uptime_ms = deviceUptime,
             app_uptime_ms = if (appStart > 0L && deviceUptime >= appStart) deviceUptime - appStart else null,
             boot_time = TimeUtil.toIso(nowMs - deviceUptime),
-            maintenance = maintenanceStatus(nowMs)
+            maintenance = maintenanceStatus(nowMs),
+            diag = DiagCollector.collect(this, cfg, nowMs)
         )
+        // Liveness is recorded in onDelivered(): a queued publish is not proof
+        // that the broker ever saw it.
         m.publish(Topics.STATUS, PagerJson.diagnostics(d), retained = true)
-        // Proof of life for the on-device supervisor. Published (queued) without
-        // throwing is the best signal we have from here.
-        cfg.lastPublishAt = nowMs
     }
 
     /** The on-device maintenance plan, as the admin/support should see it. */

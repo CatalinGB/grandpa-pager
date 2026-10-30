@@ -37,7 +37,7 @@
   var cfg = JSON.parse(JSON.stringify(DEF));
   var dirty = false, client = null, lastAttempt = 0, pendingOk = null, revertTimer = null;
   var sessionStart = Date.now(), linkUpSince = 0, deviceOnlineSince = 0;
-  var lastStatusObj = null, mqttUp = false;
+  var lastStatusObj = null, mqttUp = false, cpuPrev = null;
   /* Message history, read from the retained grandpa/last array the web sender
      maintains. The admin is read-only here (its token has no publish on
      grandpa/last). */
@@ -110,6 +110,9 @@
       originCommand: "estimated from the last restart/reboot", originLastSeen: "not reported by the app",
       bootedAt: "booted {t}", appUptimeSub: "app {d}", lastSeenAt: "last seen {t}",
       telSession: "Admin session", telLastStatus: "Last status", telLastRestart: "Last restart / reboot",
+      telMem: "Memory (heap)", telCpu: "Process CPU", telCpuSub: "total {t}", telCrash: "Last crash",
+      telDrop: "Last link drop", dropsTotal: "{n} drops", optOn: "battery opt. exempt", optOff: "NOT battery-opt. exempt",
+      inDoze: "in Doze",
       telMaint: "Next app restart / reboot", telMaintSub: "last auto reboot: {r}",
       maintStale: "because it went silent", maintScheduled: "scheduled", off: "off",
       telConfig: "Config applied", telMessage: "Current message", telConnection: "Connection",
@@ -190,6 +193,9 @@
       originCommand: "estimat de la ultima repornire", originLastSeen: "nereportat de aplicație",
       bootedAt: "pornit {t}", appUptimeSub: "aplicație {d}", lastSeenAt: "văzut ultima dată {t}",
       telSession: "Sesiune admin", telLastStatus: "Ultimul status", telLastRestart: "Ultima repornire",
+      telMem: "Memorie (heap)", telCpu: "CPU proces", telCpuSub: "total {t}", telCrash: "Ultimul crash",
+      telDrop: "Ultima cădere de link", dropsTotal: "{n} căderi", optOn: "exceptat de la optimizarea bateriei", optOff: "NEexceptat de la optimizarea bateriei",
+      inDoze: "în Doze",
       telMaint: "Următorul restart / reboot", telMaintSub: "ultimul reboot automat: {r}",
       maintStale: "pentru că a tăcut", maintScheduled: "programat", off: "oprit",
       telConfig: "Config aplicat", telMessage: "Mesaj curent", telConnection: "Conexiune",
@@ -605,6 +611,35 @@
         html += stat(tr("telConnection"), "—", "", "muted", true);
       }
     }
+    var dg = s && s.diag;
+    if (dg && typeof dg === "object") {
+      var heap = (typeof dg.heap_used_kb === "number" && typeof dg.heap_max_kb === "number")
+        ? (dg.heap_used_kb / 1024).toFixed(1) + " / " + Math.round(dg.heap_max_kb / 1024) + " MB" : "—";
+      var dsub = [];
+      if (typeof dg.native_heap_kb === "number") dsub.push("native " + (dg.native_heap_kb / 1024).toFixed(1) + " MB");
+      if (typeof dg.threads === "number") dsub.push(dg.threads + " thr");
+      if (typeof dg.free_storage_kb === "number") dsub.push((dg.free_storage_kb / 1048576).toFixed(1) + " GB free");
+      if (typeof dg.ignoring_battery_optimizations === "boolean") dsub.push(dg.ignoring_battery_optimizations ? tr("optOn") : tr("optOff"));
+      if (dg.device_idle === true) dsub.push(tr("inDoze"));
+      html += stat(tr("telMem"), GP.escapeHtml(heap), GP.escapeHtml(dsub.join(" · ")), "small");
+      if (typeof dg.cpu_ms === "number") {
+        var pct = "";
+        if (cpuPrev && now > cpuPrev.t + 30000 && dg.cpu_ms >= cpuPrev.ms) {
+          pct = (((dg.cpu_ms - cpuPrev.ms) / (now - cpuPrev.t)) * 100).toFixed(1) + "%";
+        }
+        cpuPrev = { t: now, ms: dg.cpu_ms };
+        html += stat(tr("telCpu"), GP.escapeHtml(pct || fmtDur(dg.cpu_ms)), GP.escapeHtml(tr("telCpuSub", { t: fmtDur(dg.cpu_ms) })), "small");
+      }
+      if (dg.last_crash) {
+        html += stat(tr("telCrash"), GP.escapeHtml(relativeTime(dg.last_crash.at)),
+          GP.escapeHtml((dg.last_crash.type || "") + (dg.last_crash.message ? " · " + dg.last_crash.message : "")), "small", true);
+      }
+      if (dg.last_disconnect) {
+        html += stat(tr("telDrop"), GP.escapeHtml(relativeTime(dg.last_disconnect.at)),
+          GP.escapeHtml(dg.last_disconnect.reason || "—") +
+          (typeof dg.disconnect_count === "number" ? " · " + GP.escapeHtml(tr("dropsTotal", { n: dg.disconnect_count })) : ""), "small", true);
+      }
+    }
     var mt = s && s.maintenance;
     if (mt && typeof mt === "object" && mt.enabled) {
       var when = function (iso) { return iso ? new Date(iso).toLocaleString() : tr("off"); };
@@ -927,6 +962,14 @@
     // The live preview reflects the change.
     t("preview reflects name size", function () { renderPreview(); }, null);
     checks.push(((el("pvName").style.fontSize === "60px") ? "OK " : "FAIL ") + "preview name font-size (is '" + el("pvName").style.fontSize + "')");
+    // Backward compatibility: a status from an older app has no `diag`/`maintenance`
+    // and must render without errors.
+    lastStatusObj = {
+      state: "idle", battery: 80, charging: true, wifi: true, mqtt: true,
+      device_owner: true, last_seen: new Date().toISOString(), app: "receiver"
+    };
+    renderTelemetry();
+    checks.push(((el("telGrid").innerHTML.indexOf(tr("telLink")) >= 0) ? "OK " : "FAIL ") + "old status (no diag/maintenance) still renders");
     // Telemetry tab: inject a sample status and check it renders.
     var nowIso = new Date().toISOString();
     var restartIso = new Date(Date.now() - 3661e3).toISOString();
@@ -938,7 +981,11 @@
       connection: { state: "idle", host: "mqtt.example", port: 8883, use_tls: true, password_set: true, last_error: null },
       maintenance: { enabled: true, last_publish_age_s: 12, next_restart_at: new Date(Date.now() + 3600e3).toISOString(),
         next_reboot_at: new Date(Date.now() + 7200e3).toISOString(), last_stale_restart_at: null,
-        last_reboot_at: restartIso, last_reboot_reason: "scheduled" }
+        last_reboot_at: restartIso, last_reboot_reason: "scheduled" },
+      diag: { heap_used_kb: 24576, heap_max_kb: 131072, native_heap_kb: 8192, threads: 12,
+        cpu_ms: 61000, free_storage_kb: 1048576, ignoring_battery_optimizations: true,
+        last_crash: { at: restartIso, type: "IllegalStateException", message: "boom" },
+        last_disconnect: { at: restartIso, reason: "Socket closed" }, disconnect_count: 3 }
     };
     renderTelemetry();
     var tel = el("telGrid").innerHTML;
@@ -947,6 +994,8 @@
     checks.push((tel.indexOf(tr("originCommand")) >= 0 ? "OK " : "FAIL ") + "fallback uptime origin is visible");
     checks.push((tel.indexOf(tr("restartApp")) >= 0 ? "OK " : "FAIL ") + "telemetry shows last restart");
     checks.push((tel.indexOf(tr("telMaint")) >= 0 ? "OK " : "FAIL ") + "telemetry shows the maintenance plan");
+    checks.push((tel.indexOf(tr("telCrash")) >= 0 ? "OK " : "FAIL ") + "telemetry shows the last crash");
+    checks.push((tel.indexOf(tr("telDrop")) >= 0 ? "OK " : "FAIL ") + "telemetry shows the last link drop");
     // A newer app reports device/app uptime: it must win and show its origin.
     lastStatusObj.device_uptime_ms = 7200000;
     lastStatusObj.app_uptime_ms = 3600000;

@@ -175,6 +175,42 @@ class Config(context: Context) {
         get() = p.getString("lastRebootReason", null)
         set(v) = p.edit().putString("lastRebootReason", v).apply()
 
+    // --- diagnostics (all additive; persisted so a reboot keeps the story) ---
+    /** Last publish the broker acknowledged (epoch millis, 0 = never). */
+    var lastPublishOkAt: Long
+        get() = p.getLong("lastPublishOk", 0L)
+        set(v) = p.edit().putLong("lastPublishOk", v).apply()
+
+    var connectCount: Long
+        get() = p.getLong("connectCount", 0L)
+        set(v) = p.edit().putLong("connectCount", v).apply()
+
+    var disconnectCount: Long
+        get() = p.getLong("disconnectCount", 0L)
+        set(v) = p.edit().putLong("disconnectCount", v).apply()
+
+    var lastDisconnectAt: Long
+        get() = p.getLong("lastDisconnectAt", 0L)
+        set(v) = p.edit().putLong("lastDisconnectAt", v).apply()
+
+    var lastDisconnectReason: String?
+        get() = p.getString("lastDisconnectReason", null)
+        set(v) = p.edit().putString("lastDisconnectReason", v).apply()
+
+    var serviceStartCount: Long
+        get() = p.getLong("serviceStartCount", 0L)
+        set(v) = p.edit().putLong("serviceStartCount", v).apply()
+
+    /** boot / command / stale / scheduled / start */
+    var lastStartReason: String?
+        get() = p.getString("lastStartReason", null)
+        set(v) = p.edit().putString("lastStartReason", v).apply()
+
+    /** Consecutive stale reboots that did not restore the link (exponential backoff). */
+    var rebootBackoff: Int
+        get() = p.getInt("rebootBackoff", 0)
+        set(v) = p.edit().putInt("rebootBackoff", v).apply()
+
     /** The currently applied remote config (defaults if none). */
     fun remoteConfig(): RemoteConfig =
         RemoteConfigCodec.parse(remoteConfigJson) ?: RemoteConfig()

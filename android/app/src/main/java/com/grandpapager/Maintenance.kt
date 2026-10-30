@@ -33,6 +33,17 @@ object MaintenancePolicy {
     /** Keep the reboot threshold meaningfully above the restart threshold. */
     const val MIN_GAP_MINUTES = 15
 
+    /** Ceiling for the exponential reboot backoff (a day). */
+    const val MAX_COOLDOWN_MS = 24 * HOUR_MS
+
+    /** Cooldown after [rebootBackoff] consecutive failed reboots (doubles, capped). */
+    fun effectiveCooldownMs(plan: RemoteConfig.Maintenance, rebootBackoff: Int): Long {
+        if (plan.reboot_cooldown_minutes <= 0) return 0L
+        val factor = 1L shl rebootBackoff.coerceIn(0, 4)
+        val base = plan.reboot_cooldown_minutes * MINUTE_MS * factor
+        return minOf(base, MAX_COOLDOWN_MS)
+    }
+
     /**
      * The next moment a scheduled run is due: never in the past, at least
      * [intervalMs] after [lastRunMs], and — for daily-or-longer cycles — at
@@ -74,9 +85,12 @@ object MaintenancePolicy {
      * been tried since the last successful publish, the longer threshold has
      * passed, the reboot cooldown is over and the battery is not critically low.
      *
-     * @param lastPublishMs epoch millis of the last *successful* publish/connect,
-     *   0 when the app has never talked to the broker.
+     * @param lastPublishMs epoch millis of the last *broker-acknowledged* publish,
+     *   0 when the app has never had one.
      * @param batteryPct current battery level, null when unknown.
+     * @param rebootBackoff consecutive stale reboots that did not restore the
+     *   link; each level doubles the cooldown (capped at [MAX_COOLDOWN_MS]) so a
+     *   permanently unreachable pager is not rebooted four times a day forever.
      */
     fun decide(
         nowMs: Long,
@@ -84,10 +98,11 @@ object MaintenancePolicy {
         lastPublishMs: Long,
         lastRestartMs: Long,
         lastRebootMs: Long,
-        batteryPct: Int?
+        batteryPct: Int?,
+        rebootBackoff: Int = 0
     ): MaintenanceAction {
         if (!plan.enabled) return MaintenanceAction.NONE
-        // Never talked, or the clock moved backwards (NTP): no verdict.
+        // Never had an acked publish, or the clock moved backwards (NTP): no verdict.
         if (lastPublishMs <= 0L || lastPublishMs > nowMs) return MaintenanceAction.NONE
 
         val staleMinutes = (nowMs - lastPublishMs) / MINUTE_MS
@@ -95,9 +110,8 @@ object MaintenancePolicy {
         val rebootAfter = plan.stale_reboot_minutes
 
         val restartAlreadyTried = lastRestartMs > lastPublishMs
-        val cooldownOver = plan.reboot_cooldown_minutes <= 0 ||
-            lastRebootMs <= 0L ||
-            nowMs - lastRebootMs >= plan.reboot_cooldown_minutes * MINUTE_MS
+        val cooldownMs = effectiveCooldownMs(plan, rebootBackoff)
+        val cooldownOver = cooldownMs <= 0L || lastRebootMs <= 0L || nowMs - lastRebootMs >= cooldownMs
         val batteryOk = batteryPct == null || batteryPct >= BATTERY_FLOOR_PCT
 
         if (rebootAfter > 0 && staleMinutes >= rebootAfter &&

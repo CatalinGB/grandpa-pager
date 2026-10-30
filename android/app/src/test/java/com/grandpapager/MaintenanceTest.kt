@@ -262,6 +262,47 @@ class MaintenanceTest {
     }
 
     @Test
+    fun rebootCooldownDoublesWithEachFailedRebootAndIsCapped() {
+        val base = MaintenancePolicy.effectiveCooldownMs(plan, 0)
+        assertEquals(6 * 3_600_000L, base)
+        assertEquals(base * 2, MaintenancePolicy.effectiveCooldownMs(plan, 1))
+        assertEquals(base * 4, MaintenancePolicy.effectiveCooldownMs(plan, 2))
+        // capped at a day, and 0 still means "no cooldown"
+        assertEquals(MaintenancePolicy.MAX_COOLDOWN_MS, MaintenancePolicy.effectiveCooldownMs(plan, 4))
+        assertEquals(MaintenancePolicy.MAX_COOLDOWN_MS, MaintenancePolicy.effectiveCooldownMs(plan, 99))
+        assertEquals(0L, MaintenancePolicy.effectiveCooldownMs(plan.copy(reboot_cooldown_minutes = 0), 3))
+    }
+
+    @Test
+    fun backoffActuallyDelaysTheNextStaleReboot() {
+        // 6h base cooldown: after 3h a reboot is still refused, even though the
+        // silence threshold has long passed.
+        assertEquals(
+            MaintenanceAction.RESTART_APP,
+            decide(staleMinutes = 400, lastRestartAfterPublish = true, lastRebootAgoMin = 180)
+        )
+        // With one failed reboot behind it the cooldown is 12h, so 8h is not enough.
+        val backoff1 = MaintenancePolicy.decide(
+            now, plan,
+            lastPublishMs = now - 400 * MaintenancePolicy.MINUTE_MS,
+            lastRestartMs = now - 60_000L,
+            lastRebootMs = now - 8 * 60 * MaintenancePolicy.MINUTE_MS,
+            batteryPct = 80,
+            rebootBackoff = 1
+        )
+        assertEquals(MaintenanceAction.RESTART_APP, backoff1)
+        val backoff1Ready = MaintenancePolicy.decide(
+            now, plan,
+            lastPublishMs = now - 400 * MaintenancePolicy.MINUTE_MS,
+            lastRestartMs = now - 60_000L,
+            lastRebootMs = now - 13 * 60 * MaintenancePolicy.MINUTE_MS,
+            batteryPct = 80,
+            rebootBackoff = 1
+        )
+        assertEquals(MaintenanceAction.REBOOT_DEVICE, backoff1Ready)
+    }
+
+    @Test
     fun isStaleUsesTheConfiguredThreshold() {
         val last = now - 50 * MaintenancePolicy.MINUTE_MS
         assertTrue(MaintenancePolicy.isStale(now, last, plan))

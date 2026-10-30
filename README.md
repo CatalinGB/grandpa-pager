@@ -38,6 +38,11 @@ device.
   link to the full list — N is set in the admin console (default 10).
 - **Attention cue** on a new message: a slow amber glow, a chime and a torch
   pulse (plus an optional double vibration, off by default).
+- **Remote health telemetry** (1.3+): heap/native memory, thread count, process
+  CPU time, free storage, Doze/battery-optimisation state, Wi-Fi RSSI, the last
+  uncaught exception, the last MQTT disconnect reason and connect counters, the
+  last broker-acknowledged publish, and the service start count/reason — all in
+  the retained status, so a pager you cannot touch can still be diagnosed.
 - **Live diagnostics**: online/offline, battery + charging, Wi-Fi, MQTT, current
   message and how long ago it was last seen.
 - **Admin console** (browser): three tabs — **Telemetry** (device/app uptime

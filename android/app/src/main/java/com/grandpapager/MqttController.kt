@@ -20,8 +20,11 @@ class MqttController(
 
     interface Listener {
         fun onConnected()
-        fun onConnectionLost()
+        /** [cause] is the Paho failure (null when the broker closed cleanly). */
+        fun onConnectionLost(cause: Throwable? = null)
         fun onMessage(topic: String, payload: ByteArray)
+        /** The broker acknowledged a publish; [topics] is null when unknown. */
+        fun onDelivered(topics: Array<String>? = null)
     }
 
     @Volatile
@@ -65,7 +68,7 @@ class MqttController(
 
             override fun connectionLost(cause: Throwable?) {
                 Log.w(TAG, "connectionLost: ${cause?.message}")
-                listener.onConnectionLost()
+                listener.onConnectionLost(cause)
             }
 
             override fun messageArrived(topic: String?, message: MqttMessage?) {
@@ -74,7 +77,9 @@ class MqttController(
                 }
             }
 
-            override fun deliveryComplete(token: IMqttDeliveryToken?) {}
+            override fun deliveryComplete(token: IMqttDeliveryToken?) {
+                listener.onDelivered(runCatching { token?.topics }.getOrNull())
+            }
         })
 
         c.connect(opts)
@@ -92,10 +97,17 @@ class MqttController(
         Log.i(TAG, "subscribed to $topics")
     }
 
-    fun publish(topic: String, payload: String, retained: Boolean) {
-        val c = client ?: return
-        if (!c.isConnected) return
-        c.publish(topic, payload.toByteArray(Charsets.UTF_8), qos, retained)
+    /**
+     * Returns false when nothing could even be queued (no client / not connected).
+     * A true return only means "handed to Paho" — the delivery callback is the
+     * real proof the broker accepted it, so never treat true as liveness.
+     */
+    fun publish(topic: String, payload: String, retained: Boolean): Boolean {
+        val c = client ?: return false
+        if (!c.isConnected) return false
+        return runCatching {
+            c.publish(topic, payload.toByteArray(Charsets.UTF_8), qos, retained)
+        }.onFailure { Log.w(TAG, "publish failed: ${it.message}") }.isSuccess
     }
 
     /** Publish an empty retained payload, clearing the retained message. */
