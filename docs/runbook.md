@@ -108,6 +108,32 @@ Observed results (2026-10-10, Mi A1 / Android 9, via `adb reverse`):
    `grandpa/status` battery readings) and complete the physical/thermal/network
    checklist in [`device-hardening.md`](device-hardening.md).
 
+## 5d. Release signing (read before every release)
+
+The release APK is signed with `android/pager-release.jks` (gitignored) via
+`android/keystore.properties` (gitignored, see the `.example`). Its certificate
+is:
+
+```
+SHA-256 1099d30fb2319c594f2a49ba53d44f1af4da128f269eac9a8e3efd5561329674
+CN=Android Debug, O=Android, C=US
+```
+
+- **Never regenerate it.** Android identifies an installed app by this
+  certificate; a new key makes every update fail with "App not installed" and
+  forces a wipe/reinstall (and, on a device-owner pager, `dpm set-device-owner`
+  again).
+- **Back it up** (keystore + password, two places, offline). Losing it means the
+  same wipe/reinstall for every future build.
+- Verify a build before publishing:
+  ```bash
+  ~/Android/Sdk/build-tools/34.0.0/apksigner verify --print-certs \
+      android/app/build/outputs/apk/release/app-release.apk | grep SHA-256
+  ```
+- The v1.1.0 release was signed with a *different* debug key
+  (`aa253383…`) that is no longer available, so exactly one in-place update may
+  be refused. After that one reinstall, all future releases have this stable key.
+
 ## 5c. Provision the pager without typing (QR / magic link)
 
 The admin console can hand the phone its whole connection in one link.

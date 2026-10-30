@@ -200,10 +200,10 @@ Still open:
   Moving `MaintenanceReceiver` to `android:process=":maintenance"` would fix it,
   but SharedPreferences are not coherent across processes — it needs a
   file/heartbeat store first. Deliberately not rushed in 1.3.0.
-- **APK signing key changed**: v1.1.0 was signed with a debug cert
-  (`aa2533…`) that no longer exists on this machine; local builds use
-  (`1099d3…`). An in-place update over the installed app will be refused. Either
-  recover the old keystore or uninstall/reinstall once (needs physical access).
-  Add a real `android/keystore.properties` + keep it backed up before the next
-  release so updates stay in-place.
+- **APK signing key**: v1.1.0 was signed with a debug cert (`aa2533…`) that no
+  longer exists; from 1.3.0 onward builds use `1099d3…`. That key is now preserved
+  as `android/pager-release.jks` with a real password (`keystore.properties`, both
+  gitignored) — see runbook §5d. One in-place update may still be refused because
+  of the old key; after that single reinstall every future release updates in
+  place. **Back up the keystore + password** (cannot be regenerated).
 
