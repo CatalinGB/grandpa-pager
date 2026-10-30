@@ -59,6 +59,12 @@ device.
   console — the phone probes the candidate and **auto-reverts** within the window
   if it cannot connect, so a bad push can't strand it; and issue **restart /
   reboot** commands, all acknowledged in status.
+- **Self-maintenance on the phone**: the app schedules its own service restart
+  and phone reboot with `AlarmManager` (re-armed after every boot), plus a
+  silence ladder — no broker contact for N minutes restarts the app, and if it is
+  still silent it reboots the phone. The schedule/thresholds are configured from
+  the admin page (HA) and travel in the retained remote config, so the phone keeps
+  saving itself even when MQTT is exactly what broke.
 - **Kiosk lockdown** via device-owner Lock Task Mode, re-armed on every boot,
   with a hidden admin escape gesture.
 - **Power-aware**: the display sleeps when idle and wakes instantly on a new

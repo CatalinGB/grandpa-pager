@@ -126,6 +126,12 @@ Diagnostics — `grandpa/status`:
   "connection": { "state": "active", "host": "mqtt.flespi.io", "port": 8883,
                   "use_tls": true, "password_set": true, "last_error": null },
   "command": { "last": "restart_app", "received_at": "…", "result": "ok" },
+  "maintenance": {
+    "enabled": true, "last_publish_age_s": 41,
+    "next_restart_at": "2026-10-31T02:00:00Z", "next_reboot_at": "2026-11-01T02:00:00Z",
+    "last_stale_restart_at": null, "last_reboot_at": "2026-10-29T02:00:00Z",
+    "last_reboot_reason": "scheduled"
+  },
   "device_uptime_ms": 3723000, "app_uptime_ms": 120000,
   "boot_time": "2026-10-10T13:52:42Z"
 }
@@ -145,6 +151,31 @@ degrading cell; `tools/scripts/charge-controller.js` can also gate a smart plug
 on it. See [`device-hardening.md`](device-hardening.md).
 
 `device_uptime_ms` / `app_uptime_ms` / `boot_time` are **additive and nullable**.
+
+`maintenance` is additive too: it is absent on builds before 1.2 and older clients
+ignore it. It reports the *armed* plan, which is what lets the admin prove that a
+silent pager will still restart/reboot itself.
+
+### Self-maintenance supervisor (phone-owned)
+
+`MaintenanceScheduler` arms three exact, wake-capable alarms from the persisted
+remote config: a 10-minute self-check, a scheduled app restart and a scheduled
+phone reboot. `MaintenanceReceiver` executes them and re-arms; `BootReceiver`
+re-arms after a reboot. Nothing here touches MQTT, which is deliberate: the
+supervisor exists to fix a pager that the broker can no longer reach.
+
+The reactive ladder in `MaintenancePolicy` (pure, unit-tested) is:
+
+1. no successful publish/connect for `stale_restart_minutes` (default 45) →
+   restart the app service (cold restart, publish a status first);
+2. still silent `stale_reboot_minutes` (default 180) after that restart, with the
+   reboot cooldown (default 6 h) elapsed and the battery above 15 % →
+   `DevicePolicyManager.reboot()`.
+
+Status also updates `last_publish_at` on every successful publish *and* every
+completed MQTT connection, so the supervisor measures real connectivity, not the
+status timer.
+
 A current receiver reports the device uptime since boot
 (`SystemClock.elapsedRealtime()`), the app process uptime
 (`Process.getStartElapsedRealtime()`) and the phone-local boot timestamp. Older

@@ -13,7 +13,8 @@ data class RemoteConfig(
     val kiosk: Kiosk = Kiosk(),
     val power: Power = Power(),
     val telemetry: Telemetry = Telemetry(),
-    val device_owner: DeviceOwner = DeviceOwner()
+    val device_owner: DeviceOwner = DeviceOwner(),
+    val maintenance: Maintenance = Maintenance()
 ) {
     data class Display(
         val name_size_sp: Int = 58,
@@ -59,6 +60,32 @@ data class RemoteConfig(
         val restrict_tethering: Boolean = true,
         val restrict_roaming: Boolean = true
     )
+
+    /**
+     * On-device maintenance supervisor.
+     *
+     * The admin configures it here (through `grandpa/config`), but the phone owns
+     * the execution: the plan is persisted and re-armed with AlarmManager, so a
+     * dead MQTT link, a killed process or a reboot cannot cancel it. That is what
+     * makes "wait for the next occurrence" actually true.
+     *
+     * Intervals/thresholds of 0 disable the corresponding action.
+     */
+    data class Maintenance(
+        val enabled: Boolean = true,
+        /** Restart the app service at most once per N hours (0 = never). */
+        val restart_every_hours: Int = 24,
+        /** Reboot the phone at most once per N days (0 = never). */
+        val reboot_every_days: Int = 3,
+        /** Local hour (0-23) both scheduled actions are anchored to. */
+        val at_hour: Int = 4,
+        /** No broker contact for this long -> restart the app (0 = never). */
+        val stale_restart_minutes: Int = 45,
+        /** Still silent this long, after that restart -> reboot the phone (0 = never). */
+        val stale_reboot_minutes: Int = 180,
+        /** Minimum gap between automatic reboots (0 = no cooldown). */
+        val reboot_cooldown_minutes: Int = 360
+    )
 }
 
 object RemoteConfigCodec {
@@ -90,6 +117,7 @@ object RemoteConfigCodec {
             val p = root.getAsJsonObject("power")
             val te = root.getAsJsonObject("telemetry")
             val doo = root.getAsJsonObject("device_owner")
+            val mt = root.getAsJsonObject("maintenance")
 
             // Keep the auto-size window ordered: min <= max.
             var sizeMin = int(d, "message_size_min_sp", 10, 8, 200)
@@ -139,11 +167,34 @@ object RemoteConfigCodec {
                     restrict_mobile_networks = bool(doo, "restrict_mobile_networks", true),
                     restrict_tethering = bool(doo, "restrict_tethering", true),
                     restrict_roaming = bool(doo, "restrict_roaming", true)
-                )
+                ),
+                maintenance = maintenance(mt)
             )
         } catch (e: Exception) {
             null
         }
+    }
+
+    /**
+     * Parse the maintenance block. Thresholds are clamped so a typo cannot turn
+     * the pager into a reboot loop; the reboot threshold always stays at least
+     * [MaintenancePolicy.MIN_GAP_MINUTES] above the restart threshold.
+     */
+    private fun maintenance(o: JsonObject?): RemoteConfig.Maintenance {
+        val restartAfter = int(o, "stale_restart_minutes", 45, 0, 1440)
+        var rebootAfter = int(o, "stale_reboot_minutes", 180, 0, 2880)
+        if (rebootAfter > 0 && restartAfter > 0 && rebootAfter <= restartAfter) {
+            rebootAfter = (restartAfter + MaintenancePolicy.MIN_GAP_MINUTES).coerceAtMost(2880)
+        }
+        return RemoteConfig.Maintenance(
+            enabled = bool(o, "enabled", true),
+            restart_every_hours = int(o, "restart_every_hours", 24, 0, 168),
+            reboot_every_days = int(o, "reboot_every_days", 3, 0, 30),
+            at_hour = int(o, "at_hour", 4, 0, 23),
+            stale_restart_minutes = restartAfter,
+            stale_reboot_minutes = rebootAfter,
+            reboot_cooldown_minutes = int(o, "reboot_cooldown_minutes", 360, 0, 2880)
+        )
     }
 
     private fun int(o: JsonObject?, key: String, def: Int, min: Int, max: Int): Int {

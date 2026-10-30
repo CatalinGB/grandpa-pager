@@ -90,7 +90,29 @@ data class DiagnosticsPayload(
     /** App process uptime (now - Process.getStartElapsedRealtime()), or null if unknown. */
     val app_uptime_ms: Long? = null,
     /** Phone-local boot timestamp (now - device uptime) as ISO-8601 UTC. */
-    val boot_time: String? = null
+    val boot_time: String? = null,
+    /** On-device maintenance plan state (additive; older clients ignore it). */
+    val maintenance: MaintenanceStatus? = null
+)
+
+/**
+ * What the phone's own supervisor is doing. Everything is nullable so the field
+ * can be absent on older builds and ignored by older clients.
+ */
+data class MaintenanceStatus(
+    val enabled: Boolean,
+    /** Seconds since the last successful broker publish/connect. */
+    val last_publish_age_s: Long? = null,
+    /** Next scheduled app restart (ISO-8601 UTC). */
+    val next_restart_at: String? = null,
+    /** Next scheduled phone reboot (ISO-8601 UTC). */
+    val next_reboot_at: String? = null,
+    /** Last restart triggered because the pager went silent. */
+    val last_stale_restart_at: String? = null,
+    /** Last automatic reboot (scheduled or stale-triggered). */
+    val last_reboot_at: String? = null,
+    /** "scheduled" or "stale". */
+    val last_reboot_reason: String? = null
 )
 
 /** ISO-8601 UTC helpers that work down to API 24 (no java.time). */

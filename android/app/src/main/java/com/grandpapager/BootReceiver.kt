@@ -5,12 +5,19 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 
-/** Re-arms the pager after reboot / app update. */
+/**
+ * Re-arms the pager after reboot / app update.
+ *
+ * Both halves matter: the service must come back, and the maintenance alarms
+ * (which AlarmManager drops on reboot) must be re-created — otherwise a reboot
+ * would silently disable the self-healing schedule.
+ */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         val cfg = Config(context)
         if (!cfg.isConfigured()) return
         Log.i("BootReceiver", "boot event ${intent?.action}; starting PagerService")
         runCatching { PagerService.start(context) }
+        runCatching { MaintenanceScheduler.reschedule(context) }
     }
 }

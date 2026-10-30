@@ -6,9 +6,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
-import android.app.admin.DevicePolicyManager
 import android.content.BroadcastReceiver
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -48,9 +46,11 @@ class PagerService : Service(), MqttController.Listener {
         const val ACTION_SEND = "com.grandpapager.action.SEND"
         const val ACTION_CLEAR = "com.grandpapager.action.CLEAR"
         const val ACTION_EXPIRY = "com.grandpapager.action.EXPIRY"
+        const val ACTION_SELF_RESTART = "com.grandpapager.action.SELF_RESTART"
         const val EXTRA_TEXT = "text"
         const val EXTRA_DURATION = "duration"
         const val EXTRA_EXPECTED_ID = "expectedId"
+        const val EXTRA_REASON = "reason"
 
         /**
          * The reconnect watchdog and the status cadence are deliberately separate:
@@ -66,6 +66,17 @@ class PagerService : Service(), MqttController.Listener {
         /** How often the connection guardrail re-evaluates a pending change. */
         private const val GUARD_TICK_MS = 5_000L
         fun start(ctx: Context) = launch(ctx, Intent(ctx, PagerService::class.java))
+
+        /**
+         * Start the service, optionally forcing a *cold* restart of a running
+         * instance. Used by the maintenance supervisor when it is invoked from an
+         * alarm (process may be alive or dead; both ends up healthy).
+         */
+        fun start(ctx: Context, forceRestart: Boolean, reason: String? = null) {
+            val i = Intent(ctx, PagerService::class.java)
+            if (forceRestart) i.setAction(ACTION_SELF_RESTART).putExtra(EXTRA_REASON, reason)
+            launch(ctx, i)
+        }
 
         fun send(ctx: Context, text: String, duration: Int) = launch(
             ctx,
@@ -97,12 +108,28 @@ class PagerService : Service(), MqttController.Listener {
     private var wifiLock: WifiManager.WifiLock? = null
     private val started = java.util.concurrent.atomic.AtomicBoolean(false)
 
+    /** Publishes a fresh status on charger connect/disconnect (best effort). */
+    private val powerReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            executor.execute {
+                runCatching { if (mqtt?.isConnected() == true) publishStatus() }
+            }
+        }
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
         cfg = Config(this)
         createChannel()
+        // A charger cut/return is the single most useful power signal and it is
+        // invisible otherwise until the next status tick.
+        val f = IntentFilter().apply {
+            addAction(Intent.ACTION_POWER_CONNECTED)
+            addAction(Intent.ACTION_POWER_DISCONNECTED)
+        }
+        runCatching { registerReceiver(powerReceiver, f) }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -125,6 +152,16 @@ class PagerService : Service(), MqttController.Listener {
             ACTION_EXPIRY -> {
                 val expected = intent.getStringExtra(EXTRA_EXPECTED_ID)
                 withConnection { checkExpiry(expected) }
+            }
+            ACTION_SELF_RESTART -> {
+                if (started.get()) {
+                    val reason = intent.getStringExtra(EXTRA_REASON) ?: "?"
+                    Log.i(TAG, "self-restart requested ($reason)")
+                    executor.execute { runCatching { restartApp() } }
+                } else {
+                    // The process was gone; this is already a cold start.
+                    withConnection { onReady() }
+                }
             }
             else -> withConnection { onReady() }
         }
@@ -184,6 +221,8 @@ class PagerService : Service(), MqttController.Listener {
             restoreReceiverState()
             publishStatus()
             startStatusTimer()
+            // Keep the on-device plan armed even after the app/broker was away.
+            MaintenanceScheduler.reschedule(this)
         }
         startWatchdog()
         PagerBus.notifyChanged()
@@ -207,6 +246,7 @@ class PagerService : Service(), MqttController.Listener {
         stopWatchdog()
         stopStatusTimer()
         stopGuardTimer()
+        runCatching { unregisterReceiver(powerReceiver) }
         releaseLocks()
         Link.connected = false
         runCatching { mqtt?.disconnect() }
@@ -219,6 +259,8 @@ class PagerService : Service(), MqttController.Listener {
     override fun onConnected() {
         Log.i(TAG, "onConnected (reconnect complete)")
         Link.connected = true
+        // A completed MQTT connection is proof the app can reach the outside world.
+        cfg.lastPublishAt = System.currentTimeMillis()
         executor.execute {
             // A live link while a connection change is switched in starts (or
             // restarts) the confirm clock.
@@ -276,6 +318,8 @@ class PagerService : Service(), MqttController.Listener {
             if (!parsed.power.screen_off_when_idle) wakeReceiverActivity()
         }
         if (started.get()) startStatusTimer() // cadence may have changed
+        // The maintenance plan may have changed too (thresholds, intervals).
+        MaintenanceScheduler.reschedule(this)
         publishStatus()
         PagerBus.notifyChanged()
     }
@@ -353,14 +397,10 @@ class PagerService : Service(), MqttController.Listener {
     }
 
     /** Device-owner reboot; returns false when we lack the rights. */
-    private fun rebootDevice(): Boolean {
-        if (!DeviceOwnerManager.isDeviceOwner(this)) return false
-        val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-        val admin = ComponentName(this, PagerDeviceAdminReceiver::class.java)
-        return runCatching { dpm.reboot(admin) }
-            .onFailure { Log.w(TAG, "reboot failed", it) }
-            .isSuccess
-    }
+    private fun rebootDevice(): Boolean =
+        DeviceOwnerManager.reboot(this).also { ok ->
+            if (!ok) Log.w(TAG, "reboot refused (not device owner?)")
+        }
 
     // ------------------------------------------------- connection guardrail
 
@@ -595,9 +635,40 @@ class PagerService : Service(), MqttController.Listener {
             battery_temp_c = batteryTempC(),
             device_uptime_ms = deviceUptime,
             app_uptime_ms = if (appStart > 0L && deviceUptime >= appStart) deviceUptime - appStart else null,
-            boot_time = TimeUtil.toIso(nowMs - deviceUptime)
+            boot_time = TimeUtil.toIso(nowMs - deviceUptime),
+            maintenance = maintenanceStatus(nowMs)
         )
         m.publish(Topics.STATUS, PagerJson.diagnostics(d), retained = true)
+        // Proof of life for the on-device supervisor. Published (queued) without
+        // throwing is the best signal we have from here.
+        cfg.lastPublishAt = nowMs
+    }
+
+    /** The on-device maintenance plan, as the admin/support should see it. */
+    private fun maintenanceStatus(nowMs: Long): MaintenanceStatus {
+        val plan = cfg.remoteConfig().maintenance
+        fun next(last: Long, intervalMs: Long): String? {
+            if (!plan.enabled || intervalMs <= 0L) return null
+            val at = MaintenancePolicy.nextRunAt(nowMs, last, intervalMs, plan.at_hour)
+            return if (at == MaintenancePolicy.NEVER) null else TimeUtil.toIso(at)
+        }
+        val lastReboot = maxOf(cfg.lastStaleRebootAt, cfg.lastScheduledRebootAt)
+        return MaintenanceStatus(
+            enabled = plan.enabled,
+            last_publish_age_s = if (cfg.lastPublishAt > 0L)
+                ((nowMs - cfg.lastPublishAt) / 1000L).coerceAtLeast(0L) else null,
+            next_restart_at = next(
+                cfg.lastScheduledRestartAt,
+                plan.restart_every_hours * MaintenancePolicy.HOUR_MS
+            ),
+            next_reboot_at = next(
+                cfg.lastScheduledRebootAt,
+                plan.reboot_every_days * MaintenancePolicy.DAY_MS
+            ),
+            last_stale_restart_at = cfg.lastStaleRestartAt.takeIf { it > 0L }?.let { TimeUtil.toIso(it) },
+            last_reboot_at = lastReboot.takeIf { it > 0L }?.let { TimeUtil.toIso(it) },
+            last_reboot_reason = cfg.lastRebootReason
+        )
     }
 
     /**

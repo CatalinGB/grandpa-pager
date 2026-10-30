@@ -1,5 +1,11 @@
 # Reference copy of the three automations created via the HA config API.
 # Times are local (Europe/Bucharest on the current instance).
+#
+# LEGACY: the next app build schedules the daily restart and the periodic reboot
+# itself (AlarmManager + `maintenance.*` in grandpa/config), so these two MQTT
+# automations become redundant — and they only work while the pager is actually
+# reachable. Turn them off once the new build is installed; keep the
+# republish-discovery one.
 
 - id: pager_republish_discovery
   alias: "Pager — republish MQTT discovery on start"

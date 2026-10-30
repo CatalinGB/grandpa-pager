@@ -77,6 +77,28 @@ Three equivalent ways:
 The script is exposed like any other action, so any automation, script, or
 conversation/LLM tool that can call scripts can send a message.
 
+### Self-maintenance (phone-side)
+
+The pager schedules its own service restart and phone reboot with AlarmManager,
+re-armed on boot, and reports the armed plan in `status.maintenance`. Configure it
+in the admin page → **Settings → Self-maintenance (on the phone)**; the values ride
+in `grandpa/config`, so they survive a broker outage:
+
+| Field | Meaning |
+|---|---|
+| `maintenance.enabled` | master switch for the supervisor |
+| `restart_every_hours` | scheduled app restart cadence, anchored at `at_hour` (0 = off) |
+| `reboot_every_days` | scheduled phone reboot cadence, anchored at `at_hour` (0 = off) |
+| `at_hour` | local hour the scheduled runs happen |
+| `stale_restart_minutes` | no broker contact for this long → restart the app |
+| `stale_reboot_minutes` | still silent this long after that restart → reboot the phone |
+| `reboot_cooldown_minutes` | minimum gap between automatic reboots |
+
+The reactive ladder never reboots a phone below 15 % battery. **After installing
+the new build, turn off the two legacy automations** (daily restart / 3-day
+reboot) — the phone does that itself now, and an MQTT command cannot reach a pager
+whose connection is exactly what failed.
+
 ### Automations
 
 `pager_automations.yaml`:

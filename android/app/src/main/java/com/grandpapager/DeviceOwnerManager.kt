@@ -30,6 +30,20 @@ object DeviceOwnerManager {
     fun isDeviceOwner(context: Context): Boolean =
         runCatching { dpm(context).isDeviceOwnerApp(context.packageName) }.getOrDefault(false)
 
+    /**
+     * Reboot the phone. Requires device owner (API 24+). Returns false instead of
+     * throwing when the app is not device owner, so callers can log it.
+     *
+     * Deliberately network-free: the maintenance supervisor uses this so a pager
+     * that can no longer be reached over MQTT can still reboot itself.
+     */
+    fun reboot(context: Context): Boolean {
+        if (!isDeviceOwner(context)) return false
+        return runCatching { dpm(context).reboot(admin(context)) }
+            .onFailure { Log.w(TAG, "reboot failed", it) }
+            .isSuccess
+    }
+
     /** Map a pure restriction key to the Android constants that enforce it. */
     private val RESTRICTION_CONSTS: Map<String, List<String>> = mapOf(
         RestrictionPlan.ACCOUNTS to listOf(UserManager.DISALLOW_MODIFY_ACCOUNTS),

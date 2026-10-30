@@ -147,3 +147,34 @@ payloads were already expired, so nothing was displayed).
 Fix: Flespi → Tokens → `grandpa-pager-home` → allow **publish** on
 `grandpa/message` (or `grandpa/#`), restart Mosquitto, then send one message from
 the dashboard and confirm it appears on the phone. No app change, no HA change.
+
+### 2026-10-30 outage: the pager died while healthy, and stayed dead ~20 h
+
+Last contact 22:28 local, status fully healthy (100 %, charging, Wi-Fi on, MQTT
+on, device owner). Nothing since: the 00:00 restart and two manual
+restart/reboot presses produced **no ack at all** (last ack still Oct 28 22:00),
+so this was not the Oct 25 "alive but not publishing" mode — the app was gone or
+unreachable. Home Assistant restarted twice that day but the bridge/retained state
+was fine, and the phone's charging LED is on (camera), so power is present.
+
+Root cause of the *duration*, regardless of the trigger: **every recovery path was
+MQTT-only**. The daily restart and the 3-day reboot were commands published into a
+dead client, so the pager had no way back until a human touched it.
+
+Fixed in the app (build pending): phone-owned maintenance supervisor
+(`maintenance.*` in the retained config, AlarmManager, re-armed on boot) with a
+silence ladder (restart → reboot), reboot cooldown and a 15 % battery floor. See
+`docs/decisions.md` D19.
+
+Still open:
+- deploy the build and turn off the two legacy HA automations;
+- add a HA staleness alert (last_seen > 45 min) so the next outage is noticed in
+  an hour, not a day;
+- physical check of the device when possible (battery swelling is still the #1
+  hardware risk on this 2017 phone, and the charge controller is not running —
+  battery sits at 100 %);
+- decide the OTA path: the device owner app can download + verify an APK, but
+  Android 9 does not grant `INSTALL_PACKAGES`, so a *silent* self-install is not
+  guaranteed; expect either a one-tap installer prompt (needs someone at the
+  device) or ADB over TCP (needs `adb tcpip 5555` after each boot). Investigate
+  device-owner install behaviour on the actual device before relying on it.

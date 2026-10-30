@@ -144,6 +144,37 @@ class Config(context: Context) {
         get() = p.getString("remoteError", null)
         set(v) = p.edit().putString("remoteError", v).apply()
 
+    // --- on-device maintenance supervisor (survives reboot) ---
+    /** Epoch millis of the last successful broker publish/connect (0 = never). */
+    var lastPublishAt: Long
+        get() = p.getLong("lastPublish", 0L)
+        set(v) = p.edit().putLong("lastPublish", v).apply()
+
+    /** Last *stale-triggered* app restart (epoch millis). */
+    var lastStaleRestartAt: Long
+        get() = p.getLong("lastStaleRestart", 0L)
+        set(v) = p.edit().putLong("lastStaleRestart", v).apply()
+
+    /** Last *stale-triggered* reboot (epoch millis). */
+    var lastStaleRebootAt: Long
+        get() = p.getLong("lastStaleReboot", 0L)
+        set(v) = p.edit().putLong("lastStaleReboot", v).apply()
+
+    /** Last scheduled (interval) app restart (epoch millis). */
+    var lastScheduledRestartAt: Long
+        get() = p.getLong("lastSchedRestart", 0L)
+        set(v) = p.edit().putLong("lastSchedRestart", v).apply()
+
+    /** Last scheduled (interval) reboot (epoch millis). */
+    var lastScheduledRebootAt: Long
+        get() = p.getLong("lastSchedReboot", 0L)
+        set(v) = p.edit().putLong("lastSchedReboot", v).apply()
+
+    /** Why the last automatic reboot happened: "scheduled" or "stale". */
+    var lastRebootReason: String?
+        get() = p.getString("lastRebootReason", null)
+        set(v) = p.edit().putString("lastRebootReason", v).apply()
+
     /** The currently applied remote config (defaults if none). */
     fun remoteConfig(): RemoteConfig =
         RemoteConfigCodec.parse(remoteConfigJson) ?: RemoteConfig()

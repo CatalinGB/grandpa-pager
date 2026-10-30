@@ -175,5 +175,40 @@ freshness **and** expiry (`GP.statusInfo`) instead of trusting `state:"showing"`
 *Change if* a second writer or cross-origin senders make a dedicated history topic
 worth its ACL cost.
 
+---
 
+## D19 — Self-maintenance lives on the phone; MQTT only configures it
 
+**Decision:** the daily app restart and the periodic phone reboot are scheduled
+**on the device** with `AlarmManager` (exact, wake-up, re-armed on boot) and read
+their plan from the retained remote config (`maintenance.*`). Home Assistant only
+writes that config; it no longer has to deliver a command at the right moment.
+
+**Context:** on 2026-10-29 22:28 the pager stopped publishing while everything
+looked healthy (100 %, charging, Wi-Fi on, MQTT connected). It stayed dark for
+~20 h. Both recovery paths were MQTT-only:
+- the 00:00 `restart_app` command was published into a dead client and lost;
+- the every-3-days `reboot_device` had the same problem.
+
+A recovery mechanism that needs the very link it is supposed to repair is a
+circular dependency. The phone must be able to save itself.
+
+**Design:**
+- `maintenance.enabled` turns the supervisor on/off; `restart_every_hours`,
+  `reboot_every_days`, `at_hour` define the *scheduled* runs (0 disables).
+- `stale_restart_minutes` / `stale_reboot_minutes` define the *reactive* ladder:
+  no successful publish → restart the app; still silent after that restart and
+  past the longer threshold → reboot the phone.
+- `reboot_cooldown_minutes` bounds reboots (default 6 h) and a battery floor of
+  15 % forbids rebooting a phone that may not come back.
+- The plan is persisted, so it also applies when the app is started cold after a
+  reboot; alarms are re-armed by `BootReceiver`.
+- The status payload gains an additive `maintenance` block (next restart/reboot,
+  last stale restart, last reboot + reason) so the admin can see that it is armed.
+
+**Trade-off:** the phone reboots itself without asking. That is the point — the
+alternative is waiting for a human. Cooldown + battery floor keep a broken
+network from turning into an unbounded reboot loop.
+
+*Change if* the device ever gets a trustworthy out-of-band channel (see the OTA
+question), in which case the reactive ladder can become advisory only.

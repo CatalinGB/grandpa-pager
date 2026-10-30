@@ -25,6 +25,12 @@
       restrict_accounts: true, restrict_bluetooth: true,
       restrict_location: true, restrict_printing: true, restrict_sync: true,
       restrict_mobile_networks: true, restrict_tethering: true, restrict_roaming: true
+    },
+    /* On-device supervisor: the phone owns the schedule (AlarmManager), the admin
+       only sets the plan. 0 disables a step. */
+    maintenance: {
+      enabled: true, restart_every_hours: 24, reboot_every_days: 3, at_hour: 4,
+      stale_restart_minutes: 45, stale_reboot_minutes: 180, reboot_cooldown_minutes: 360
     }
   };
   var el = function (id) { return document.getElementById(id); };
@@ -77,6 +83,12 @@
       lblBlockAccounts: "Block account changes", lblDisableBt: "Disable Bluetooth", lblBlockLocation: "Block location",
       lblBlockPrinting: "Block printing", lblDisableSync: "Disable auto-sync",
       lblBlockMobile: "Block mobile-network config", lblBlockTethering: "Block tethering", lblBlockRoaming: "Block data roaming",
+      secMaintenance: "Self-maintenance",
+      descMaintenance: "The phone schedules these with its own alarms, so they still happen when MQTT is dead. 0 disables a step.",
+      lblMaintEnabled: "Enabled", descMaintEnabled: "phone-side restart/reboot supervisor",
+      lblMaintRestart: "Restart app every (h)", lblMaintReboot: "Reboot phone every (days)",
+      lblMaintHour: "At hour (local)", lblMaintStaleRestart: "Silent for (min) \u2192 restart app",
+      lblMaintStaleReboot: "Still silent (min) \u2192 reboot phone", lblMaintCooldown: "Min gap between reboots (min)",
       enterToken: "Enter the token.", connecting: "Connecting…", errPrefix: "Error: ",
       notConnected: "You are not connected.", enterHost: "Enter a host.",
       appliedLoaded: "current config loaded from the phone", appliedSent: "Sent — the phone will apply it and confirm in status.",
@@ -98,6 +110,8 @@
       originCommand: "estimated from the last restart/reboot", originLastSeen: "not reported by the app",
       bootedAt: "booted {t}", appUptimeSub: "app {d}", lastSeenAt: "last seen {t}",
       telSession: "Admin session", telLastStatus: "Last status", telLastRestart: "Last restart / reboot",
+      telMaint: "Next app restart / reboot", telMaintSub: "last auto reboot: {r}",
+      maintStale: "because it went silent", maintScheduled: "scheduled", off: "off",
       telConfig: "Config applied", telMessage: "Current message", telConnection: "Connection",
       upFor: "up for {d}", onlineFor: "online for {d}",
       since: "since {t}", sinceLast: "since last {action} · {t}", observedSince: "observed online since {t}",
@@ -149,6 +163,12 @@
       lblBlockAccounts: "Blochează schimbarea conturilor", lblDisableBt: "Dezactivează Bluetooth", lblBlockLocation: "Blochează locația",
       lblBlockPrinting: "Blochează tipărirea", lblDisableSync: "Dezactivează sincronizarea",
       lblBlockMobile: "Blochează config. rețele mobile", lblBlockTethering: "Blochează tethering", lblBlockRoaming: "Blochează roaming date",
+      secMaintenance: "Automenținere",
+      descMaintenance: "Telefonul le programează cu alarme proprii, deci se întâmplă și când MQTT e mort. 0 dezactivează un pas.",
+      lblMaintEnabled: "Activat", descMaintEnabled: "supervizor restart/reboot pe telefon",
+      lblMaintRestart: "Restart aplicație la fiecare (h)", lblMaintReboot: "Reboot telefon la fiecare (zile)",
+      lblMaintHour: "La ora (local)", lblMaintStaleRestart: "Tăcut (min) \u2192 restart aplicație",
+      lblMaintStaleReboot: "Încă tăcut (min) \u2192 reboot telefon", lblMaintCooldown: "Pauză minimă între rebooturi (min)",
       enterToken: "Introdu tokenul.", connecting: "Se conectează…", errPrefix: "Eroare: ",
       notConnected: "Nu ești conectat.", enterHost: "Introdu un host.",
       appliedLoaded: "configurația curentă a fost încărcată de pe telefon", appliedSent: "Trimis — telefonul o va aplica și va confirma în status.",
@@ -170,6 +190,8 @@
       originCommand: "estimat de la ultima repornire", originLastSeen: "nereportat de aplicație",
       bootedAt: "pornit {t}", appUptimeSub: "aplicație {d}", lastSeenAt: "văzut ultima dată {t}",
       telSession: "Sesiune admin", telLastStatus: "Ultimul status", telLastRestart: "Ultima repornire",
+      telMaint: "Următorul restart / reboot", telMaintSub: "ultimul reboot automat: {r}",
+      maintStale: "pentru că a tăcut", maintScheduled: "programat", off: "oprit",
       telConfig: "Config aplicat", telMessage: "Mesaj curent", telConnection: "Conexiune",
       upFor: "activ de {d}", onlineFor: "online de {d}",
       since: "din {t}", sinceLast: "de la ultima {action} · {t}", observedSince: "online observat din {t}",
@@ -382,6 +404,14 @@
       sw("device_owner.restrict_mobile_networks", tr("lblBlockMobile")) +
       sw("device_owner.restrict_tethering", tr("lblBlockTethering")) +
       sw("device_owner.restrict_roaming", tr("lblBlockRoaming"));
+    el("sec-maintenance").innerHTML =
+      sw("maintenance.enabled", tr("lblMaintEnabled"), tr("descMaintEnabled")) +
+      stepper("maintenance.restart_every_hours", tr("lblMaintRestart"), 0, 168, 1, "h") +
+      stepper("maintenance.reboot_every_days", tr("lblMaintReboot"), 0, 30, 1) +
+      stepper("maintenance.at_hour", tr("lblMaintHour"), 0, 23, 1, "h") +
+      stepper("maintenance.stale_restart_minutes", tr("lblMaintStaleRestart"), 0, 1440, 15) +
+      stepper("maintenance.stale_reboot_minutes", tr("lblMaintStaleReboot"), 0, 2880, 15) +
+      stepper("maintenance.reboot_cooldown_minutes", tr("lblMaintCooldown"), 0, 2880, 30);
     preview();
   }
   function preview() {
@@ -574,6 +604,13 @@
       } else {
         html += stat(tr("telConnection"), "—", "", "muted", true);
       }
+    }
+    var mt = s && s.maintenance;
+    if (mt && typeof mt === "object" && mt.enabled) {
+      var when = function (iso) { return iso ? new Date(iso).toLocaleString() : tr("off"); };
+      var reason = mt.last_reboot_reason === "stale" ? tr("maintStale") : (mt.last_reboot_reason === "scheduled" ? tr("maintScheduled") : "-");
+      html += stat(tr("telMaint"), GP.escapeHtml(when(mt.next_restart_at)) + " / " + GP.escapeHtml(when(mt.next_reboot_at)),
+        GP.escapeHtml(tr("telMaintSub", { r: reason })), "small");
     }
     html += stat(tr("telSession"), GP.escapeHtml(fmtDur(now - sessionStart)), GP.escapeHtml(tr("since", { t: fmtClock(sessionStart) }) + " · " + tr("resetsOnReload")), "big", true);
     grid.innerHTML = html;
@@ -882,6 +919,11 @@
     t("duration +30 (click)", function () { plus.click(); }, { path: "defaults.duration_minutes", val: 270 });
     var torchOff = el("sec-cue").querySelector('button[data-path="cue.torch.enabled"]');
     t("torch toggles off (click)", function () { torchOff.click(); }, { path: "cue.torch.enabled", val: false });
+    // Self-maintenance: the plan must round-trip into the published config.
+    checks.push(((el("sec-maintenance") && el("sec-maintenance").querySelectorAll("[data-path]").length === 13) ? "OK " : "FAIL ") + "maintenance has 13 controls");
+    var maintRestart = el("sec-maintenance").querySelectorAll('button[data-path="maintenance.restart_every_hours"]');
+    t("maintenance restart +1h", function () { maintRestart[1].click(); }, { path: "maintenance.restart_every_hours", val: 25 });
+    checks.push(((JSON.stringify(cfg).indexOf('"maintenance"') >= 0) ? "OK " : "FAIL ") + "maintenance is in the published JSON");
     // The live preview reflects the change.
     t("preview reflects name size", function () { renderPreview(); }, null);
     checks.push(((el("pvName").style.fontSize === "60px") ? "OK " : "FAIL ") + "preview name font-size (is '" + el("pvName").style.fontSize + "')");
@@ -893,7 +935,10 @@
       device_owner: true, last_seen: nowIso, app: "receiver",
       command: { last: "restart_app", received_at: restartIso, result: "ok" },
       config_applied_at: nowIso, config_error: null,
-      connection: { state: "idle", host: "mqtt.example", port: 8883, use_tls: true, password_set: true, last_error: null }
+      connection: { state: "idle", host: "mqtt.example", port: 8883, use_tls: true, password_set: true, last_error: null },
+      maintenance: { enabled: true, last_publish_age_s: 12, next_restart_at: new Date(Date.now() + 3600e3).toISOString(),
+        next_reboot_at: new Date(Date.now() + 7200e3).toISOString(), last_stale_restart_at: null,
+        last_reboot_at: restartIso, last_reboot_reason: "scheduled" }
     };
     renderTelemetry();
     var tel = el("telGrid").innerHTML;
@@ -901,6 +946,7 @@
     checks.push((tel.indexOf("1h 01m") >= 0 ? "OK " : "FAIL ") + "fallback uptime is ~1h");
     checks.push((tel.indexOf(tr("originCommand")) >= 0 ? "OK " : "FAIL ") + "fallback uptime origin is visible");
     checks.push((tel.indexOf(tr("restartApp")) >= 0 ? "OK " : "FAIL ") + "telemetry shows last restart");
+    checks.push((tel.indexOf(tr("telMaint")) >= 0 ? "OK " : "FAIL ") + "telemetry shows the maintenance plan");
     // A newer app reports device/app uptime: it must win and show its origin.
     lastStatusObj.device_uptime_ms = 7200000;
     lastStatusObj.app_uptime_ms = 3600000;
