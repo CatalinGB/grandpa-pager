@@ -80,7 +80,7 @@ object DiagCollector {
             last_publish_ok_at = if (cfg.lastPublishOkAt > 0L) TimeUtil.toIso(cfg.lastPublishOkAt) else null,
             service_start_count = cfg.serviceStartCount,
             last_start_reason = cfg.lastStartReason,
-            reboot_backoff = cfg.rebootBackoff
+            reboot_backoff = SupervisorStore.readState(context).backoffAfter(cfg.lastPublishAt)
         )
     }
 }

@@ -25,8 +25,8 @@ android {
         applicationId = "com.grandpapager"
         minSdk = 24
         targetSdk = 28
-        versionCode = 5
-        versionName = "1.4.0"
+        versionCode = 6
+        versionName = "1.5.0"
     }
 
     signingConfigs {
@@ -45,12 +45,23 @@ android {
             isMinifyEnabled = false
             // Use the real release keystore when configured; otherwise sign with
             // the debug key so the production UI can still be sideloaded locally.
-            signingConfig = if (hasReleaseKeystore) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
-            }
+            // No silent debug-key fallback for releases: a differently signed APK
+            // would be rejected as an update. The task-graph check below fails the
+            // build instead.
+            signingConfig = if (hasReleaseKeystore) signingConfigs.getByName("release") else null
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
+    }
+
+    // Fail fast when a release artifact is requested without the real keystore.
+    // (Kept here so debug-only builds still work on a fresh checkout.)
+    gradle.taskGraph.whenReady {
+        val releaseRequested = allTasks.any { it.name.contains("Release") }
+        if (releaseRequested && !hasReleaseKeystore) {
+            throw GradleException(
+                "Refusing to build a release artifact without android/keystore.properties. " +
+                    "A different signing key would be rejected as an update — see docs/runbook.md §5d."
+            )
         }
     }
 

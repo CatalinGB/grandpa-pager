@@ -1,31 +1,18 @@
-# Reference copy of the three automations created via the HA config API.
+# Reference copy of the pager automations created via the HA config API.
 # Times are local (Europe/Bucharest on the current instance).
 #
-# LEGACY: the next app build schedules the daily restart and the periodic reboot
-# itself (AlarmManager + `maintenance.*` in grandpa/config), so these two MQTT
-# automations become redundant — and they only work while the pager is actually
-# reachable. Turn them off once the new build is installed; keep the
-# republish-discovery one.
-
-- id: pager_republish_discovery
-  alias: "Pager — republish MQTT discovery on start"
-  description: >-
-    Re-publish the pager's retained MQTT discovery payloads shortly after Home
-    Assistant starts. Without this, a broker that lost its retained messages
-    leaves every pager entity stuck as "unavailable" (and the restart/reboot
-    buttons dead) until the payloads are published again.
-  mode: single
-  triggers:
-    - trigger: homeassistant
-      event: start
-  actions:
-    # Give the MQTT client time to connect before publishing.
-    - delay: "00:00:10"
-    - action: script.pager_publish_discovery
+# 1.2+ moved maintenance INTO the app: the phone restarts its own service and
+# reboots itself from the retained `maintenance` plan (AlarmManager, re-armed on
+# boot), so it keeps working when MQTT is exactly what failed.
+#
+# The two MQTT automations below are therefore LEGACY and are turned off. They
+# only work while the pager is reachable and would double every restart/reboot.
 
 - id: pager_restart_app_daily
-  alias: "Pager — restart app daily"
-  description: "Every night at 00:00, restart the pager app so it starts each day clean."
+  alias: "Pager — restart app daily (legacy, disabled)"
+  description: >-
+    Superseded by the app's own daily restart (maintenance.restart_every_hours).
+    Kept for reference; `automation.turn_off` is applied on the instance.
   mode: single
   triggers:
     - trigger: time
@@ -36,11 +23,10 @@
         entity_id: button.grandpa_pager_restart_app
 
 - id: pager_reboot_every_3_days
-  alias: "Pager — reboot phone every 3 days"
+  alias: "Pager — reboot phone every 3 days (legacy, disabled)"
   description: >-
-    At 00:00 on every third day, reboot the pager phone. The app restarts on
-    boot. There is no native "every N days" trigger, so the cadence is a
-    template condition on the epoch day number.
+    Superseded by the app's own reboot schedule (maintenance.reboot_every_days),
+    which also works with the broker unreachable. Disabled on the instance.
   mode: single
   triggers:
     - trigger: time
@@ -51,3 +37,128 @@
     - action: button.press
       target:
         entity_id: button.grandpa_pager_reboot_phone
+
+- id: pager_republish_discovery
+  alias: "Pager — republish MQTT discovery on start"
+  description: >-
+    Re-publish the pager's retained discovery payloads shortly after Home
+    Assistant starts, so a broker that lost its retained messages cannot leave
+    every pager entity unavailable (and the restart/reboot buttons dead).
+  mode: single
+  triggers:
+    - trigger: homeassistant
+      event: start
+  actions:
+    - delay: "00:00:10"
+    - action: script.pager_publish_discovery
+
+# ---------------------------------------------------------------------------
+# Operations: the human backstop. The phone repairs itself first (app restart at
+# 45 min, phone reboot at 3 h of silence); these alert when that is not enough or
+# when a reinstall dropped device owner.
+#
+# Helper: input_boolean.pager_silent_alert (latches one notification per outage).
+
+- id: pager_silent_alert
+  alias: "Pager — silent alert"
+  description: >-
+    Notify once when no broker-acknowledged status has arrived for 45 minutes.
+    The phone restarts its app at 45 min and reboots after 3 h of silence, so
+    this is the human backstop for a device that cannot rescue itself.
+  mode: single
+  triggers:
+    - trigger: time_pattern
+      minutes: "/10"
+  conditions:
+    - condition: state
+      entity_id: input_boolean.pager_silent_alert
+      state: "off"
+    - condition: template
+      value_template: >-
+        {% set seen = as_timestamp(states('sensor.grandpa_pager_last_seen'), 0) %}
+        {{ seen == 0 or (now().timestamp() - seen) > 2700 }}
+  actions:
+    - action: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.pager_silent_alert
+    - action: notify.mobile_app_sm_s921b
+      data:
+        title: "Grandpa Pager is silent"
+        message: >-
+          No status for over 45 min. The phone restarts its app itself; a reboot
+          follows after 3 h of silence. Check the camera/charging LED if it stays
+          dark.
+    - action: persistent_notification.create
+      data:
+        title: "Grandpa Pager is silent"
+        notification_id: pager_silent
+        message: >-
+          No broker-acknowledged status for 45+ minutes. The pager escalates by
+          itself: app restart at 45 min, phone reboot at 3 h (needs device owner).
+
+- id: pager_silent_recovered
+  alias: "Pager — silent alert cleared"
+  description: "Clears the silent alert once a fresh status arrives."
+  mode: single
+  triggers:
+    - trigger: state
+      entity_id: sensor.grandpa_pager_last_seen
+  conditions:
+    - condition: state
+      entity_id: input_boolean.pager_silent_alert
+      state: "on"
+    - condition: template
+      value_template: >-
+        {{ (now().timestamp() - as_timestamp(states('sensor.grandpa_pager_last_seen'), 0)) < 900 }}
+  actions:
+    - action: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.pager_silent_alert
+    - action: persistent_notification.dismiss
+      data:
+        notification_id: pager_silent
+    - action: notify.mobile_app_sm_s921b
+      data:
+        title: "Grandpa Pager is back"
+        message: "Status is flowing again."
+
+- id: pager_device_owner_lost
+  alias: "Pager — device owner lost"
+  description: >-
+    A reinstall without `dpm set-device-owner` leaves the app running but without
+    kiosk mode, user restrictions and the self-reboot path.
+  mode: single
+  triggers:
+    - trigger: state
+      entity_id: binary_sensor.grandpa_pager_device_owner
+      to: "off"
+      for: "00:05:00"
+  actions:
+    - action: notify.mobile_app_sm_s921b
+      data:
+        title: "Pager: kiosk inactive"
+        message: >-
+          The app is not device owner: kiosk lock, restrictions and the
+          self-reboot are off. Re-grant with
+          `adb shell dpm set-device-owner com.grandpapager/.PagerDeviceAdminReceiver`.
+    - action: persistent_notification.create
+      data:
+        title: "Pager: kiosk inactive"
+        notification_id: pager_no_owner
+        message: >-
+          device_owner is off. Kiosk mode, user restrictions and
+          DevicePolicyManager.reboot are unavailable until device owner is
+          re-granted (adb).
+
+- id: pager_device_owner_restored
+  alias: "Pager — kiosk restored"
+  description: "Dismisses the kiosk-inactive notification once device owner is back."
+  mode: single
+  triggers:
+    - trigger: state
+      entity_id: binary_sensor.grandpa_pager_device_owner
+      to: "on"
+  actions:
+    - action: persistent_notification.dismiss
+      data:
+        notification_id: pager_no_owner

@@ -37,12 +37,18 @@ class MaintenanceReceiver : BroadcastReceiver() {
                     Log.i(TAG, "scheduled app restart")
                     // Record only once the start was actually handed to the system,
                     // otherwise a refused start burns a whole interval.
-                    if (restartService(app, "scheduled")) cfg.lastScheduledRestartAt = now
+                    if (restartService(app, "scheduled")) {
+                        val state = SupervisorStore.readState(app)
+                        SupervisorStore.writeState(app, state.copy(lastScheduledRestartAt = now))
+                    }
                 }
                 MaintenanceScheduler.ACTION_SCHEDULED_REBOOT -> {
                     Log.i(TAG, "scheduled phone reboot")
-                    cfg.lastScheduledRebootAt = now
-                    cfg.lastRebootReason = "scheduled"
+                    val state = SupervisorStore.readState(app)
+                    SupervisorStore.writeState(
+                        app,
+                        state.copy(lastScheduledRebootAt = now, lastRebootReason = "scheduled")
+                    )
                     if (!DeviceOwnerManager.reboot(app)) {
                         Log.w(TAG, "scheduled reboot refused (not device owner?)")
                     }
@@ -63,32 +69,39 @@ class MaintenanceReceiver : BroadcastReceiver() {
      * threshold and cooldown have passed (see [MaintenancePolicy.decide]).
      */
     private fun runSelfCheck(app: Context, cfg: Config, now: Long) {
-        val plan = cfg.remoteConfig().maintenance
+        val plan = SupervisorStore.readPlan(app, cfg.remoteConfig().maintenance)
+        val heartbeat = SupervisorStore.readHeartbeat(app, cfg.lastPublishAt)
+        val state = SupervisorStore.readState(app)
         val battery = batteryPercent(app)
         val action = MaintenancePolicy.decide(
             nowMs = now,
             plan = plan,
-            lastPublishMs = cfg.lastPublishAt,
-            lastRestartMs = cfg.lastStaleRestartAt,
-            lastRebootMs = cfg.lastStaleRebootAt,
+            lastPublishMs = heartbeat,
+            lastRestartMs = state.lastStaleRestartAt,
+            lastRebootMs = state.lastStaleRebootAt,
             batteryPct = battery,
-            rebootBackoff = cfg.rebootBackoff
+            rebootBackoff = state.backoffAfter(heartbeat)
         )
-        val silentMin = if (cfg.lastPublishAt > 0L) (now - cfg.lastPublishAt) / MaintenancePolicy.MINUTE_MS else -1
+        val silentMin = if (heartbeat > 0L) (now - heartbeat) / MaintenancePolicy.MINUTE_MS else -1
 
         when (action) {
             MaintenanceAction.RESTART_APP -> {
                 Log.w(TAG, "no broker contact for ${silentMin}min; restarting the app")
-                cfg.lastStaleRestartAt = now
+                SupervisorStore.writeState(app, state.copy(lastStaleRestartAt = now))
                 restartService(app, "stale")
             }
             MaintenanceAction.REBOOT_DEVICE -> {
                 Log.w(TAG, "still silent after a restart (${silentMin}min); rebooting the phone")
-                cfg.lastStaleRebootAt = now
-                cfg.lastRebootReason = "stale"
                 // Each reboot that does not restore the link doubles the next
-                // cooldown (reset by the first acked publish).
-                cfg.rebootBackoff = (cfg.rebootBackoff + 1).coerceAtMost(4)
+                // cooldown (reset by the first acked publish in the app process).
+                SupervisorStore.writeState(
+                    app,
+                    state.copy(
+                        lastStaleRebootAt = now,
+                        lastRebootReason = "stale",
+                        rebootBackoff = (state.rebootBackoff + 1).coerceAtMost(4)
+                    )
+                )
                 if (!DeviceOwnerManager.reboot(app)) {
                     Log.w(TAG, "stale reboot refused (not device owner?)")
                 }

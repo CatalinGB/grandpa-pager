@@ -180,6 +180,44 @@ Paho's `deliveryComplete` — a broker acknowledgement — never on "queued".
 ignore it. It reports the *armed* plan, which is what lets the admin prove that a
 silent pager will still restart/reboot itself.
 
+### Process isolation
+
+The supervisor runs in `android:process=":maintenance"` (`MaintenanceReceiver`,
+`BootReceiver`). A wedged app main thread cannot block an alarm broadcast in
+another process, so the rescue path survives the exact failure it exists for.
+Cross-process state therefore lives in files under `filesDir`, one writer each:
+
+| File | Written by | Content |
+|---|---|---|
+| `maintenance_plan.json` | app process | the `maintenance` plan (full config JSON, re-parsed/clamped) |
+| `maintenance_heartbeat` | app process | epoch millis of the last broker-acknowledged publish |
+| `maintenance_state.json` | supervisor process | last scheduled/stale restart + reboot, reboot backoff, reason |
+
+`SupervisorStateCodec` never throws: a corrupt file degrades to "no history", not
+to a reboot loop. `SupervisorState.backoffAfter(heartbeat)` derives the effective
+backoff from the heartbeat so only the supervisor writes the state file.
+
+Known limit: if the process is **force-stopped** by the user, Android cancels the
+alarms and nothing can recover it except launching the app.
+
+### Operations in Home Assistant
+
+- `sensor.grandpa_pager_next_maintenance` — the armed plan ("restart … · reboot …").
+- `sensor.grandpa_pager_last_auto_reboot`, `last_crash`, `last_link_drop` — the
+  supervisor/diagnostic trail.
+- `automation.pager_silent_alert` (+ `…_cleared`, latched by
+  `input_boolean.pager_silent_alert`) — notifies once after 45 min of silence.
+- `automation.pager_device_owner_lost` / `…_kiosk_restored` — after a reinstall
+  without `dpm set-device-owner`, kiosk and the self-reboot are off; the alert
+  says so and clears when ownership returns.
+- The old MQTT restart/reboot automations are turned **off** (the phone owns them).
+
+Note: the Flespi→Mosquitto bridge does not preserve the retain flag on live
+forwards, so the home broker's retained `grandpa/status` can be one bridge
+reconnect old. Newly created entities therefore show the last bridged payload
+until the next status (≤ one telemetry cadence, 15 min). The dashboard's age
+display makes that visible.
+
 ### Magic-link provisioning (`grandpapager://setup`)
 
 `setup.html` (GitHub Pages) turns `#host=…&port=…&tls=…&user=…&pass=…&role=…&name=…`

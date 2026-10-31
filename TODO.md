@@ -195,11 +195,13 @@ Fixed:
   disconnect/counters/last acked publish/service starts (+ admin cards).
 
 Still open:
-- **supervisor shares the app process**: a blocked main looper also blocks the
-  AlarmManager receiver, so a wedged (not killed) process cannot self-rescue.
-  Moving `MaintenanceReceiver` to `android:process=":maintenance"` would fix it,
-  but SharedPreferences are not coherent across processes — it needs a
-  file/heartbeat store first. Deliberately not rushed in 1.3.0.
+- ~~supervisor shares the app process~~ — **fixed in 1.5.0**: `MaintenanceReceiver`
+  and `BootReceiver` run in `:maintenance` with file-backed plan/heartbeat/state
+  (one writer per file, atomic replace). Only a user force-stop still defeats it.
+- **Retained status can lag one bridge reconnect**: Mosquitto does not preserve
+  the retain flag on live forwards, so entities created between statuses (or HA
+  restarts) show the last bridged payload until the next status (≤15 min). Not
+  worth a republish loop; the age display makes it visible.
 - **APK signing key**: v1.1.0 was signed with a debug cert (`aa2533…`) that no
   longer exists; from 1.3.0 onward builds use `1099d3…`. That key is now preserved
   as `android/pager-release.jks` with a real password (`keystore.properties`, both

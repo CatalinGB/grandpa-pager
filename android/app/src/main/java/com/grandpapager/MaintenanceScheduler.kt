@@ -40,7 +40,10 @@ object MaintenanceScheduler {
     fun reschedule(context: Context) {
         val app = context.applicationContext
         val cfg = Config(app)
-        val plan = cfg.remoteConfig().maintenance
+        // Read the plan/state from the supervisor files: this method is called
+        // from both processes and SharedPreferences are not coherent across them.
+        val plan = SupervisorStore.readPlan(app, cfg.remoteConfig().maintenance)
+        val state = SupervisorStore.readState(app)
         val am = app.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
         cancel(app, am, REQ_CHECK, ACTION_CHECK)
@@ -61,14 +64,14 @@ object MaintenanceScheduler {
 
         if (plan.restart_every_hours > 0) {
             val at = MaintenancePolicy.nextRunAt(
-                now, cfg.lastScheduledRestartAt,
+                now, state.lastScheduledRestartAt,
                 plan.restart_every_hours * MaintenancePolicy.HOUR_MS, plan.at_hour, tz
             )
             setAt(app, am, REQ_RESTART, at, ACTION_SCHEDULED_RESTART)
         }
         if (plan.reboot_every_days > 0) {
             val at = MaintenancePolicy.nextRunAt(
-                now, cfg.lastScheduledRebootAt,
+                now, state.lastScheduledRebootAt,
                 plan.reboot_every_days * MaintenancePolicy.DAY_MS, plan.at_hour, tz
             )
             setAt(app, am, REQ_REBOOT, at, ACTION_SCHEDULED_REBOOT)

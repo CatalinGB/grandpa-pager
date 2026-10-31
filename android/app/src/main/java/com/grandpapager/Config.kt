@@ -150,31 +150,6 @@ class Config(context: Context) {
         get() = p.getLong("lastPublish", 0L)
         set(v) = p.edit().putLong("lastPublish", v).apply()
 
-    /** Last *stale-triggered* app restart (epoch millis). */
-    var lastStaleRestartAt: Long
-        get() = p.getLong("lastStaleRestart", 0L)
-        set(v) = p.edit().putLong("lastStaleRestart", v).apply()
-
-    /** Last *stale-triggered* reboot (epoch millis). */
-    var lastStaleRebootAt: Long
-        get() = p.getLong("lastStaleReboot", 0L)
-        set(v) = p.edit().putLong("lastStaleReboot", v).apply()
-
-    /** Last scheduled (interval) app restart (epoch millis). */
-    var lastScheduledRestartAt: Long
-        get() = p.getLong("lastSchedRestart", 0L)
-        set(v) = p.edit().putLong("lastSchedRestart", v).apply()
-
-    /** Last scheduled (interval) reboot (epoch millis). */
-    var lastScheduledRebootAt: Long
-        get() = p.getLong("lastSchedReboot", 0L)
-        set(v) = p.edit().putLong("lastSchedReboot", v).apply()
-
-    /** Why the last automatic reboot happened: "scheduled" or "stale". */
-    var lastRebootReason: String?
-        get() = p.getString("lastRebootReason", null)
-        set(v) = p.edit().putString("lastRebootReason", v).apply()
-
     // --- diagnostics (all additive; persisted so a reboot keeps the story) ---
     /** Last publish the broker acknowledged (epoch millis, 0 = never). */
     var lastPublishOkAt: Long
@@ -206,10 +181,6 @@ class Config(context: Context) {
         get() = p.getString("lastStartReason", null)
         set(v) = p.edit().putString("lastStartReason", v).apply()
 
-    /** Consecutive stale reboots that did not restore the link (exponential backoff). */
-    var rebootBackoff: Int
-        get() = p.getInt("rebootBackoff", 0)
-        set(v) = p.edit().putInt("rebootBackoff", v).apply()
 
     /** The currently applied remote config (defaults if none). */
     fun remoteConfig(): RemoteConfig =

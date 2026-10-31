@@ -108,6 +108,20 @@ Observed results (2026-10-10, Mi A1 / Android 9, via `adb reverse`):
    `grandpa/status` battery readings) and complete the physical/thermal/network
    checklist in [`device-hardening.md`](device-hardening.md).
 
+## 5e. Operations: who repairs what
+
+| Situation | Automatic action |
+|---|---|
+| App hung / socket dead | phone: app restart after 45 min of no broker ack |
+| Still silent | phone: reboot after 3 h (device owner only), cooldown 6 h doubling to 24 h |
+| Phone reboots | `BootReceiver` in `:maintenance` re-arms the plan before any connection |
+| Human visibility | HA `Pager — silent alert` notifies once after 45 min; cleared when status returns |
+| Reinstall without ADB | `Pager — device owner lost` says kiosk/self-reboot are off |
+| Release build | fails without `android/keystore.properties` (see 5d) |
+
+Plan changes: admin → Settings → Self-maintenance → Apply. They travel in the
+retained `grandpa/config` and are re-armed the moment the phone receives them.
+
 ## 5d. Release signing (read before every release)
 
 The release APK is signed with `android/pager-release.jks` (gitignored) via

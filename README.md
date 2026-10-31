@@ -70,6 +70,17 @@ device.
   console — the phone probes the candidate and **auto-reverts** within the window
   if it cannot connect, so a bad push can't strand it; and issue **restart /
   reboot** commands, all acknowledged in status.
+- **Isolated supervisor**: the maintenance alarms run in a separate
+  `:maintenance` process with file-backed state, so a wedged app main thread
+  cannot block the alarm that is meant to rescue it (a killed process is
+  restarted by the system; a hung one still gets the phone reboot).
+- **Operations loop**: Home Assistant alerts when the pager has been silent for
+  45 min (the phone repairs itself first), when device owner is lost after a
+  reinstall (kiosk/reboot off), and the new `Next maintenance` / `Last auto
+  reboot` / `Last crash` / `Last link drop` sensors expose the supervisor's state.
+- **Release guard**: a release build fails unless `android/keystore.properties`
+  is present, so nobody can accidentally publish an APK with a different signing
+  key (which Android would reject as an update).
 - **Self-maintenance on the phone**: the app schedules its own service restart
   and phone reboot with `AlarmManager` (re-armed after every boot), plus a
   silence ladder — no broker contact for N minutes restarts the app, and if it is

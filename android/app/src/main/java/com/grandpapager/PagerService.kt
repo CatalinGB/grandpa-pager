@@ -234,6 +234,7 @@ class PagerService : Service(), MqttController.Listener {
             publishStatus()
             startStatusTimer()
             // Keep the on-device plan armed even after the app/broker was away.
+            SupervisorStore.writePlan(this, cfg.remoteConfig().maintenance)
             MaintenanceScheduler.reschedule(this)
         }
         startWatchdog()
@@ -302,7 +303,9 @@ class PagerService : Service(), MqttController.Listener {
         val now = System.currentTimeMillis()
         cfg.lastPublishAt = now
         cfg.lastPublishOkAt = now
-        if (cfg.rebootBackoff != 0) cfg.rebootBackoff = 0
+        // The supervisor runs in its own process; the heartbeat is how it learns
+        // that the outside world actually heard from us.
+        SupervisorStore.writeHeartbeat(this, now)
     }
 
     override fun onMessage(topic: String, payload: ByteArray) {
@@ -346,6 +349,7 @@ class PagerService : Service(), MqttController.Listener {
         }
         if (started.get()) startStatusTimer() // cadence may have changed
         // The maintenance plan may have changed too (thresholds, intervals).
+        SupervisorStore.writePlan(this, cfg.remoteConfig().maintenance)
         MaintenanceScheduler.reschedule(this)
         publishStatus()
         PagerBus.notifyChanged()
@@ -679,22 +683,23 @@ class PagerService : Service(), MqttController.Listener {
             val at = MaintenancePolicy.nextRunAt(nowMs, last, intervalMs, plan.at_hour)
             return if (at == MaintenancePolicy.NEVER) null else TimeUtil.toIso(at)
         }
-        val lastReboot = maxOf(cfg.lastStaleRebootAt, cfg.lastScheduledRebootAt)
+        val state = SupervisorStore.readState(this)
+        val lastReboot = maxOf(state.lastStaleRebootAt, state.lastScheduledRebootAt)
         return MaintenanceStatus(
             enabled = plan.enabled,
             last_publish_age_s = if (cfg.lastPublishAt > 0L)
                 ((nowMs - cfg.lastPublishAt) / 1000L).coerceAtLeast(0L) else null,
             next_restart_at = next(
-                cfg.lastScheduledRestartAt,
+                state.lastScheduledRestartAt,
                 plan.restart_every_hours * MaintenancePolicy.HOUR_MS
             ),
             next_reboot_at = next(
-                cfg.lastScheduledRebootAt,
+                state.lastScheduledRebootAt,
                 plan.reboot_every_days * MaintenancePolicy.DAY_MS
             ),
-            last_stale_restart_at = cfg.lastStaleRestartAt.takeIf { it > 0L }?.let { TimeUtil.toIso(it) },
+            last_stale_restart_at = state.lastStaleRestartAt.takeIf { it > 0L }?.let { TimeUtil.toIso(it) },
             last_reboot_at = lastReboot.takeIf { it > 0L }?.let { TimeUtil.toIso(it) },
-            last_reboot_reason = cfg.lastRebootReason
+            last_reboot_reason = state.lastRebootReason
         )
     }
 
