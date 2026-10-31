@@ -157,6 +157,10 @@ object DiagFormat {
         return if (flat.length <= max) flat else flat.substring(0, max - 1) + "…"
     }
 
+    /** A plausible Wi-Fi RSSI in dBm; anything outside this range is a redacted
+     *  or unavailable reading (Android returns 0/-127 without location access). */
+    fun validRssi(value: Int?): Int? = value?.takeIf { it in -100..-20 }
+
     /** One-line rendering of a throwable for the status payload. */
     fun describe(t: Throwable?): String? {
         if (t == null) return null

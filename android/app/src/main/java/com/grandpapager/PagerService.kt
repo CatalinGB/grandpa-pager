@@ -107,11 +107,13 @@ class PagerService : Service(), MqttController.Listener {
     private var wakeLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
     private val started = java.util.concurrent.atomic.AtomicBoolean(false)
+    /** Set at the very start of onDestroy(); late callbacks must not submit work. */
+    @Volatile private var destroyed = false
 
     /** Publishes a fresh status on charger connect/disconnect (best effort). */
     private val powerReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            executor.execute {
+            post {
                 runCatching { if (mqtt?.isConnected() == true) publishStatus() }
             }
         }
@@ -159,7 +161,7 @@ class PagerService : Service(), MqttController.Listener {
                 if (started.get()) {
                     val reason = intent.getStringExtra(EXTRA_REASON) ?: "?"
                     Log.i(TAG, "self-restart requested ($reason)")
-                    executor.execute { runCatching { restartApp() } }
+                    post { runCatching { restartApp() } }
                 } else {
                     // The process was gone; this is already a cold start.
                     withConnection { onReady() }
@@ -183,7 +185,7 @@ class PagerService : Service(), MqttController.Listener {
     }
 
     private fun withConnection(after: () -> Unit) {
-        executor.execute {
+        post {
             try {
                 ensureConnected()
                 after()
@@ -216,9 +218,25 @@ class PagerService : Service(), MqttController.Listener {
         Log.i(TAG, "connected")
     }
 
+    /**
+     * Submit work to the service executor, dropping it once the service is being
+     * destroyed. A late callback (status timer, Paho delivery, power event) used
+     * to hit a shut-down executor and throw [java.util.concurrent.RejectedExecutionException]
+     * on the calling thread, crashing the process — observed on a real device
+     * during an app update.
+     */
+    private fun post(block: () -> Unit) {
+        if (destroyed) return
+        runCatching {
+            post {
+                if (!destroyed) runCatching(block).onFailure { Log.w(TAG, "background task failed", it) }
+            }
+        }.onFailure { Log.w(TAG, "executor rejected a task", it) }
+    }
+
     private fun scheduleReconnect() {
         handler.postDelayed({
-            executor.execute {
+            post {
                 runCatching {
                     ensureConnected()
                     onReady()
@@ -256,6 +274,10 @@ class PagerService : Service(), MqttController.Listener {
     }
 
     override fun onDestroy() {
+        // Order matters: stop the timers/receivers BEFORE shutting the executor
+        // down, so nothing can be queued into a terminated pool.
+        destroyed = true
+        handler.removeCallbacksAndMessages(null)
         stopWatchdog()
         stopStatusTimer()
         stopGuardTimer()
@@ -273,7 +295,7 @@ class PagerService : Service(), MqttController.Listener {
         Log.i(TAG, "onConnected (reconnect complete)")
         Link.connected = true
         cfg.connectCount = cfg.connectCount + 1
-        executor.execute {
+        post {
             // A live link while a connection change is switched in starts (or
             // restarts) the confirm clock.
             if (guard.state.status == GuardStatus.SWITCHED) {
@@ -310,7 +332,7 @@ class PagerService : Service(), MqttController.Listener {
 
     override fun onMessage(topic: String, payload: ByteArray) {
         val text = String(payload, Charsets.UTF_8)
-        executor.execute { handleMessage(topic, text) }
+        post { handleMessage(topic, text) }
     }
 
     private fun handleMessage(topic: String, text: String) {
@@ -515,8 +537,8 @@ class PagerService : Service(), MqttController.Listener {
         val r = object : Runnable {
             override fun run() {
                 val self = this
-                executor.execute {
-                    if (!guard.state.isPending) return@execute
+                post {
+                    if (!guard.state.isPending) return@post
                     val effect = guard.on(GuardEvent.Tick(System.currentTimeMillis()))
                     handleGuardEffect(effect)
                     publishStatus()
@@ -712,7 +734,7 @@ class PagerService : Service(), MqttController.Listener {
         stopWatchdog()
         val r = object : Runnable {
             override fun run() {
-                executor.execute {
+                post {
                     runCatching { ensureConnected() }
                         .onFailure { Log.w(TAG, "watchdog reconnect failed", it) }
                 }
@@ -739,7 +761,7 @@ class PagerService : Service(), MqttController.Listener {
         val intervalMs = cfg.remoteConfig().telemetry.interval_minutes.coerceIn(1, 1440) * 60_000L
         val r = object : Runnable {
             override fun run() {
-                executor.execute { runCatching { publishStatus() } }
+                post { runCatching { publishStatus() } }
                 handler.postDelayed(this, intervalMs)
             }
         }

@@ -27,6 +27,18 @@ class DiagFormatTest {
     }
 
     @Test
+    fun rssiAcceptsOnlyPlausibleReadings() {
+        assertEquals(-58, DiagFormat.validRssi(-58))
+        assertEquals(-20, DiagFormat.validRssi(-20))
+        assertEquals(-100, DiagFormat.validRssi(-100))
+        // Redacted/unavailable values Android reports without location access.
+        assertEquals(null, DiagFormat.validRssi(0))
+        assertEquals(null, DiagFormat.validRssi(-127))
+        assertEquals(null, DiagFormat.validRssi(-101))
+        assertEquals(null, DiagFormat.validRssi(null))
+    }
+
+    @Test
     fun describeIncludesTheExceptionType() {
         val out = DiagFormat.describe(IllegalStateException("boom"))!!
         assertEquals("IllegalStateException: boom", out)

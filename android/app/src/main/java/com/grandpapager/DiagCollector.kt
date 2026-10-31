@@ -49,8 +49,10 @@ object DiagCollector {
                 as? android.net.wifi.WifiManager ?: return@runCatching null
             @Suppress("DEPRECATION")
             val info = wm.connectionInfo ?: return@runCatching null
-            if (info.networkId == -1) null else info.rssi
-        }.getOrNull()?.takeIf { it in -120..0 }
+            // networkId is unreliable on some Android 9 builds; validate the RSSI
+            // itself instead (0 and -127 are the redacted/unavailable values).
+            info.rssi
+        }.getOrNull().let { DiagFormat.validRssi(it) }
 
         return DiagStatus(
             heap_used_kb = (rt.totalMemory() - rt.freeMemory()) / 1024,

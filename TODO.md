@@ -219,3 +219,26 @@ Fixed: tombstones (`{}`) everywhere, `publish` granted on that topic for the
 admin and receiver tokens, and the admin console gained a Clear action. Verified
 end-to-end on Flespi (HA publish → bridge → message; HA clear → retained `{}`; a
 fresh subscriber sees the tombstone).
+
+### 2026-10-31 1.5.0 field report (8 h on the original pager)
+
+Working: migration kept device owner, app up 8 h with no restarts, plan armed for
+04:00, family messages shown/cleared, HA silent alert fired at 12:40 and cleared
+at 13:29 when the pager returned.
+
+Found and fixed in 1.5.1:
+- **Crash during update / restart**: `RejectedExecutionException` from a queued
+  task hitting a shut-down executor (13:29:38, right before the reboot). All
+  submissions now go through `post()`, and `onDestroy()` stops callbacks before
+  `shutdownNow()`.
+- **Kiosk not re-armed**: `lock_task` was false with device owner true after the
+  update (startLockTask only ran from onCreate). Re-asserted on every resume.
+- **`wifi_rssi` always missing**: `networkId` gate dropped good readings; now the
+  RSSI range is validated instead.
+
+Open observation: **21 connects / 22 disconnects in 8 h** (~one drop every 22 min,
+recovery ~16 s). Messages are QoS1 with a persistent session so they queue, but
+the churn is worth watching — likely the AP/Wi-Fi idle timeout while the screen is
+off. Compare `diag.connect_count` after a few days; if the gaps grow, look at the
+phone's Wi-Fi sleep policy / the AP.
+

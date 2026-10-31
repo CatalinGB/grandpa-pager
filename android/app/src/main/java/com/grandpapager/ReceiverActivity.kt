@@ -210,6 +210,24 @@ class ReceiverActivity : Activity() {
         super.onResume()
         PagerBus.addListener(busListener)
         handler.post(ticker)
+        ensureLockTask()
+    }
+
+    /**
+     * Re-assert kiosk lock task. startLockTask() can silently fail when it is
+     * called from onCreate (before the activity is resumed), which left the pager
+     * unlocked after an update/reboot while device-owner stayed true. Doing it
+     * again on every resume is cheap and idempotent.
+     */
+    private fun ensureLockTask() {
+        if (!DeviceOwnerManager.isDeviceOwner(this)) return
+        val rc = cfg.remoteConfig()
+        if (!rc.device_owner.lock_task || !rc.kiosk.locked) return
+        val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        if (am.lockTaskModeState != ActivityManager.LOCK_TASK_MODE_NONE) return
+        runCatching { startLockTask() }
+            .onFailure { Log.w(TAG, "startLockTask failed", it) }
+        Log.i(TAG, "lock task re-asserted (state=${am.lockTaskModeState})")
     }
 
     override fun onPause() {

@@ -180,6 +180,22 @@ Paho's `deliveryComplete` — a broker acknowledgement — never on "queued".
 ignore it. It reports the *armed* plan, which is what lets the admin prove that a
 silent pager will still restart/reboot itself.
 
+### Crash-safety and kiosk re-assert (1.5.1)
+
+- Every background submission goes through `PagerService.post()`, which drops the
+  work once the service is being destroyed; `onDestroy()` stops the timers and
+  receivers *before* shutting the executor down. This removes a
+  `RejectedExecutionException` crash seen on a device during an app update
+  (a queued status publish hit a terminated pool and killed the process).
+- `ReceiverActivity.onResume()` re-asserts `startLockTask()` when device owner is
+  set and the kiosk is locked. Calling it only from `onCreate()` can silently
+  fail before the activity is resumed, which left the pager unlocked after an
+  update/reboot even though `device_owner` stayed true. The current state is
+  reported as `diag.lock_task`.
+- `diag.wifi_rssi` validates the reading (`-100..-20`) instead of trusting
+  `networkId`, which is unreliable on Android 9 and used to filter out good
+  values.
+
 ### Clearing (retained tombstone)
 
 `grandpa/message` carries one retained message. Clearing publishes the retained
