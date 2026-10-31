@@ -79,6 +79,21 @@ class ProvisionLinkTest {
     }
 
     @Test
+    fun parsesAFamilySenderLink() {
+        // Shape used by the on-device test invite (setup.html forwards this verbatim).
+        val p = ProvisionLink.parse(
+            "grandpapager://setup?host=mqtt.flespi.io&port=8883&user=$token&tls=1" +
+                "&role=family&name=Test"
+        )!!
+        assertEquals("mqtt.flespi.io", p.host)
+        assertEquals(8883, p.port)
+        assertEquals(true, p.tls)
+        assertEquals(token, p.username)
+        assertEquals(Role.SENDER_FAMILY, p.role)
+        assertEquals("Test", p.senderName)
+    }
+
+    @Test
     fun rejectsMalformedOrDangerousLinks() {
         assertNull(ProvisionLink.parse(null))
         assertNull(ProvisionLink.parse(""))
