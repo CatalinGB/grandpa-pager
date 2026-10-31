@@ -108,6 +108,29 @@ Observed results (2026-10-10, Mi A1 / Android 9, via `adb reverse`):
    `grandpa/status` battery readings) and complete the physical/thermal/network
    checklist in [`device-hardening.md`](device-hardening.md).
 
+### CI vs local releases
+
+- **CI** (`.github/workflows/ci.yml`): debug APK + unit tests, every push. It
+  never builds a release APK, because it cannot sign one correctly.
+- **Release** (`.github/workflows/release.yml`): **manual only**
+  (`workflow_dispatch` with a tag input). It refuses to run without the keystore
+  secrets and verifies the certificate before publishing — a tag push must never
+  produce an APK with a different key.
+- **Local (normal path)**: `tools/scripts/release.sh <release-notes.md>` builds,
+  runs the tests, verifies the certificate against
+  `1099d30fb2319c594f2a49ba53d44f1af4da128f269eac9a8e3efd5561329674`, copies the
+  APK to `/tmp/grandpa-pager-<version>.apk` and publishes it with `gh`.
+
+To enable CI releases, add these repository secrets from the machine that holds
+the keystore (the key itself never needs to leave it, `gh` encrypts the upload):
+
+```bash
+base64 -w0 android/pager-release.jks | gh secret set KEYSTORE_B64
+awk -F= '/^storePassword=/{print $2}' android/keystore.properties | gh secret set KEYSTORE_PASSWORD
+printf androiddebugkey | gh secret set KEY_ALIAS
+awk -F= '/^keyPassword=/{print $2}' android/keystore.properties | gh secret set KEY_PASSWORD
+```
+
 ## 5e. Operations: who repairs what
 
 | Situation | Automatic action |

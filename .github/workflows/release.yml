@@ -1,8 +1,24 @@
-name: Release
+name: Release (manual, signed)
+
+# Releases MUST be signed with the keystore the installed apps already trust
+# (android/pager-release.jks, deliberately not in git). CI can only sign
+# correctly when that keystore is provided as repository secrets, so this
+# workflow is manual-only: a tag push must never publish an APK with a different
+# key, because Android would reject it as an update ("App not installed").
+#
+# The normal release path is local, on the machine that holds the keystore:
+#   tools/scripts/release.sh docs/release-notes.md
+#
+# A CI release needs these repository secrets (docs/runbook.md §5d):
+#   KEYSTORE_B64, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD
 
 on:
-  push:
-    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish (e.g. v1.5.2). Created if missing."
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -25,30 +41,42 @@ jobs:
           yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
           "$SDKMANAGER" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-      # Optional: sign with a real release key if these repo secrets are set
-      # (KEYSTORE_B64 = base64 of the .jks, plus KEYSTORE_PASSWORD / KEY_ALIAS /
-      # KEY_PASSWORD). Without them the build falls back to the debug key.
-      - name: Set up release keystore (optional)
+      - name: Require the release keystore
         working-directory: android
         env:
           KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          if [ -n "$KEYSTORE_B64" ]; then
-            echo "$KEYSTORE_B64" | base64 -d > release.jks
-            printf 'storeFile=release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
-              "${{ secrets.KEYSTORE_PASSWORD }}" "${{ secrets.KEY_ALIAS }}" "${{ secrets.KEY_PASSWORD }}" \
-              > keystore.properties
-            echo "Signing with the provided release keystore."
-          else
-            echo "No keystore secrets; falling back to the debug key."
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::error::KEYSTORE_B64 is not set. Add the signing secrets (docs/runbook.md §5d) or cut the release locally with tools/scripts/release.sh."
+            exit 1
           fi
+          echo "$KEYSTORE_B64" | base64 -d > pager-release.jks
+          printf 'storeFile=pager-release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+            "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > keystore.properties
 
       - name: Build release APK
         working-directory: android
         run: ./gradlew assembleRelease --no-daemon --console=plain
 
+      - name: Verify the signing certificate
+        working-directory: android
+        run: |
+          APKSIGNER="$ANDROID_HOME/build-tools/34.0.0/apksigner"
+          CERT=$("$APKSIGNER" verify --print-certs app/build/outputs/apk/release/app-release.apk \
+                 | awk '/SHA-256 digest/{print $NF; exit}')
+          echo "signing certificate: $CERT"
+          if [ "$CERT" != "1099d30fb2319c594f2a49ba53d44f1af4da128f269eac9a8e3efd5561329674" ]; then
+            echo "::error::APK is not signed with the release key (got $CERT) — refusing to publish."
+            exit 1
+          fi
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.tag }}
           files: android/app/build/outputs/apk/release/app-release.apk
+          fail_on_unmatched_files: true
           generate_release_notes: true
