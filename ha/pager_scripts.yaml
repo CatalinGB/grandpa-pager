@@ -70,13 +70,17 @@ pager_send:
 
 pager_clear:
   alias: "Pager: clear screen"
-  description: "Clear the retained message so the screen goes idle."
+  description: >-
+    Clear the screen. Publishes the `{}` tombstone (retained) instead of an empty
+    payload: an empty retained payload removes the topic, so a pager that is
+    offline at clearing time never receives the clear. `{}` survives and is
+    delivered on the next connect (the app treats it as a clear).
   mode: single
   sequence:
     - action: mqtt.publish
       data:
         topic: grandpa/message
-        payload: ""
+        payload: "{}"
         qos: 1
         retain: true
 

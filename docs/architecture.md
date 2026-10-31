@@ -180,6 +180,16 @@ Paho's `deliveryComplete` — a broker acknowledgement — never on "queued".
 ignore it. It reports the *armed* plan, which is what lets the admin prove that a
 silent pager will still restart/reboot itself.
 
+### Clearing (retained tombstone)
+
+`grandpa/message` carries one retained message. Clearing publishes the retained
+payload `{}` — **not** an empty payload. An empty retained publish removes the
+topic, so a pager that is offline when the clear happens would receive nothing on
+reconnect and keep showing its stored message; `{}` is delivered on the next
+connect and the receiver treats it as a clear. Senders, the admin console, the HA
+button/script and the app all use this form. The admin token (also used by the
+bridge) and the receiver token have `publish` on this topic for that reason.
+
 ### Process isolation
 
 The supervisor runs in `android:process=":maintenance"` (`MaintenanceReceiver`,

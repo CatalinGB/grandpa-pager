@@ -233,7 +233,7 @@
    "object_id": "pager_clear_message",
    "unique_id": "grandpa_pager_clear_message",
    "command_topic": "grandpa/message",
-   "payload_press": "",
+   "payload_press": "{}",
    "retain": true,
    "qos": 1,
    "icon": "mdi:monitor-off",

@@ -83,7 +83,7 @@ from any other website**. Use `[]` to block browsers entirely.
   "access": {
     "type": 2,
     "acl": [
-      { "uri": "mqtt", "topic": "grandpa/message", "actions": ["subscribe"] },
+      { "uri": "mqtt", "topic": "grandpa/message", "actions": ["publish", "subscribe"] },
       { "uri": "mqtt", "topic": "grandpa/command", "actions": ["subscribe"] },
       { "uri": "mqtt", "topic": "grandpa/config",  "actions": ["subscribe"] },
       { "uri": "mqtt", "topic": "grandpa/status",  "actions": ["publish"] }
@@ -106,7 +106,7 @@ from any other website**. Use `[]` to block browsers entirely.
       { "uri": "mqtt", "topic": "grandpa/config",  "actions": ["publish", "subscribe"] },
       { "uri": "mqtt", "topic": "grandpa/command", "actions": ["publish"] },
       { "uri": "mqtt", "topic": "grandpa/status",  "actions": ["subscribe"] },
-      { "uri": "mqtt", "topic": "grandpa/message", "actions": ["subscribe"] },
+      { "uri": "mqtt", "topic": "grandpa/message", "actions": ["publish", "subscribe"] },
       { "uri": "mqtt", "topic": "grandpa/last",    "actions": ["subscribe"] }
     ]
   },
@@ -119,6 +119,12 @@ from any other website**. Use `[]` to block browsers entirely.
 > **History:** `grandpa/last` carries the message-history array. The admin
 > subscribes to it (read-only) to render the history; it is published only by the
 > web sender, so no `publish` grant is needed here.
+
+**Why the receiver and the admin may publish `grandpa/message`:** clearing is a
+retained `{}` tombstone on that topic (an empty retained payload *removes* the
+topic, so an offline pager would never learn about the clear). The receiver needs
+publish to clear its own retained copy, and the admin/bridge needs it to send and
+clear from Home Assistant and the console.
 
 ACL is **default-deny**: only the listed topic+action pairs are permitted.
 

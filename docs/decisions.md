@@ -239,3 +239,25 @@ no reboot, no alarm — the exact failure the supervisor exists to catch.
 *Change if* the device gets a second, independent liveness channel (e.g. an
 on-device heartbeat written to storage) — then the stricter signal can be
 cross-checked instead of trusted alone.
+
+---
+
+## D21 — Clearing is a retained `{}` tombstone; admin/bridge may publish messages
+
+**Decision:** every clear publishes the retained payload `{}` on
+`grandpa/message` instead of an empty payload. The receiver already treats `{}`
+as "clear". The `grandpa-admin` token (which the Mosquitto bridge uses) and the
+`grandpa-phone-receiver` token both gained `publish` on `grandpa/message`.
+
+**Why:** an empty retained publish *removes* the retained message on the broker,
+so a pager that is offline at clearing time receives nothing on reconnect and
+keeps showing its stored message — observed on the test phone. A retained `{}` is
+tiny, durable, delivered on the next connect, and already understood by every
+build in the field, so no app update is needed.
+
+**Also:** the admin token's ACL (used by the bridge) lacked `publish` on the
+message topic, so the HA dashboard's Send/Clear never left the home broker. The
+grant fixes Send and Clear from HA and from the admin console.
+
+*Change if* a message-format version is introduced — `{}` must stay the clear
+sentinel.

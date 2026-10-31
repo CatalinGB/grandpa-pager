@@ -26,7 +26,7 @@ Unraid host — see [Setup](#setup-the-bridge) if it ever has to be rebuilt.
 | `sensor.grandpa_pager_last_command` | app ack of the last command (e.g. `reboot_device: ok`) |
 | `sensor.grandpa_pager_last_message` | newest history text |
 | `sensor.grandpa_pager_history` | history count; `messages` attribute = full array |
-| `button.grandpa_pager_clear_message` | clear the screen (empty retained `grandpa/message`) |
+| `button.grandpa_pager_clear_message` | clear the screen (retained `{}` tombstone on `grandpa/message`, so an offline pager still clears on reconnect) |
 | `button.grandpa_pager_restart_app` | restart the app |
 | `button.grandpa_pager_reboot_phone` | reboot the phone (device owner) |
 

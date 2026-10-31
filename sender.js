@@ -632,7 +632,10 @@
   function clearDisplay() {
     if (!client || !client.connected) { el("sendHint").textContent = t("errNotConnected"); return; }
     showDialog(t("clearTitle"), t("clearBody"), t("clearConfirm"), function () {
-      client.publish(TOPIC.message, "", { qos: 1, retain: true });
+      // Retained tombstone, not an empty payload: an empty retained publish
+      // removes the topic, so a pager that is offline now would never learn
+      // about the clear and would show its stored message on reconnect.
+      client.publish(TOPIC.message, "{}", { qos: 1, retain: true });
       el("sendHint").textContent = t("clearedMsg");
     });
   }

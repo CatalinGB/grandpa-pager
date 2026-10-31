@@ -209,3 +209,13 @@ Still open:
   of the old key; after that single reinstall every future release updates in
   place. **Back up the keystore + password** (cannot be regenerated).
 
+### 2026-10-31 clear did not work (test phone)
+
+Cause: (a) clears published an **empty retained** payload, which *deletes* the
+retained message, so an offline pager never learned about the clear and re-showed
+its stored message; (b) the admin token (used by the bridge) had no `publish` on
+`grandpa/message`, so the HA dashboard Send/Clear never left the home broker.
+Fixed: tombstones (`{}`) everywhere, `publish` granted on that topic for the
+admin and receiver tokens, and the admin console gained a Clear action. Verified
+end-to-end on Flespi (HA publish → bridge → message; HA clear → retained `{}`; a
+fresh subscriber sees the tombstone).

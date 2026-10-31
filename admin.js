@@ -71,7 +71,9 @@
       connHost: "Host", connPort: "Port", connTls: "Use TLS", connUser: "Username", connPass: "Password",
       connKeep: "Keepalive (s)", connTimeout: "Timeout (s)", connAuto: "Auto-reconnect", connQos: "QoS",
       connInflight: "Max inflight", connRevert: "Revert after (s)", connChange: "Change connection…",
-      secActions: "Device actions", restartApp: "Restart app", rebootDevice: "Reboot device",
+      secActions: "Device actions", restartApp: "Restart app", rebootDevice: "Reboot device", clearScreen: "Clear screen",
+      dlgClearTitle: "Clear the screen?", dlgClearBody: "The message disappears on the pager. Sending a new one replaces it anyway.",
+      clearedMsg: "Clear sent.",
       cancelBtn: "Cancel", okBtn: "OK",
       lblOrientation: "Orientation", lblNameSize: "Name size", lblCountdown: "Show received/expires time",
       lblMsgMin: "Message size min", lblMsgMax: "Message size max", lblNameColor: "Name colour",
@@ -159,7 +161,9 @@
       connHost: "Host", connPort: "Port", connTls: "Folosește TLS", connUser: "Utilizator", connPass: "Parolă",
       connKeep: "Keepalive (s)", connTimeout: "Timeout (s)", connAuto: "Reconectare automată", connQos: "QoS",
       connInflight: "Max inflight", connRevert: "Revenire după (s)", connChange: "Schimbă conexiunea…",
-      secActions: "Acțiuni dispozitiv", restartApp: "Repornește aplicația", rebootDevice: "Repornește telefonul",
+      secActions: "Acțiuni dispozitiv", restartApp: "Repornește aplicația", rebootDevice: "Repornește telefonul", clearScreen: "Șterge ecranul",
+      dlgClearTitle: "Ștergi ecranul?", dlgClearBody: "Mesajul dispare de pe pager. Trimiterea altuia îl înlocuiește oricum.",
+      clearedMsg: "Ștergere trimisă.",
       cancelBtn: "Anulează", okBtn: "OK",
       lblOrientation: "Orientare", lblNameSize: "Mărime nume", lblCountdown: "Arată ora primirii/expirării",
       lblMsgMin: "Mărime mesaj min", lblMsgMax: "Mărime mesaj max", lblNameColor: "Culoare nume",
@@ -803,6 +807,16 @@
       startRevertCountdown(revert);
     });
   }
+  /** Clear the screen. Publishes the `{}` tombstone (retained) so a pager that
+   *  is offline right now still learns about the clear on its next connect. */
+  function clearScreen() {
+    if (!client || !client.connected) { el("actionHint").textContent = tr("notConnected"); return; }
+    showDialog(tr("dlgClearTitle"), tr("dlgClearBody"), tr("okBtn"), function () {
+      client.publish(TOPIC.message, "{}", { qos: 1, retain: true });
+      el("actionHint").textContent = tr("clearedMsg");
+    });
+  }
+
   function sendAction(action, titleKey, bodyKey) {
     if (!client || !client.connected) { el("actionHint").textContent = tr("notConnected"); return; }
     showDialog(tr(titleKey), tr(bodyKey), tr("okBtn"), function () {
@@ -930,6 +944,7 @@
     el("apply").addEventListener("click", apply);
     el("reset").addEventListener("click", reset);
     el("applyConn").addEventListener("click", applyConn);
+    if (el("clearScreen")) el("clearScreen").addEventListener("click", clearScreen);
     el("restartApp").addEventListener("click", function () { sendAction("restart_app", "dlgRestartTitle", "dlgRestartBody"); });
     el("rebootDevice").addEventListener("click", function () { sendAction("reboot_device", "dlgRebootTitle", "dlgRebootBody"); });
     el("langBtn").addEventListener("click", toggleLocale);
@@ -1036,6 +1051,7 @@
     checks.push((tel.indexOf(tr("restartApp")) >= 0 ? "OK " : "FAIL ") + "telemetry shows last restart");
     checks.push((tel.indexOf(tr("telMaint")) >= 0 ? "OK " : "FAIL ") + "telemetry shows the maintenance plan");
     checks.push((tel.indexOf(tr("telCrash")) >= 0 ? "OK " : "FAIL ") + "telemetry shows the last crash");
+    checks.push(((el("clearScreen") && el("clearScreen").textContent.length > 0) ? "OK " : "FAIL ") + "admin exposes the clear action");
     // Provisioning link: must carry everything ProvisionLink.parse expects.
     el("provHost").value = "mqtt.example";
     el("provPort").value = "8883";
